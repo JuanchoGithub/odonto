@@ -4,6 +4,8 @@ import { listPatients } from '@/server/actions/patients';
 import { Link } from '@/lib/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PatientSearch } from '@/components/patients/patient-search';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
 import { formatDate } from '@/lib/format';
 import { queryOne } from '@/lib/db';
 import type { AppLocale } from '@/lib/schemas/common';
@@ -43,9 +45,15 @@ export default async function PatientsPage({
         </CardHeader>
         <CardContent>
           {patients.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              {tCommon('loading')}
-            </p>
+            <EmptyState
+              title={q ? tCommon('search') : t('new')}
+              description={q ? `No results for "${q}"` : 'Add your first patient to get started.'}
+              action={
+                <Button asChild>
+                  <Link href="/patients/new">{t('new')}</Link>
+                </Button>
+              }
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

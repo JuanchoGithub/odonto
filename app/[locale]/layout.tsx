@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth';
 import { queryOne } from '@/lib/db';
 import { TopNav } from '@/components/nav/top-nav';
 import { AuthProvider } from '@/components/auth/session-provider';
+import { Toaster } from '@/components/ui/toaster';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -45,20 +46,22 @@ export default async function LocaleLayout({
   return (
     <AuthProvider>
       <NextIntlClientProvider messages={messages} locale={locale}>
-        <div className="min-h-screen flex flex-col">
-          {session?.user ? (
-            <TopNav
-              user={{
-                name: session.user.name ?? '',
-                email: session.user.email ?? '',
-                role: session.user.role,
-              }}
-              clinicName={clinic?.name ?? null}
-              currency={clinic?.currency ?? null}
-            />
-          ) : null}
-          <main className="flex-1">{children}</main>
-        </div>
+        <Toaster>
+          <div className="min-h-screen flex flex-col">
+            {session?.user ? (
+              <TopNav
+                user={{
+                  name: session.user.name ?? '',
+                  email: session.user.email ?? '',
+                  role: session.user.role,
+                }}
+                clinicName={clinic?.name ?? null}
+                currency={clinic?.currency ?? null}
+              />
+            ) : null}
+            <main className="flex-1">{children}</main>
+          </div>
+        </Toaster>
       </NextIntlClientProvider>
     </AuthProvider>
   );

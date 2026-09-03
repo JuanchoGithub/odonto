@@ -58,6 +58,7 @@
     "lastName": "Apellido",
     "documentId": "Documento",
     "birthDate": "Fecha de nacimiento",
+    "phone": "Teléfono",
     "gender": "Género",
     "male": "Masculino",
     "female": "Femenino",

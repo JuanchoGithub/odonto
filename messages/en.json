@@ -58,6 +58,7 @@
     "lastName": "Last name",
     "documentId": "ID document",
     "birthDate": "Birth date",
+    "phone": "Phone",
     "gender": "Gender",
     "male": "Male",
     "female": "Female",

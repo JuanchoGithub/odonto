@@ -59,6 +59,10 @@ export async function updateTreatmentStatus(id: string, status: string) {
     'UPDATE treatments SET status = ?, performed_at = ?, performed_by = ? WHERE id = ?',
     [status, performed_at, performed_by, id],
   );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'treatment', ?, ?)`,
+    [uid(), user.id, id, JSON.stringify({ status })],
+  );
   revalidatePath('/treatments');
 }
 

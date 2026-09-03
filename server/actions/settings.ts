@@ -28,7 +28,7 @@ const ClinicSchema = z.object({
 });
 
 export async function upsertClinic(fd: FormData) {
-  await requireRole(['admin']);
+  const me = await requireRole(['admin']);
   const parsed = ClinicSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: 'Invalid' };
   const d = parsed.data;
@@ -50,12 +50,17 @@ export async function upsertClinic(fd: FormData) {
         existing.id,
       ],
     );
+    await query(
+      `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'update', 'clinic', ?)`,
+      [uid(), me.id, existing.id],
+    );
   } else {
+    const id = uid();
     await query(
       `INSERT INTO clinics (id, name, address, tax_id, tax_rate_standard_bps, tax_rate_reduced_bps, currency, locale, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        uid(),
+        id,
         d.name,
         d.address || null,
         d.tax_id || null,
@@ -67,13 +72,17 @@ export async function upsertClinic(fd: FormData) {
         nowIso(),
       ],
     );
+    await query(
+      `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'clinic', ?)`,
+      [uid(), me.id, id],
+    );
   }
   revalidatePath('/', 'layout');
   return { ok: true };
 }
 
 const UserSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(3),
   name: z.string().min(1),
   role: z.enum(['admin', 'dentist', 'receptionist']),
   password: z.string().min(6),
@@ -86,11 +95,12 @@ export async function createUser(fd: FormData) {
   if (!parsed.success) return { error: 'Invalid' };
   const d = parsed.data;
   const hash = await bcrypt.hash(d.password, 10);
+  const newId = uid();
   try {
     await query(
       `INSERT INTO users (id, email, password_hash, name, role, locale, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [uid(), d.email.toLowerCase(), hash, d.name, d.role, d.locale, nowIso()],
+      [newId, d.email.toLowerCase(), hash, d.name, d.role, d.locale, nowIso()],
     );
   } catch (e: any) {
     if (String(e?.message ?? '').includes('UNIQUE')) {
@@ -98,6 +108,10 @@ export async function createUser(fd: FormData) {
     }
     throw e;
   }
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'user', ?)`,
+    [uid(), me.id, newId],
+  );
   revalidatePath('/settings');
   return { ok: true };
 }
