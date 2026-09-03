@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "migrate": "node scripts/migrate.mjs",
     "seed": "node scripts/seed.mjs",
-    "postinstall": "node scripts/migrate.mjs || true"
+    "postinstall": "node scripts/migrate.mjs || true",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "vercel:setup": "node scripts/vercel-setup.mjs"
   },
   "dependencies": {
     "@auth/core": "0.40.0",
@@ -46,6 +49,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.50.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.2",
     "@types/react": "19.0.1",

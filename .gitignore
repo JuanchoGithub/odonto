@@ -13,6 +13,17 @@ local.db
 local.db-journal
 local.db-wal
 local.db-shm
+.ci.db
+.ci.db-journal
+.ci.db-wal
+.ci.db-shm
+.e2e.db
+.e2e.db-journal
+.e2e.db-wal
+.e2e.db-shm
+playwright-report
+test-results
 next-env.d.ts
+tsconfig.tsbuildinfo
 .vercel
 .turso

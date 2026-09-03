@@ -58,41 +58,60 @@ TURSO_TOKEN=
 | `BLOB_READ_WRITE_TOKEN` | yes    | Vercel Blob token                                            |
 | `CLINIC_LOCALE`      | local    | `es` (default → ARS) or `en` (→ USD); only used by the seed |
 
-## Production deploy (Vercel + Turso)
+## CI / CD / Deploy
 
-1. **Provision a Turso DB**
+The repo ships with three GitHub Actions workflows. Once you set the GitHub secrets, every push runs them automatically — no manual work.
+
+### Workflows
+
+| File                          | Trigger                | What it does                                             |
+| ----------------------------- | ---------------------- | -------------------------------------------------------- |
+| `.github/workflows/ci.yml`    | every push / PR        | typecheck, lint, build (uses `file:./.ci.db`)            |
+| `.github/workflows/e2e.yml`   | every push / PR        | Playwright smoke (login → create patient → guards)       |
+| `.github/workflows/deploy.yml`| push to `main`         | `vercel deploy --prod` + smoke test the live URL         |
+
+### One-shot setup (after you have a Turso DB and a Vercel token)
+
+1. **Create a Turso DB** (free tier):
    ```bash
-   # https://docs.turso.tech/quickstart
    turso db create odonto
    turso db tokens create odonto
    ```
-   Save the URL (`libsql://...`) and the token.
+   Save the URL (`libsql://odonto-<your-org>.turso.io`) and the token.
 
-2. **Push the repo to GitHub** (or GitLab/Bitbucket) and import the project in Vercel.
+2. **Generate a Vercel token** at <https://vercel.com/account/tokens> (scope: Full Access, or scoped to this project once it's created).
 
-3. **Set environment variables in Vercel** (Project → Settings → Environment Variables):
-   - `TURSO_URL` = `libsql://odonto-<your-org>.turso.io`
-   - `TURSO_TOKEN` = the token from step 1
-   - `AUTH_SECRET` = `openssl rand -base64 32`
-   - `AUTH_URL` = `https://<your-domain>`
-   - `BLOB_READ_WRITE_TOKEN` = Vercel Blob token (Storage → Create Store → "odonto" → copy the `BLOB_READ_WRITE_TOKEN`)
-
-4. **Run migrations + seed against the production DB** (one-time, locally):
+3. **Run the bootstrap script** locally:
    ```bash
-   TURSO_URL='libsql://odonto-<your-org>.turso.io' \
-   TURSO_TOKEN='<token>' \
-   CLINIC_LOCALE=es \
-   npm run migrate
-   TURSO_URL='libsql://odonto-<your-org>.turso.io' \
-   TURSO_TOKEN='<token>' \
-   CLINIC_LOCALE=es \
-   npm run seed
+   export VERCEL_TOKEN='<vercel-token>'
+   export TURSO_URL='libsql://odonto-<your-org>.turso.io'
+   export TURSO_TOKEN='<turso-token>'
+   # Optional: AUTH_URL if you have a custom domain
+   npm run vercel:setup
    ```
-   After the first run, the application's first-login flow will force an admin to confirm the clinic profile (currency, locale, tax rates) in `/settings`.
+   The script will:
+   - Link the Vercel project (creating it on first run)
+   - Create a Vercel Blob store named `odonto` and capture its token
+   - Push `TURSO_URL`, `TURSO_TOKEN`, `AUTH_SECRET`, `AUTH_URL`, `BLOB_READ_WRITE_TOKEN` to Vercel (all 3 env targets)
+   - Push the same values as GitHub Actions secrets on `JuanchoGithub/odonto`
+   - Run `npm run migrate` against the production Turso DB
+   - `git push origin main` to trigger the first deploy
 
-5. **Deploy** — push to the connected branch and Vercel will build + deploy.
+4. **Branch protection (optional but recommended):** Settings → Branches → Add rule for `main` → require `quality` and `e2e` from CI to pass before merge.
 
-> The `postinstall` script runs `node scripts/migrate.mjs` against whatever DB the build env sees. For Vercel builds, set the Turso URL + token as env vars **before the first build** so migrations are applied automatically. If migrations ever fail to apply at build time, run them manually against prod as in step 4.
+### Subsequent deploys
+
+Just `git push origin main`. The `Deploy` workflow runs the production build via Vercel and smoke-tests the live URL.
+
+### Re-running setup
+
+If you need to rotate a secret or re-provision Blob, re-run `npm run vercel:setup`. It is idempotent for env vars (Vercel deduplicates by key+target).
+
+### Manual deploy (fallback)
+
+```bash
+vercel deploy --prod --token=$VERCEL_TOKEN
+```
 
 ## Architecture
 
