@@ -79,25 +79,32 @@ The repo ships with three GitHub Actions workflows. Once you set the GitHub secr
    ```
    Save the URL (`libsql://odonto-<your-org>.turso.io`) and the token.
 
-2. **Generate a Vercel token** at <https://vercel.com/account/tokens> (scope: Full Access, or scoped to this project once it's created).
+2. **Generate a Vercel token** at <https://vercel.com/account/tokens> (Full Account Access, or scope it to the project once it exists).
 
-3. **Run the bootstrap script** locally:
+3. **Add `VERCEL_TOKEN` as a GitHub Actions secret** (Repo → Settings → Secrets and variables → Actions → New repository secret). The deploy workflow needs it.
+
+4. **Run the bootstrap script** locally:
    ```bash
    export VERCEL_TOKEN='<vercel-token>'
    export TURSO_URL='libsql://odonto-<your-org>.turso.io'
    export TURSO_TOKEN='<turso-token>'
-   # Optional: AUTH_URL if you have a custom domain
+
+   # If your Vercel project already exists with a different name (e.g.
+   # "clinica-odonto-jet"), point the script at it:
+   export VERCEL_PROJECT='clinica-odonto-jet'
+
    npm run vercel:setup
    ```
    The script will:
-   - Link the Vercel project (creating it on first run)
-   - Create a Vercel Blob store named `odonto` and capture its token
-   - Push `TURSO_URL`, `TURSO_TOKEN`, `AUTH_SECRET`, `AUTH_URL`, `BLOB_READ_WRITE_TOKEN` to Vercel (all 3 env targets)
-   - Push the same values as GitHub Actions secrets on `JuanchoGithub/odonto`
-   - Run `npm run migrate` against the production Turso DB
-   - `git push origin main` to trigger the first deploy
+   - Look up the existing Vercel project by name (`VERCEL_PROJECT` or, if not set, the repo name). If it doesn't exist, create it.
+   - Create a Vercel Blob store named `odonto` and capture its token. (If the store already exists, set `BLOB_READ_WRITE_TOKEN` in your env and re-run.)
+   - Push `TURSO_URL`, `TURSO_TOKEN`, `AUTH_SECRET`, `AUTH_URL`, `BLOB_READ_WRITE_TOKEN` to Vercel for all 3 env targets (production / preview / development).
+   - Run `npm run migrate` against the production Turso DB.
+   - `git push origin main` to trigger the first production deploy via the Deploy workflow.
 
-4. **Branch protection (optional but recommended):** Settings → Branches → Add rule for `main` → require `quality` and `e2e` from CI to pass before merge.
+   This script does **not** touch GitHub secrets beyond what you've already configured manually. The Deploy workflow reads its env from Vercel at deploy time, not from GitHub.
+
+5. **Branch protection (optional but recommended):** Settings → Branches → Add rule for `main` → require the `CI` and `E2E` checks to pass before merge.
 
 ### Subsequent deploys
 
