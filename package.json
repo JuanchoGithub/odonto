@@ -34,7 +34,7 @@
     "date-fns": "^4.1.0",
     "jspdf": "^2.5.2",
     "lucide-react": "^0.469.0",
-    "next": "15.1.3",
+    "next": "15.1.11",
     "next-auth": "5.0.0-beta.25",
     "next-intl": "^3.26.3",
     "react": "19.0.0",
