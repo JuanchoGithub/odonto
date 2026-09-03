@@ -30,6 +30,8 @@ export function can(role: Role, action: string): boolean {
       'treatments:write',
       'billing:read',
       'reports:read',
+      'insurers:read',
+      'insurers:write',
     ],
     receptionist: [
       'patients:read',
@@ -39,6 +41,8 @@ export function can(role: Role, action: string): boolean {
       'billing:read',
       'billing:write',
       'reports:read',
+      'insurers:read',
+      'insurers:write',
     ],
   };
   if (matrix[role].includes('*')) return true;

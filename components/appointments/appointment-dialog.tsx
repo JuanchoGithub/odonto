@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, ChevronDown, Check, Plus, UserPlus } from 'lucide-react';
+import { X, ChevronDown, Check, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,9 +15,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { createAppointment, type ApptRow } from '@/server/actions/appointments';
+import { createAppointment } from '@/server/actions/appointments';
 import { useRouter } from '@/lib/navigation';
 import { format } from 'date-fns';
+import { PatientForm } from '@/components/patients/patient-form';
+import { createPatientInline, type PatientRow } from '@/server/actions/patients';
 
 export function AppointmentDialog({
   open,
@@ -35,6 +37,7 @@ export function AppointmentDialog({
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
   const tErr = useTranslations('errors');
+  const tPi = useTranslations('patientOnboarding');
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,7 +51,14 @@ export function AppointmentDialog({
     setError(null);
     fetch('/api/patients?limit=200')
       .then((r) => r.json())
-      .then((data) => setPatients(data.map((p: any) => ({ id: p.id, name: `${p.last_name}, ${p.first_name}` }))))
+      .then((data) =>
+        setPatients(
+          data.map((p: PatientRow) => ({
+            id: p.id,
+            name: `${p.last_name}, ${p.first_name}`,
+          })),
+        ),
+      )
       .catch(() => setPatients([]));
   }, [open]);
 
@@ -90,6 +100,38 @@ export function AppointmentDialog({
       setError(tErr('generic'));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onPatientCreated(p: PatientRow) {
+    setNewPatientOpen(false);
+    // Refetch the full patient so we have the real id (createPatientInline returns id)
+    if (p.id) {
+      setPatientId(p.id);
+      setPatients((list) => [
+        ...list,
+        { id: p.id, name: `${p.last_name}, ${p.first_name}` },
+      ]);
+      return;
+    }
+    // Fallback: search by name+lastname via the API
+    try {
+      const r = await fetch(
+        `/api/patients?q=${encodeURIComponent(p.last_name)}`,
+      );
+      const list: PatientRow[] = await r.json();
+      const match = list.find(
+        (x) => x.first_name === p.first_name && x.last_name === p.last_name,
+      );
+      if (match) {
+        setPatientId(match.id);
+        setPatients((prev) => [
+          ...prev,
+          { id: match.id, name: `${match.last_name}, ${match.first_name}` },
+        ]);
+      }
+    } catch {
+      /* ignore */
     }
   }
 
@@ -176,13 +218,10 @@ export function AppointmentDialog({
         </Dialog.Content>
       </Dialog.Portal>
 
-      <NewPatientInlineDialog
+      <NewPatientFullDialog
         open={newPatientOpen}
         onOpenChange={setNewPatientOpen}
-        onCreated={(newP) => {
-          setPatients((p) => [...p, { id: newP.id, name: `${newP.last_name}, ${newP.first_name}` }]);
-          setPatientId(newP.id);
-        }}
+        onCreated={onPatientCreated}
       />
     </Dialog.Root>
   );
@@ -285,95 +324,49 @@ function PatientPicker({
   );
 }
 
-function NewPatientInlineDialog({
+function NewPatientFullDialog({
   open,
   onOpenChange,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
-  onCreated: (p: { id: string; first_name: string; last_name: string }) => void;
+  onCreated: (p: PatientRow) => void;
 }) {
-  const t = useTranslations('patients');
+  const t = useTranslations('patientOnboarding');
   const tCommon = useTranslations('common');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const fd = new FormData(e.currentTarget);
-      const payload: Record<string, unknown> = {
-        first_name: fd.get('first_name'),
-        last_name: fd.get('last_name'),
-        document_id: fd.get('document_id') || undefined,
-        phone: fd.get('phone') || undefined,
-      };
-      const r = await fetch('/api/patients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await r.json();
-      if (!r.ok) {
-        setError(typeof data?.error === 'string' ? data.error : tCommon('cancel'));
-        return;
-      }
-      onCreated(data);
-      onOpenChange(false);
-    } catch {
-      setError('Error creating patient');
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/50" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-3xl max-h-[95vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
-            <Dialog.Title className="text-lg font-semibold">{t('new')}</Dialog.Title>
+            <div>
+              <Dialog.Title className="text-lg font-semibold">{t('title')}</Dialog.Title>
+              <p className="text-xs text-muted-foreground mt-1">{t('fullFormNotice')}</p>
+            </div>
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon">
                 <X className="h-4 w-4" />
               </Button>
             </Dialog.Close>
           </div>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label htmlFor="np_first">{t('firstName')}</Label>
-                <Input id="np_first" name="first_name" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="np_last">{t('lastName')}</Label>
-                <Input id="np_last" name="last_name" required />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="np_doc">{t('documentId')}</Label>
-              <Input id="np_doc" name="document_id" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="np_phone">{tCommon('phone')}</Label>
-              <Input id="np_phone" name="phone" />
-            </div>
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
-                <Button type="button" variant="outline">
-                  {tCommon('cancel')}
-                </Button>
-              </Dialog.Close>
-              <Button type="submit" disabled={saving}>
-                {saving ? tCommon('loading') : tCommon('save')}
-              </Button>
-            </div>
-          </form>
+          <PatientForm
+            action={async (_prev, fd) => {
+              const res = await createPatientInline({}, fd);
+              if (res.ok) {
+                onCreated(res.patient);
+                return { ok: true };
+              }
+              return { error: res.error };
+            }}
+          />
+          <div className="mt-4 flex justify-end">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              {tCommon('cancel')}
+            </Button>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

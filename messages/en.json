@@ -41,7 +41,8 @@
     "treatments": "Treatments",
     "billing": "Billing",
     "reports": "Reports",
-    "settings": "Settings"
+    "settings": "Settings",
+    "insurers": "Insurers"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -191,6 +192,25 @@
     "newUser": "New user",
     "role": "Role",
     "password": "Password"
+  },
+  "insurers": {
+    "title": "Insurers and health plans",
+    "new": "New insurer",
+    "edit": "Edit insurer",
+    "name": "Name",
+    "plan": "Plan",
+    "phone": "Phone",
+    "email": "Email",
+    "notes": "Notes",
+    "patientCount": "Patients",
+    "duplicate": "An insurer with that name already exists",
+    "searchPlaceholder": "Search by name or plan…"
+  },
+  "patientOnboarding": {
+    "title": "New patient",
+    "fullFormNotice": "You're filling in the full intake. You can return to appointments afterwards or keep editing the patient.",
+    "insurerNone": "No insurance",
+    "insurerOther": "Other (type manually)"
   },
   "attachments": {
     "title": "Attachments",

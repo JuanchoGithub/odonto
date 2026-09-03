@@ -1,5 +1,5 @@
 'use client';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { InsurerPicker } from '@/components/insurers/insurer-picker';
 import {
   createPatient,
   updatePatient,
@@ -22,19 +23,59 @@ import {
 export function PatientForm({
   patient,
   action,
+  onCreated,
 }: {
   patient?: PatientRow;
   action?: (prev: PatientFormState, fd: FormData) => Promise<PatientFormState>;
+  /**
+   * If provided, called with the created patient after a successful create.
+   * The form's server action `createPatient` redirects, so for inline flows
+   * pass a custom `action` that does NOT redirect (see `createPatientJson`
+   * via the inline dialog).
+   */
+  onCreated?: (p: PatientRow) => void;
 }) {
   const t = useTranslations('patients');
   const tc = useTranslations('common');
-  const bound = action
+  const [insurerId, setInsurerId] = useState<string | null>(patient?.insurer_id ?? null);
+  const [freeText, setFreeText] = useState<{ name: string; plan: string }>({
+    name: patient?.insurance_provider ?? '',
+    plan: patient?.insurance_plan ?? '',
+  });
+
+  const baseBound = action
     ? action
     : patient
       ? updatePatient.bind(null, patient.id)
       : createPatient;
+
   const [state, formAction, pending] = useActionState<PatientFormState, FormData>(
-    bound,
+    async (prev, fd) => {
+      const res = await baseBound(prev, fd);
+      if (res.ok && !patient && onCreated) {
+        onCreated({
+          id: '',
+          first_name: String(fd.get('first_name') ?? ''),
+          last_name: String(fd.get('last_name') ?? ''),
+          document_id: null,
+          birth_date: null,
+          gender: null,
+          phone: null,
+          email: null,
+          address: null,
+          insurance_provider: freeText.name || null,
+          insurance_number: null,
+          insurer_id: insurerId,
+          insurance_plan: freeText.plan || null,
+          medical_history: null,
+          allergies: null,
+          notes: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+      return res;
+    },
     {},
   );
 
@@ -83,21 +124,20 @@ export function PatientForm({
           <Label htmlFor="address">{t('address')}</Label>
           <Input id="address" name="address" defaultValue={patient?.address ?? ''} />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="insurance_provider">{t('insuranceProvider')}</Label>
-          <Input
-            id="insurance_provider"
-            name="insurance_provider"
-            defaultValue={patient?.insurance_provider ?? ''}
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="insurer-picker-trigger">{t('insuranceProvider')}</Label>
+          <InsurerPicker
+            value={insurerId}
+            onChange={setInsurerId}
+            initialName={freeText.name}
+            initialPlan={freeText.plan}
+            onFreeTextChange={setFreeText}
+            memberNumber={patient?.insurance_number ?? ''}
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="insurance_number">{t('insuranceNumber')}</Label>
-          <Input
-            id="insurance_number"
-            name="insurance_number"
-            defaultValue={patient?.insurance_number ?? ''}
-          />
+          {/* Hidden inputs that ride along in FormData so the server action sees them */}
+          <input type="hidden" name="insurer_id" value={insurerId ?? ''} />
+          <input type="hidden" name="insurance_provider" value={freeText.name} />
+          <input type="hidden" name="insurance_plan" value={freeText.plan} />
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="medical_history">{t('medicalHistory')}</Label>
@@ -137,9 +177,9 @@ function GenderSelect({ defaultValue }: { defaultValue: string }) {
   const t = useTranslations('patients');
   return (
     <>
-      <input type="hidden" name="gender" defaultValue={defaultValue} />
+      <input id="gender" type="hidden" name="gender" defaultValue={defaultValue} />
       <Select defaultValue={defaultValue || 'none'} onValueChange={() => {}}>
-        <SelectTrigger>
+        <SelectTrigger aria-labelledby="gender">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

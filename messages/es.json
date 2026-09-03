@@ -41,7 +41,8 @@
     "treatments": "Tratamientos",
     "billing": "Facturación",
     "reports": "Reportes",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "insurers": "Obras sociales"
   },
   "dashboard": {
     "title": "Panel",
@@ -191,6 +192,25 @@
     "newUser": "Nuevo usuario",
     "role": "Rol",
     "password": "Contraseña"
+  },
+  "insurers": {
+    "title": "Obras sociales y prepagas",
+    "new": "Nueva obra social",
+    "edit": "Editar obra social",
+    "name": "Nombre",
+    "plan": "Plan",
+    "phone": "Teléfono",
+    "email": "Email",
+    "notes": "Notas",
+    "patientCount": "Pacientes",
+    "duplicate": "Ya existe una obra social con ese nombre",
+    "searchPlaceholder": "Buscar por nombre o plan…"
+  },
+  "patientOnboarding": {
+    "title": "Nuevo paciente",
+    "fullFormNotice": "Vas a completar el alta completa. Después podés volver a turnos o seguir editando el paciente.",
+    "insurerNone": "Sin obra social",
+    "insurerOther": "Otra (escribir manualmente)"
   },
   "attachments": {
     "title": "Adjuntos",
