@@ -1,6 +1,9 @@
 name: E2E
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   push:
     branches: [main]
   pull_request:
@@ -12,6 +15,7 @@ concurrency:
 
 jobs:
   e2e:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     name: Playwright smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -46,7 +50,7 @@ jobs:
         run: npm run build
 
       - name: Run e2e
-        run: npm run test:e2e
+        run: npm run test:e2e -- --reporter=github
 
       - name: Upload Playwright report
         if: always()

@@ -24,10 +24,12 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: 'npm run start',
-        url: 'http://localhost:3000',
+        command: 'npx next start -p 3000',
+        url: 'http://localhost:3000/login',
         reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        timeout: 60_000,
+        stdout: process.env.CI ? 'ignore' : 'pipe',
+        stderr: process.env.CI ? 'ignore' : 'pipe',
         env: {
           TURSO_URL: process.env.TURSO_URL ?? 'file:./.e2e.db',
           TURSO_TOKEN: process.env.TURSO_TOKEN ?? '',
