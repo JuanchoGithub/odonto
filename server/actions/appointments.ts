@@ -20,35 +20,50 @@ const ApptSchema = z.object({
 export async function createAppointment(fd: FormData) {
   const user = await requireUser();
   const parsed = ApptSchema.safeParse(Object.fromEntries(fd));
-  if (!parsed.success) return { error: 'Invalid data' };
+  if (!parsed.success) return { error: 'invalid' as const };
   const data = parsed.data;
 
-  // conflict check
+  // verify the patient actually exists (defensive; FK would catch it but with a confusing error)
+  const patient = await queryOne<{ id: string }>(
+    'SELECT id FROM patients WHERE id = ? LIMIT 1',
+    [data.patient_id],
+  );
+  if (!patient) return { error: 'patient_not_found' as const };
+
+  // conflict check — only blocks if the overlapping appointment is still active
   const conflict = await queryOne(
     `SELECT id FROM appointments
-     WHERE dentist_id = ? AND status != 'cancelled'
+     WHERE dentist_id = ? AND status NOT IN ('cancelled','completed','no_show')
        AND NOT (datetime(ends_at) <= datetime(?) OR datetime(starts_at) >= datetime(?))
      LIMIT 1`,
     [data.dentist_id, data.starts_at, data.ends_at],
   );
-  if (conflict) return { error: 'conflict' };
+  if (conflict) return { error: 'conflict' as const };
 
   const id = uid();
-  await query(
-    `INSERT INTO appointments (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      data.patient_id,
-      data.dentist_id,
-      data.starts_at,
-      data.ends_at,
-      data.status,
-      data.reason || null,
-      data.notes || null,
-      nowIso(),
-    ],
-  );
+  try {
+    await query(
+      `INSERT INTO appointments (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        data.patient_id,
+        data.dentist_id,
+        data.starts_at,
+        data.ends_at,
+        data.status,
+        data.reason || null,
+        data.notes || null,
+        nowIso(),
+      ],
+    );
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    if (msg.includes('FOREIGN KEY')) {
+      return { error: 'patient_not_found' as const };
+    }
+    throw e;
+  }
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'appointment', ?)`,
     [uid(), user.id, id],

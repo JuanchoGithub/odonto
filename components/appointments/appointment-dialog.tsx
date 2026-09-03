@@ -1,7 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
+import { X, ChevronDown, Check, Plus, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,8 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { X } from 'lucide-react';
-import { createAppointment } from '@/server/actions/appointments';
+import { cn } from '@/lib/utils';
+import { createAppointment, type ApptRow } from '@/server/actions/appointments';
 import { useRouter } from '@/lib/navigation';
 import { format } from 'date-fns';
 
@@ -23,14 +24,12 @@ export function AppointmentDialog({
   onOpenChange,
   defaultStart,
   dentists,
-  patients,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
   defaultStart: string | null;
   dentists: { id: string; name: string }[];
-  patients?: { id: string; name: string }[];
   onCreated?: () => void;
 }) {
   const t = useTranslations('appointments');
@@ -39,35 +38,66 @@ export function AppointmentDialog({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
+  const [patientId, setPatientId] = useState<string>('');
+  const [newPatientOpen, setNewPatientOpen] = useState(false);
+
+  // Load patients each time the dialog opens
+  useEffect(() => {
+    if (!open) return;
+    setError(null);
+    fetch('/api/patients?limit=200')
+      .then((r) => r.json())
+      .then((data) => setPatients(data.map((p: any) => ({ id: p.id, name: `${p.last_name}, ${p.first_name}` }))))
+      .catch(() => setPatients([]));
+  }, [open]);
 
   const start = defaultStart ? new Date(defaultStart) : new Date();
   const end = new Date(start.getTime() + 30 * 60000);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!patientId) {
+      setError(t('patientNotFound'));
+      return;
+    }
     setError(null);
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
-    const res = await createAppointment(fd);
-    setLoading(false);
-    if (res.error === 'conflict') {
-      setError(t('conflict'));
-      return;
-    }
-    if (res.error) {
+    try {
+      const fd = new FormData(e.currentTarget);
+      fd.set('patient_id', patientId);
+      const res = await createAppointment(fd);
+      if (res.error === 'conflict') {
+        setError(t('conflict'));
+        return;
+      }
+      if (res.error === 'patient_not_found') {
+        setError(t('patientNotFound'));
+        return;
+      }
+      if (res.error === 'invalid') {
+        setError(t('invalid'));
+        return;
+      }
+      if (res.error) {
+        setError(tErr('generic'));
+        return;
+      }
+      onOpenChange(false);
+      if (onCreated) onCreated();
+      else router.refresh();
+    } catch {
       setError(tErr('generic'));
-      return;
+    } finally {
+      setLoading(false);
     }
-    onOpenChange(false);
-    if (onCreated) onCreated();
-    else router.refresh();
   }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">{t('new')}</Dialog.Title>
             <Dialog.Close asChild>
@@ -78,8 +108,13 @@ export function AppointmentDialog({
           </div>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="patient_id">{t('patient')}</Label>
-              <PatientCombobox patients={patients ?? []} name="patient_id" />
+              <Label>{t('patient')}</Label>
+              <PatientPicker
+                patients={patients}
+                value={patientId}
+                onChange={setPatientId}
+                onCreateNew={() => setNewPatientOpen(true)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="dentist_id">{t('dentist')}</Label>
@@ -133,46 +168,214 @@ export function AppointmentDialog({
                   {tCommon('cancel')}
                 </Button>
               </Dialog.Close>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading || !patientId}>
                 {loading ? tCommon('loading') : tCommon('save')}
               </Button>
             </div>
           </form>
         </Dialog.Content>
       </Dialog.Portal>
+
+      <NewPatientInlineDialog
+        open={newPatientOpen}
+        onOpenChange={setNewPatientOpen}
+        onCreated={(newP) => {
+          setPatients((p) => [...p, { id: newP.id, name: `${newP.last_name}, ${newP.first_name}` }]);
+          setPatientId(newP.id);
+        }}
+      />
     </Dialog.Root>
   );
 }
 
-function PatientCombobox({
+function PatientPicker({
   patients,
-  name,
+  value,
+  onChange,
+  onCreateNew,
 }: {
   patients: { id: string; name: string }[];
-  name: string;
+  value: string;
+  onChange: (v: string) => void;
+  onCreateNew: () => void;
 }) {
-  if (patients.length === 0) {
-    return (
-      <Input
-        name={name}
-        placeholder="patient id"
-        required
-        className="font-mono text-xs"
-      />
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const t = useTranslations('patients');
+  const tCommon = useTranslations('common');
+
+  const selected = patients.find((p) => p.id === value);
+  const filtered = query
+    ? patients.filter((p) =>
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        p.id.toLowerCase().includes(query.toLowerCase()),
+      )
+    : patients;
+
   return (
-    <Select name={name} defaultValue={patients[0]?.id}>
-      <SelectTrigger>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {patients.map((p) => (
-          <SelectItem key={p.id} value={p.id}>
-            {p.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm',
+          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+        )}
+      >
+        <span className={cn(!selected && 'text-muted-foreground')}>
+          {selected ? selected.name : tCommon('search') + '…'}
+        </span>
+        <ChevronDown className="h-4 w-4 opacity-50" />
+      </button>
+      {open ? (
+        <div
+          className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md p-1"
+          onMouseLeave={() => setOpen(false)}
+        >
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tCommon('search') + '…'}
+            className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm mb-1"
+          />
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="text-xs text-muted-foreground p-2 text-center">
+                {t('new')}
+              </div>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(p.id);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                    'hover:bg-accent hover:text-accent-foreground',
+                    value === p.id && 'bg-accent',
+                  )}
+                >
+                  {value === p.id ? <Check className="h-3.5 w-3.5" /> : <span className="w-3.5" />}
+                  <span className="truncate">{p.name}</span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="border-t mt-1 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onCreateNew();
+              }}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-primary hover:bg-accent"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              {t('new')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function NewPatientInlineDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (b: boolean) => void;
+  onCreated: (p: { id: string; first_name: string; last_name: string }) => void;
+}) {
+  const t = useTranslations('patients');
+  const tCommon = useTranslations('common');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const fd = new FormData(e.currentTarget);
+      const payload: Record<string, unknown> = {
+        first_name: fd.get('first_name'),
+        last_name: fd.get('last_name'),
+        document_id: fd.get('document_id') || undefined,
+        phone: fd.get('phone') || undefined,
+      };
+      const r = await fetch('/api/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setError(typeof data?.error === 'string' ? data.error : tCommon('cancel'));
+        return;
+      }
+      onCreated(data);
+      onOpenChange(false);
+    } catch {
+      setError('Error creating patient');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-4">
+            <Dialog.Title className="text-lg font-semibold">{t('new')}</Dialog.Title>
+            <Dialog.Close asChild>
+              <Button variant="ghost" size="icon">
+                <X className="h-4 w-4" />
+              </Button>
+            </Dialog.Close>
+          </div>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="np_first">{t('firstName')}</Label>
+                <Input id="np_first" name="first_name" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="np_last">{t('lastName')}</Label>
+                <Input id="np_last" name="last_name" required />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="np_doc">{t('documentId')}</Label>
+              <Input id="np_doc" name="document_id" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="np_phone">{tCommon('phone')}</Label>
+              <Input id="np_phone" name="phone" />
+            </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline">
+                  {tCommon('cancel')}
+                </Button>
+              </Dialog.Close>
+              <Button type="submit" disabled={saving}>
+                {saving ? tCommon('loading') : tCommon('save')}
+              </Button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

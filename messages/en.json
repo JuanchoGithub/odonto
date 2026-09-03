@@ -94,7 +94,9 @@
       "cancelled": "Cancelled",
       "no_show": "No-show"
     },
-    "conflict": "Dentist already has an appointment at that time"
+    "conflict": "Dentist already has an appointment at that time",
+    "patientNotFound": "That patient doesn't exist. Pick one from the list or create a new patient.",
+    "invalid": "Invalid data. Check the fields."
   },
   "odontogram": {
     "title": "Odontogram",

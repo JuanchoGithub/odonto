@@ -133,19 +133,63 @@ export type PatientRow = {
   updated_at: string;
 };
 
-export async function listPatients(q?: string) {
+export async function listPatients(q?: string, limit = 200) {
   if (q && q.trim()) {
     const like = `%${q.trim()}%`;
     return query<PatientRow>(
       `SELECT * FROM patients
        WHERE first_name LIKE ? OR last_name LIKE ? OR document_id LIKE ? OR phone LIKE ? OR email LIKE ?
-       ORDER BY last_name, first_name LIMIT 200`,
-      [like, like, like, like, like],
+       ORDER BY last_name, first_name LIMIT ?`,
+      [like, like, like, like, like, limit],
     );
   }
   return query<PatientRow>(
-    'SELECT * FROM patients ORDER BY last_name, first_name LIMIT 200',
+    'SELECT * FROM patients ORDER BY last_name, first_name LIMIT ?',
+    [limit],
   );
+}
+
+export type CreatePatientResult =
+  | { ok: true; patient: PatientRow }
+  | { ok: false; error: string };
+
+export async function createPatientJson(body: unknown): Promise<CreatePatientResult> {
+  const Schema = PatientSchema;
+  const parsed = Schema.safeParse(body);
+  if (!parsed.success) return { ok: false, error: parsed.error.errors[0]?.message ?? 'invalid' };
+  const data = parsed.data;
+  const user = await requireUser();
+  const id = uid();
+  await query(
+    `INSERT INTO patients (id, first_name, last_name, document_id, birth_date, gender, phone, email, address, insurance_provider, insurance_number, medical_history, allergies, notes, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      data.first_name,
+      data.last_name,
+      data.document_id || null,
+      data.birth_date || null,
+      data.gender || null,
+      data.phone || null,
+      data.email || null,
+      data.address || null,
+      data.insurance_provider || null,
+      data.insurance_number || null,
+      data.medical_history || null,
+      data.allergies || null,
+      data.notes || null,
+      user.id,
+      nowIso(),
+      nowIso(),
+    ],
+  );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'patient', ?)`,
+    [uid(), user.id, id],
+  );
+  const created = await queryOne<PatientRow>('SELECT * FROM patients WHERE id = ?', [id]);
+  revalidatePath('/patients');
+  return { ok: true, patient: created! };
 }
 
 export async function getPatient(id: string) {

@@ -94,7 +94,9 @@
       "cancelled": "Cancelado",
       "no_show": "No asistió"
     },
-    "conflict": "El odontólogo ya tiene un turno en ese horario"
+    "conflict": "El odontólogo ya tiene un turno en ese horario",
+    "patientNotFound": "Ese paciente no existe. Selecciona uno de la lista o crea uno nuevo.",
+    "invalid": "Datos inválidos. Revisá los campos."
   },
   "odontogram": {
     "title": "Odontograma",
