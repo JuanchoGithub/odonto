@@ -1,0 +1,211 @@
+{
+  "common": {
+    "appName": "Odonto",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "loading": "Loading…",
+    "back": "Back",
+    "actions": "Actions",
+    "yes": "Yes",
+    "no": "No",
+    "none": "None",
+    "all": "All",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "notes": "Notes",
+    "date": "Date",
+    "status": "Status",
+    "total": "Total",
+    "subtotal": "Subtotal",
+    "tax": "Tax",
+    "currency": "Currency",
+    "locale": "Language",
+    "logout": "Sign out",
+    "login": "Sign in",
+    "signInTitle": "Sign in to Odonto",
+    "password": "Password",
+    "emailOrPasswordWrong": "Wrong email or password",
+    "noClinicConfigured": "Configure the clinic before continuing",
+    "configureClinic": "Configure clinic"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "patients": "Patients",
+    "appointments": "Appointments",
+    "odontogram": "Odontogram",
+    "treatments": "Treatments",
+    "billing": "Billing",
+    "reports": "Reports",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "todayAppointments": "Today's appointments",
+    "weekRevenue": "This week's revenue",
+    "activePatients": "Active patients",
+    "unpaidInvoices": "Unpaid invoices"
+  },
+  "patients": {
+    "title": "Patients",
+    "new": "New patient",
+    "edit": "Edit patient",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "documentId": "ID document",
+    "birthDate": "Birth date",
+    "gender": "Gender",
+    "male": "Male",
+    "female": "Female",
+    "other": "Other",
+    "address": "Address",
+    "insuranceProvider": "Insurance",
+    "insuranceNumber": "Member number",
+    "medicalHistory": "Medical history",
+    "allergies": "Allergies",
+    "tabs": {
+      "general": "General",
+      "medical": "Medical",
+      "odontogram": "Odontogram",
+      "treatments": "Treatments",
+      "attachments": "Attachments",
+      "invoices": "Invoices"
+    }
+  },
+  "appointments": {
+    "title": "Appointments",
+    "new": "New appointment",
+    "edit": "Edit appointment",
+    "patient": "Patient",
+    "dentist": "Dentist",
+    "startsAt": "Starts",
+    "endsAt": "Ends",
+    "reason": "Reason",
+    "status": {
+      "scheduled": "Scheduled",
+      "arrived": "Arrived",
+      "in_chair": "In chair",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "no_show": "No-show"
+    },
+    "conflict": "Dentist already has an appointment at that time"
+  },
+  "odontogram": {
+    "title": "Odontogram",
+    "tooth": "Tooth",
+    "surface": "Surface",
+    "condition": "Condition",
+    "note": "Note",
+    "conditions": {
+      "caries": "Caries",
+      "filling": "Filling",
+      "crown": "Crown",
+      "root_canal": "Root canal",
+      "missing": "Missing",
+      "impacted": "Impacted",
+      "fracture": "Fracture",
+      "sealant": "Sealant",
+      "implant": "Implant",
+      "healthy": "Healthy"
+    },
+    "surfaces": {
+      "occlusal": "Occlusal",
+      "buccal": "Buccal",
+      "lingual": "Lingual",
+      "mesial": "Mesial",
+      "distal": "Distal",
+      "root": "Root",
+      "whole": "Whole"
+    }
+  },
+  "treatments": {
+    "title": "Treatments",
+    "new": "New treatment",
+    "description": "Description",
+    "code": "Code",
+    "cost": "Cost",
+    "tooth": "Tooth",
+    "status": {
+      "planned": "Planned",
+      "in_progress": "In progress",
+      "done": "Done",
+      "cancelled": "Cancelled"
+    }
+  },
+  "billing": {
+    "title": "Billing",
+    "newInvoice": "New invoice",
+    "number": "Number",
+    "issuedAt": "Issued",
+    "status": {
+      "draft": "Draft",
+      "issued": "Issued",
+      "paid": "Paid",
+      "void": "Void"
+    },
+    "lines": "Lines",
+    "addLine": "Add line",
+    "taxKind": {
+      "standard": "Standard",
+      "reduced": "Reduced",
+      "none": "Tax-free"
+    },
+    "recordPayment": "Record payment",
+    "amount": "Amount",
+    "method": "Method",
+    "methods": {
+      "cash": "Cash",
+      "card": "Card",
+      "transfer": "Transfer",
+      "insurance": "Insurance",
+      "other": "Other"
+    },
+    "reference": "Reference",
+    "exportPdf": "Export PDF"
+  },
+  "reports": {
+    "title": "Reports",
+    "revenue": "Revenue",
+    "topTreatments": "Top treatments",
+    "noShowRate": "No-show rate",
+    "byDentist": "Dentist productivity",
+    "dateRange": "Date range"
+  },
+  "settings": {
+    "title": "Settings",
+    "clinic": "Clinic",
+    "clinicName": "Clinic name",
+    "address": "Address",
+    "taxId": "Tax ID",
+    "taxRateStandard": "Standard tax rate (bps)",
+    "taxRateReduced": "Reduced tax rate (bps)",
+    "users": "Users",
+    "newUser": "New user",
+    "role": "Role",
+    "password": "Password"
+  },
+  "attachments": {
+    "title": "Attachments",
+    "upload": "Upload file",
+    "kind": "Type",
+    "kinds": {
+      "xray": "X-ray",
+      "photo": "Photo",
+      "doc": "Document",
+      "consent": "Consent",
+      "other": "Other"
+    }
+  },
+  "errors": {
+    "generic": "Something went wrong",
+    "unauthorized": "Unauthorized",
+    "forbidden": "Forbidden",
+    "notFound": "Not found",
+    "required": "Required"
+  }
+}

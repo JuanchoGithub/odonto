@@ -1,0 +1,211 @@
+{
+  "common": {
+    "appName": "Odonto",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "search": "Buscar",
+    "loading": "Cargando…",
+    "back": "Volver",
+    "actions": "Acciones",
+    "yes": "Sí",
+    "no": "No",
+    "none": "Ninguno",
+    "all": "Todos",
+    "name": "Nombre",
+    "email": "Email",
+    "phone": "Teléfono",
+    "notes": "Notas",
+    "date": "Fecha",
+    "status": "Estado",
+    "total": "Total",
+    "subtotal": "Subtotal",
+    "tax": "Impuestos",
+    "currency": "Moneda",
+    "locale": "Idioma",
+    "logout": "Cerrar sesión",
+    "login": "Ingresar",
+    "signInTitle": "Ingresar a Odonto",
+    "password": "Contraseña",
+    "emailOrPasswordWrong": "Email o contraseña incorrectos",
+    "noClinicConfigured": "Configura la clínica antes de continuar",
+    "configureClinic": "Configurar clínica"
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "patients": "Pacientes",
+    "appointments": "Turnos",
+    "odontogram": "Odontograma",
+    "treatments": "Tratamientos",
+    "billing": "Facturación",
+    "reports": "Reportes",
+    "settings": "Configuración"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "todayAppointments": "Turnos hoy",
+    "weekRevenue": "Ingresos esta semana",
+    "activePatients": "Pacientes activos",
+    "unpaidInvoices": "Facturas impagas"
+  },
+  "patients": {
+    "title": "Pacientes",
+    "new": "Nuevo paciente",
+    "edit": "Editar paciente",
+    "firstName": "Nombre",
+    "lastName": "Apellido",
+    "documentId": "Documento",
+    "birthDate": "Fecha de nacimiento",
+    "gender": "Género",
+    "male": "Masculino",
+    "female": "Femenino",
+    "other": "Otro",
+    "address": "Dirección",
+    "insuranceProvider": "Obra social",
+    "insuranceNumber": "Número de afiliado",
+    "medicalHistory": "Antecedentes médicos",
+    "allergies": "Alergias",
+    "tabs": {
+      "general": "General",
+      "medical": "Médico",
+      "odontogram": "Odontograma",
+      "treatments": "Tratamientos",
+      "attachments": "Adjuntos",
+      "invoices": "Facturas"
+    }
+  },
+  "appointments": {
+    "title": "Turnos",
+    "new": "Nuevo turno",
+    "edit": "Editar turno",
+    "patient": "Paciente",
+    "dentist": "Odontólogo",
+    "startsAt": "Inicio",
+    "endsAt": "Fin",
+    "reason": "Motivo",
+    "status": {
+      "scheduled": "Programado",
+      "arrived": "Llegó",
+      "in_chair": "En consultorio",
+      "completed": "Completado",
+      "cancelled": "Cancelado",
+      "no_show": "No asistió"
+    },
+    "conflict": "El odontólogo ya tiene un turno en ese horario"
+  },
+  "odontogram": {
+    "title": "Odontograma",
+    "tooth": "Pieza",
+    "surface": "Superficie",
+    "condition": "Condición",
+    "note": "Nota",
+    "conditions": {
+      "caries": "Caries",
+      "filling": "Restauración",
+      "crown": "Corona",
+      "root_canal": "Endodoncia",
+      "missing": "Ausente",
+      "impacted": "Incluido",
+      "fracture": "Fractura",
+      "sealant": "Sellador",
+      "implant": "Implante",
+      "healthy": "Sano"
+    },
+    "surfaces": {
+      "occlusal": "Oclusal",
+      "buccal": "Vestibular",
+      "lingual": "Palatino/Lingual",
+      "mesial": "Mesial",
+      "distal": "Distal",
+      "root": "Raíz",
+      "whole": "Toda"
+    }
+  },
+  "treatments": {
+    "title": "Tratamientos",
+    "new": "Nuevo tratamiento",
+    "description": "Descripción",
+    "code": "Código",
+    "cost": "Costo",
+    "tooth": "Pieza",
+    "status": {
+      "planned": "Planificado",
+      "in_progress": "En curso",
+      "done": "Realizado",
+      "cancelled": "Cancelado"
+    }
+  },
+  "billing": {
+    "title": "Facturación",
+    "newInvoice": "Nueva factura",
+    "number": "Número",
+    "issuedAt": "Emitida",
+    "status": {
+      "draft": "Borrador",
+      "issued": "Emitida",
+      "paid": "Pagada",
+      "void": "Anulada"
+    },
+    "lines": "Líneas",
+    "addLine": "Agregar línea",
+    "taxKind": {
+      "standard": "Estándar",
+      "reduced": "Reducida",
+      "none": "Sin impuesto"
+    },
+    "recordPayment": "Registrar pago",
+    "amount": "Monto",
+    "method": "Método",
+    "methods": {
+      "cash": "Efectivo",
+      "card": "Tarjeta",
+      "transfer": "Transferencia",
+      "insurance": "Obra social",
+      "other": "Otro"
+    },
+    "reference": "Referencia",
+    "exportPdf": "Exportar PDF"
+  },
+  "reports": {
+    "title": "Reportes",
+    "revenue": "Ingresos",
+    "topTreatments": "Tratamientos más frecuentes",
+    "noShowRate": "Tasa de inasistencia",
+    "byDentist": "Productividad por odontólogo",
+    "dateRange": "Rango de fechas"
+  },
+  "settings": {
+    "title": "Configuración",
+    "clinic": "Clínica",
+    "clinicName": "Nombre de la clínica",
+    "address": "Dirección",
+    "taxId": "CUIT/RFC",
+    "taxRateStandard": "Tasa de impuesto estándar (bps)",
+    "taxRateReduced": "Tasa de impuesto reducida (bps)",
+    "users": "Usuarios",
+    "newUser": "Nuevo usuario",
+    "role": "Rol",
+    "password": "Contraseña"
+  },
+  "attachments": {
+    "title": "Adjuntos",
+    "upload": "Subir archivo",
+    "kind": "Tipo",
+    "kinds": {
+      "xray": "Radiografía",
+      "photo": "Foto",
+      "doc": "Documento",
+      "consent": "Consentimiento",
+      "other": "Otro"
+    }
+  },
+  "errors": {
+    "generic": "Algo salió mal",
+    "unauthorized": "No autorizado",
+    "forbidden": "Sin permisos",
+    "notFound": "No encontrado",
+    "required": "Requerido"
+  }
+}
