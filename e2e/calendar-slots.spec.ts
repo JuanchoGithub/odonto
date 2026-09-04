@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { pad, login, fillWhen, pickPatient } from './helpers';
+import { pad, login, fillWhen, pickPatient, settleCalendar } from './helpers';
 
 /** A day in the currently displayed week (0=Mon … 6=Sun) at h:m local time. */
 function weekDate(dayOffset: number, h: number, m: number) {
@@ -30,6 +30,7 @@ test('clicking a slot opens the dialog with the exact 15-minute time pre-filled'
 }) => {
   await login(page);
   await page.goto('/appointments');
+  await settleCalendar(page);
 
   // Sunday column (index 6) is guaranteed empty. y=142 → 10 slots → 10:30.
   await page.getByTestId('day-col-6').click({ position: { x: 40, y: 142 } });
@@ -51,6 +52,7 @@ test('blocks are sized by duration, overlaps are allowed, drag reschedules', asy
 }) => {
   await login(page);
   await page.goto('/appointments');
+  await settleCalendar(page);
 
   // 60-minute appointment (Wednesday 10:00–11:00)
   await createAppt(page, weekDate(2, 10, 0), 60);
@@ -124,6 +126,7 @@ test('drag-select on empty grid pre-fills a range and records the method', async
 }) => {
   await login(page);
   await page.goto('/appointments');
+  await settleCalendar(page);
 
   const col = page.getByTestId('day-col-2'); // Wednesday
   const box = (await col.boundingBox())!;
@@ -132,7 +135,7 @@ test('drag-select on empty grid pre-fills a range and records the method', async
   const y = box.y + 196 + 2;
   await page.mouse.move(x, y);
   await page.mouse.down();
-  await page.mouse.move(x, y + 28, { steps: 4 });
+  await page.mouse.move(x, y + 25, { steps: 4 });
   await page.mouse.up();
 
   const dialog = page.getByRole('dialog');
@@ -188,6 +191,7 @@ test('pending (shared, unbooked) links appear in the list view', async ({
 
   // The appointments list view shows it as pending
   await page.goto('/appointments');
+  await settleCalendar(page);
   await page.getByTestId('view-list').click();
   const pending = page
     .getByTestId('pending-link-row')
@@ -203,6 +207,7 @@ test('non-working hours are shaded (weekend fully, outside business hours on wee
 }) => {
   await login(page);
   await page.goto('/appointments');
+  await settleCalendar(page);
 
   // Wait for shading info to load
   const sundayShades = page
@@ -230,6 +235,7 @@ test('dentist filter narrows the calendar and is available to receptionists', as
   await login(page, 'front@local', 'Front123!');
 
   await page.goto('/appointments');
+  await settleCalendar(page);
   const filter = page.getByTestId('dentist-filter');
   await expect(filter).toBeVisible();
   await filter.click();

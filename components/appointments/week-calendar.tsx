@@ -262,7 +262,6 @@ export function WeekCalendar({
               method: t('method'),
               pendingTitle: t('pendingLinks'),
               pending: t('status.pending'),
-              slotMinutes: t('slotMinutes'),
             }}
             methodLabel={(m) => (m ? t(`method.${m}`) : '—')}
             statusLabel={(s) => t(`status.${s}`)}

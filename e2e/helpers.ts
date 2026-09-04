@@ -1,4 +1,11 @@
-import { type Page, type Locator } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
+
+/** Wait until the streamed page tree has fully settled (Suspense swap done). */
+export async function settleCalendar(page: Page) {
+  await expect(page.getByTestId('view-calendar')).toHaveCount(1, {
+    timeout: 15_000,
+  });
+}
 
 export const pad = (n: number) => String(n).padStart(2, '0');
 /** YYYY-MM-DDTHH:mm */

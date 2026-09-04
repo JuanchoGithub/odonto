@@ -92,7 +92,7 @@ export default async function PatientDetailPage({
       )}
 
       <Tabs defaultValue="general">
-        <TabsList>
+        <TabsList className="w-full">
           <TabsTrigger value="general">{t('tabs.general')}</TabsTrigger>
           <TabsTrigger value="medical">{t('tabs.medical')}</TabsTrigger>
           <TabsTrigger value="odontogram">{t('tabs.odontogram')}</TabsTrigger>

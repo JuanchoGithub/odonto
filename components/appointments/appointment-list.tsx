@@ -24,7 +24,6 @@ type Labels = {
   method: string;
   pendingTitle: string;
   pending: string;
-  slotMinutes: string; // "{minutes}" placeholder
 };
 
 function statusVariant(s: string) {
@@ -91,10 +90,7 @@ export function AppointmentList({
                       {format(new Date(l.created_at), 'PPP', { locale })}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {labels.slotMinutes.replace(
-                        '{minutes}',
-                        String(l.slot_minutes),
-                      )}
+                      {l.slot_minutes} min
                     </TableCell>
                     <TableCell>{l.patient_name}</TableCell>
                     <TableCell>
