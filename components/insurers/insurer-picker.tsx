@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -198,11 +199,21 @@ export function InsurerPicker({
         </div>
       ) : null}
 
-      <NewInsurerDialog
-        open={newOpen}
-        onOpenChange={setNewOpen}
-        onCreated={onCreated}
-      />
+      {/* NewInsurerDialog is rendered in a portal so it sits OUTSIDE the
+          surrounding <form>. That fixes two bugs at once:
+          1. The inner <form> no longer nests inside the outer patient form.
+          2. Its overlay no longer blocks sibling Radix Selects (gender,
+             InsurerPicker dropdown) that portal to <body>. */}
+      {newOpen
+        ? createPortal(
+            <NewInsurerDialog
+              open={newOpen}
+              onOpenChange={setNewOpen}
+              onCreated={onCreated}
+            />,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -223,6 +234,7 @@ function NewInsurerDialog({
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    e.stopPropagation();
     setSaving(true);
     setError(null);
     try {
@@ -252,47 +264,59 @@ function NewInsurerDialog({
     }
   }
 
+  if (!open) return null;
   return (
-    <>
-      {open ? (
-        <div className="fixed inset-0 z-[60] bg-black/50" onClick={() => onOpenChange(false)} />
-      ) : null}
-      {open ? (
-        <form
-          onSubmit={onSubmit}
-          className="fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">{t('new')}</h2>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
-              <X className="h-4 w-4" />
-            </Button>
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
+      onClick={() => onOpenChange(false)}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="relative bg-background border rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">{t('new')}</h2>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="ins_name">{t('name')}</Label>
+            <Input id="ins_name" name="name" required />
           </div>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="ins_name">{t('name')}</Label>
-              <Input id="ins_name" name="name" required />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ins_plan">{t('plan')}</Label>
-              <Input id="ins_plan" name="plan" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ins_phone">{t('phone')}</Label>
-              <Input id="ins_phone" name="phone" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ins_email">{t('email')}</Label>
-              <Input id="ins_email" name="email" type="email" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ins_notes">{t('notes')}</Label>
-              <Textarea id="ins_notes" name="notes" rows={2} />
-            </div>
+          <div className="space-y-1">
+            <Label htmlFor="ins_plan">{t('plan')}</Label>
+            <Input id="ins_plan" name="plan" />
           </div>
-          {error ? <p className="text-sm text-destructive mt-2">{error}</p> : null}
+          <div className="space-y-1">
+            <Label htmlFor="ins_phone">{t('phone')}</Label>
+            <Input id="ins_phone" name="phone" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="ins_email">{t('email')}</Label>
+            <Input id="ins_email" name="email" type="email" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="ins_notes">{t('notes')}</Label>
+            <Textarea id="ins_notes" name="notes" rows={2} />
+          </div>
+          {error ? (
+            <p className="text-sm text-destructive mt-2">{error}</p>
+          ) : null}
           <div className="flex justify-end gap-2 mt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               {tCommon('cancel')}
             </Button>
             <Button type="submit" disabled={saving}>
@@ -300,7 +324,7 @@ function NewInsurerDialog({
             </Button>
           </div>
         </form>
-      ) : null}
-    </>
+      </div>
+    </div>
   );
 }
