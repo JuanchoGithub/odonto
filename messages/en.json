@@ -199,6 +199,7 @@
     "taxId": "Tax ID",
     "taxRateStandard": "Standard tax rate (bps)",
     "taxRateReduced": "Reduced tax rate (bps)",
+    "timezone": "Time zone",
     "users": "Users",
     "newUser": "New user",
     "role": "Role",

@@ -22,6 +22,7 @@ type Clinic = {
   tax_rate_reduced_bps: number;
   currency: string;
   locale: string;
+  timezone: string;
 };
 
 const CURRENCIES = [
@@ -37,6 +38,19 @@ const CURRENCIES = [
   'GBP',
 ];
 
+const TIMEZONES = [
+  'UTC',
+  'America/Argentina/Buenos_Aires',
+  'America/Mexico_City',
+  'America/Bogota',
+  'America/Santiago',
+  'America/Lima',
+  'America/Montevideo',
+  'America/Sao_Paulo',
+  'Europe/Madrid',
+  'Europe/London',
+];
+
 export function ClinicForm({ clinic }: { clinic: Clinic | null }) {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
@@ -44,6 +58,7 @@ export function ClinicForm({ clinic }: { clinic: Clinic | null }) {
   const [saving, setSaving] = useState(false);
   const [currency, setCurrency] = useState(clinic?.currency ?? 'USD');
   const [locale, setLocale] = useState(clinic?.locale ?? 'es');
+  const [timezone, setTimezone] = useState(clinic?.timezone ?? 'UTC');
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -51,6 +66,7 @@ export function ClinicForm({ clinic }: { clinic: Clinic | null }) {
     const fd = new FormData(e.currentTarget);
     fd.set('currency', currency);
     fd.set('locale', locale);
+    fd.set('timezone', timezone);
     await upsertClinic(fd);
     setSaving(false);
     router.refresh();
@@ -123,8 +139,23 @@ export function ClinicForm({ clinic }: { clinic: Clinic | null }) {
           </SelectContent>
         </Select>
       </div>
+      <div className="space-y-2">
+        <Label>{t('timezone')}</Label>
+        <Select value={timezone} onValueChange={setTimezone}>
+          <SelectTrigger data-testid="clinic-timezone">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIMEZONES.map((tz) => (
+              <SelectItem key={tz} value={tz}>
+                {tz}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <div className="md:col-span-2 flex justify-end">
-        <Button type="submit" disabled={saving}>
+        <Button type="submit" disabled={saving} data-testid="clinic-save">
           {saving ? tCommon('loading') : tCommon('save')}
         </Button>
       </div>

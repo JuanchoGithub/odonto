@@ -39,15 +39,69 @@ export function minToHHMM(min: number): string {
   return `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
 }
 
+/** Weekday index for a clinic-local calendar date in the clinic's TZ. */
+function weekdayInTz(date: string, tz: string): number {
+  // Use noon to avoid any DST edge at midnight.
+  const utc = zonedDate(date, '12:00', tz);
+  const wd = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    weekday: 'short',
+    timeZoneName: 'short',
+  })
+    .formatToParts(utc)
+    .find((p) => p.type === 'weekday')?.value;
+  const map: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  return map[wd ?? 'Sun'] ?? 0;
+}
+
+/**
+ * Return the UTC `Date` for the wall-clock moment `${date} ${hhmm}` in `tz`.
+ * Handles DST correctly by probing Intl with the UTC guess and correcting.
+ */
+function zonedDate(date: string, hhmm: string, tz: string): Date {
+  const offsetMin = tzOffsetMinutes(date, hhmm, tz);
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h, m] = hhmm.split(':').map(Number);
+  return new Date(Date.UTC(y, mo - 1, d, h, m, 0) - offsetMin * 60000);
+}
+
+/** Offset (minutes from UTC) of the given wall-clock in tz. Positive = east of UTC. */
+function tzOffsetMinutes(date: string, hhmm: string, tz: string): number {
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h, m] = hhmm.split(':').map(Number);
+  const utcGuess = Date.UTC(y, mo - 1, d, h, m, 0);
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const parts = dtf.formatToParts(new Date(utcGuess));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+  const tzH = get('hour') === 24 ? 0 : get('hour');
+  const tzAsUtc = Date.UTC(get('year'), get('month') - 1, get('day'), tzH, get('minute'), 0);
+  // `tzAsUtc` is the UTC instant whose wall-clock (in tz) matches `utcGuess`.
+  // The offset is how much tz wall-clock is *behind* UTC: tzAsUtc - utcGuess.
+  // Example: tz=America/Argentina/Buenos_Aires, date=2026-09-07, hhmm=09:00
+  //   utcGuess = 2026-09-07T09:00:00Z
+  //   tzAsUtc  = 2026-09-07T06:00:00Z (because 09:00 UTC falls at 06:00 ART)
+  //   offset   = -180 minutes (ART is 3h behind UTC)
+  return (tzAsUtc - utcGuess) / 60_000;
+}
+
 function datesBetween(fromDate: string, toDate: string): string[] {
+  const [fy, fm, fd] = fromDate.split('-').map(Number);
+  const [ty, tm, td] = toDate.split('-').map(Number);
   const out: string[] = [];
-  const d = new Date(fromDate + 'T00:00:00');
-  const end = new Date(toDate + 'T00:00:00');
-  while (d <= end) {
+  const cur = new Date(Date.UTC(fy, fm - 1, fd));
+  const end = new Date(Date.UTC(ty, tm - 1, td));
+  while (cur <= end) {
     out.push(
-      `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+      `${cur.getUTCFullYear()}-${pad2(cur.getUTCMonth() + 1)}-${pad2(cur.getUTCDate())}`,
     );
-    d.setDate(d.getDate() + 1);
+    cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return out;
 }
@@ -110,6 +164,7 @@ export async function getSlots(
   toDate: string, // YYYY-MM-DD, clinic-local
   slotMinutes: number,
 ): Promise<Slot[]> {
+  const tz = await getClinicTimezone();
   const [clinicExceptions, dentistExceptions, schedules, businessHours, appts] =
     await Promise.all([
       query<{ date: string }>(
@@ -177,7 +232,7 @@ export async function getSlots(
 
   const slots: Slot[] = [];
   for (const date of datesBetween(fromDate, toDate)) {
-    const weekday = new Date(date + 'T00:00:00').getDay();
+    const weekday = weekdayInTz(date, tz);
     const { windows } = resolveWindowsForDate(
       date,
       weekday,
@@ -192,12 +247,10 @@ export async function getSlots(
         startMin + slotMinutes <= w.endMin;
         startMin += slotMinutes
       ) {
-        // Interpret the date+HH:MM in the server/clinic local timeline.
-        // Stored as ISO with explicit offset.
-        const start = new Date(`${date}T${minToHHMM(startMin)}:00`);
-        const end = new Date(
-          `${date}T${minToHHMM(startMin + slotMinutes)}:00`,
-        );
+        // Interpret the date+HH:MM in the clinic's timezone (DST-aware),
+        // not the server's local timezone.
+        const start = zonedDate(date, minToHHMM(startMin), tz);
+        const end = zonedDate(date, minToHHMM(startMin + slotMinutes), tz);
         const overlaps = busy.some(
           (b) => !(end.getTime() <= b.start || start.getTime() >= b.end),
         );
@@ -220,10 +273,15 @@ export async function isWithinWorkingHours(
   startsAtIso: string,
   endsAtIso: string,
 ): Promise<boolean> {
-  const start = new Date(startsAtIso);
-  const end = new Date(endsAtIso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const date = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const tz = await getClinicTimezone();
+  const startWall = wallClockInTz(startsAtIso, tz);
+  const endWall = wallClockInTz(endsAtIso, tz);
+
+  // Same-day appointments only, measured in clinic TZ.
+  if (startWall.date !== endWall.date) return false;
+
+  const date = startWall.date;
+  const weekday = startWall.dayOfWeek;
 
   const [clinicEx, dentistEx, dentistHasSchedule, schedRows, bizRows] = await Promise.all([
     queryOne<{ date: string }>(
@@ -250,12 +308,12 @@ export async function isWithinWorkingHours(
        WHERE dentist_id = ? AND day_of_week = ?
          AND (effective_from IS NULL OR effective_from <= ?)
          AND (effective_to IS NULL OR effective_to >= ?)`,
-      [dentistId, start.getDay(), date, date],
+      [dentistId, weekday, date, date],
     ),
     query<{ start_time: string; end_time: string }>(
       `SELECT bh.start_time, bh.end_time FROM clinic_business_hours bh
        WHERE bh.day_of_week = ?`,
-      [start.getDay()],
+      [weekday],
     ),
   ]);
 
@@ -276,11 +334,46 @@ export async function isWithinWorkingHours(
 
   if (windows.length === 0) return false;
 
-  const startMin = start.getHours() * 60 + start.getMinutes();
-  const endMin = end.getHours() * 60 + end.getMinutes();
-  // Same-day appointments only.
-  if (end.getDate() !== start.getDate()) return false;
   return windows.some(
-    (w) => startMin >= hhmmToMin(w.start_time) && endMin <= hhmmToMin(w.end_time),
+    (w) =>
+      startWall.minutes >= hhmmToMin(w.start_time) &&
+      endWall.minutes <= hhmmToMin(w.end_time),
   );
+}
+
+/** Convert an ISO instant to clinic-local wall-clock parts. */
+export function wallClockInTz(iso: string, tz: string): {
+  date: string;
+  hhmm: string;
+  minutes: number;
+  dayOfWeek: number;
+} {
+  const d = new Date(iso);
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    weekday: 'short',
+  });
+  const parts = dtf.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  const year = Number(get('year'));
+  const month = Number(get('month'));
+  const day = Number(get('day'));
+  const hour = get('hour') === '24' ? 0 : Number(get('hour'));
+  const minute = Number(get('minute'));
+  const weekdayMap: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  const weekday = weekdayMap[get('weekday')] ?? 0;
+  return {
+    date: `${year}-${pad2(month)}-${pad2(day)}`,
+    hhmm: `${pad2(hour)}:${pad2(minute)}`,
+    minutes: hour * 60 + minute,
+    dayOfWeek: weekday,
+  };
 }

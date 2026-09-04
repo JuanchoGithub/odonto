@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
 import { requireUser, requireRole } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
-import { isWithinWorkingHours } from '@/lib/availability';
+import { isWithinWorkingHours, getClinicTimezone, wallClockInTz } from '@/lib/availability';
 
 const WindowSchema = z.object({
   start_time: z.string().regex(/^\d{2}:\d{2}$/),
@@ -140,9 +140,10 @@ export async function findOrphanedAppointments(
       : proposedWindows;
 
   for (const a of appts) {
-    const start = new Date(a.starts_at);
-    const end = new Date(a.ends_at);
-    const date = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    const tz = await getClinicTimezone();
+    const startWall = wallClockInTz(a.starts_at, tz);
+    const endWall = wallClockInTz(a.ends_at, tz);
+    const date = startWall.date;
 
     // Simulate: check exceptions first (unchanged), then the proposed windows.
     const ex = await queryOne<{ kind: string; start_time: string | null; end_time: string | null }>(
@@ -160,15 +161,16 @@ export async function findOrphanedAppointments(
         windows = [{ start_min: sh * 60 + sm, end_min: eh * 60 + em }];
       }
     } else {
-      windows = fallbackWindows.filter((w) => w.day_of_week === start.getDay());
+      windows = fallbackWindows.filter((w) => w.day_of_week === startWall.dayOfWeek);
     }
 
-    const startMin = start.getHours() * 60 + start.getMinutes();
-    const endMin = end.getHours() * 60 + end.getMinutes();
-    const sameDay = end.getDate() === start.getDate();
+    const sameDay = startWall.date === endWall.date;
     const covered =
       sameDay &&
-      windows.some((w) => startMin >= w.start_min && endMin <= w.end_min);
+      windows.some(
+        (w) =>
+          startWall.minutes >= w.start_min && endWall.minutes <= w.end_min,
+      );
     if (!covered) orphaned.push(a);
   }
   return orphaned;
@@ -235,17 +237,23 @@ export async function saveWeeklySchedule(
         o.id,
       ]);
     } else if (dec.action === 'exception') {
-      // Keep it: create a custom_hours exception matching the appointment window.
-      const start = new Date(o.starts_at);
-      const end = new Date(o.ends_at);
-      const date = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
-      const startTime = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
-      const endTime = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+      // Keep it: create a custom_hours exception matching the appointment window,
+      // measured in the clinic's timezone (not the server's local time).
+      const tz = await getClinicTimezone();
+      const startWall = wallClockInTz(o.starts_at, tz);
+      const endWall = wallClockInTz(o.ends_at, tz);
       await query(
         `INSERT INTO dentist_exceptions
            (id, dentist_id, date, kind, start_time, end_time, reason, created_at)
          VALUES (?, ?, ?, 'custom_hours', ?, ?, 'kept-after-schedule-change', ?)`,
-        [uid(), d.dentist_id, date, startTime, endTime, nowIso()],
+        [
+          uid(),
+          d.dentist_id,
+          startWall.date,
+          startWall.hhmm,
+          endWall.hhmm,
+          nowIso(),
+        ],
       );
     } else if (dec.action === 'reschedule' && dec.new_starts_at && dec.new_ends_at) {
       await query(

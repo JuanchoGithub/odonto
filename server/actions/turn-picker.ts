@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { query, queryOne } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
-import { getSlots, getClinicTimezone } from '@/lib/availability';
+import { getSlots, getClinicTimezone, wallClockInTz } from '@/lib/availability';
 import { effectiveExpiryMs, linkStatus, type LinkStatus } from '@/lib/turn-picker';
 export type { LinkStatus } from '@/lib/turn-picker';
 
@@ -157,8 +157,9 @@ export async function bookViaPicker(
   const end = new Date(start.getTime() + link.slot_minutes * 60_000);
 
   // Defensive: re-check the slot is still available (handles stale pages & races).
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const date = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  // Use the clinic timezone so late-evening slots aren't misattributed to tomorrow.
+  const tz = await getClinicTimezone();
+  const date = wallClockInTz(slotStartIso, tz).date;
   const slots = await getSlots(link.dentist_id, date, date, link.slot_minutes);
   const stillAvailable = slots.some(
     (s) => Math.abs(new Date(s.start).getTime() - start.getTime()) < 60_000,

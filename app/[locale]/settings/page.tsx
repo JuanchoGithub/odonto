@@ -15,6 +15,7 @@ type Clinic = {
   tax_rate_reduced_bps: number;
   currency: string;
   locale: string;
+  timezone: string;
 };
 
 type User = {

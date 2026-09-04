@@ -25,6 +25,7 @@ const ClinicSchema = z.object({
     'GBP',
   ]),
   locale: z.enum(['es', 'en']),
+  timezone: z.string().min(1).max(64).default('UTC'),
 });
 
 export async function upsertClinic(fd: FormData) {
@@ -37,7 +38,7 @@ export async function upsertClinic(fd: FormData) {
   );
   if (existing) {
     await query(
-      `UPDATE clinics SET name=?, address=?, tax_id=?, tax_rate_standard_bps=?, tax_rate_reduced_bps=?, currency=?, locale=?, updated_at=? WHERE id=?`,
+      `UPDATE clinics SET name=?, address=?, tax_id=?, tax_rate_standard_bps=?, tax_rate_reduced_bps=?, currency=?, locale=?, timezone=?, updated_at=? WHERE id=?`,
       [
         d.name,
         d.address || null,
@@ -46,6 +47,7 @@ export async function upsertClinic(fd: FormData) {
         d.tax_rate_reduced_bps,
         d.currency,
         d.locale,
+        d.timezone,
         nowIso(),
         existing.id,
       ],
@@ -57,8 +59,8 @@ export async function upsertClinic(fd: FormData) {
   } else {
     const id = uid();
     await query(
-      `INSERT INTO clinics (id, name, address, tax_id, tax_rate_standard_bps, tax_rate_reduced_bps, currency, locale, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO clinics (id, name, address, tax_id, tax_rate_standard_bps, tax_rate_reduced_bps, currency, locale, timezone, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         d.name,
@@ -68,6 +70,7 @@ export async function upsertClinic(fd: FormData) {
         d.tax_rate_reduced_bps,
         d.currency,
         d.locale,
+        d.timezone,
         nowIso(),
         nowIso(),
       ],

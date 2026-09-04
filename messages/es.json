@@ -199,6 +199,7 @@
     "taxId": "CUIT/RFC",
     "taxRateStandard": "Tasa de impuesto estándar (bps)",
     "taxRateReduced": "Tasa de impuesto reducida (bps)",
+    "timezone": "Zona horaria",
     "users": "Usuarios",
     "newUser": "Nuevo usuario",
     "role": "Rol",
