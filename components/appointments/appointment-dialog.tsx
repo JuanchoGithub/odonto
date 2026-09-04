@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, ChevronDown, Check, UserPlus } from 'lucide-react';
+import { X, ChevronDown, Check, UserPlus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { createAppointment } from '@/server/actions/appointments';
+import { Link } from '@/lib/navigation';
+import {
+  createAppointment,
+  updateAppointment,
+  deleteAppointment,
+  type ApptRow,
+} from '@/server/actions/appointments';
+import { useToast } from '@/components/ui/toaster';
 import { useRouter } from '@/lib/navigation';
 import { format } from 'date-fns';
 import { PatientForm } from '@/components/patients/patient-form';
@@ -23,17 +30,29 @@ import { createPatientInline, type PatientRow } from '@/server/actions/patients'
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import { Share2 } from 'lucide-react';
 
+const STATUS_OPTIONS = [
+  'scheduled',
+  'arrived',
+  'in_chair',
+  'completed',
+  'cancelled',
+  'no_show',
+] as const;
+
 export function AppointmentDialog({
   open,
   onOpenChange,
   defaultStart,
   dentists,
+  appointment,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
   defaultStart: string | null;
   dentists: { id: string; name: string }[];
+  /** When set, the dialog edits this appointment instead of creating. */
+  appointment?: ApptRow | null;
   onCreated?: () => void;
 }) {
   const t = useTranslations('appointments');
@@ -42,18 +61,24 @@ export function AppointmentDialog({
   const tPi = useTranslations('patientOnboarding');
   const tTp = useTranslations('turnPicker');
   const router = useRouter();
+  const { push } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
   const [patientId, setPatientId] = useState<string>('');
   const [newPatientOpen, setNewPatientOpen] = useState(false);
   const [dentistId, setDentistId] = useState<string>(dentists[0]?.id ?? '');
+  const [status, setStatus] = useState<string>('scheduled');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+
+  const editing = appointment ?? null;
 
   // Load patients each time the dialog opens
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setConfirmDelete(false);
     fetch('/api/patients?limit=200')
       .then((r) => r.json())
       .then((data) =>
@@ -67,8 +92,37 @@ export function AppointmentDialog({
       .catch(() => setPatients([]));
   }, [open]);
 
-  const start = defaultStart ? new Date(defaultStart) : new Date();
-  const end = new Date(start.getTime() + 30 * 60000);
+  // Reset form state when the dialog OPEN/CLOSE cycle changes — NOT when
+  // switching between edit/create while open (because the picker may have
+  // just chosen a patient).
+  const wasOpen = useRef(false);
+  const prevEditingId = useRef<string | null>(null);
+  useEffect(() => {
+    const justOpened = open && !wasOpen.current;
+    const editSwap = open && (editing?.id ?? null) !== prevEditingId.current;
+    wasOpen.current = open;
+    prevEditingId.current = editing?.id ?? null;
+    if (!open) return;
+    if (!justOpened && !editSwap) return;
+    if (editing) {
+      setPatientId(editing.patient_id);
+      setDentistId(editing.dentist_id);
+      setStatus(editing.status);
+    } else {
+      setPatientId('');
+      setDentistId(dentists[0]?.id ?? '');
+      setStatus('scheduled');
+    }
+  }, [open, editing, dentists]);
+
+  const start = editing
+    ? new Date(editing.starts_at)
+    : defaultStart
+      ? new Date(defaultStart)
+      : new Date();
+  const end = editing
+    ? new Date(editing.ends_at)
+    : new Date(start.getTime() + 30 * 60000);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -81,24 +135,46 @@ export function AppointmentDialog({
     try {
       const fd = new FormData(e.currentTarget);
       fd.set('patient_id', patientId);
-      const res = await createAppointment(fd);
-      if (res.error === 'conflict') {
+      fd.set('dentist_id', dentistId);
+      fd.set('status', status);
+      if (editing) fd.set('id', editing.id);
+      const res = editing
+        ? await updateAppointment(fd)
+        : await createAppointment(fd);
+      if (res && 'error' in res && res.error === 'conflict') {
         setError(t('conflict'));
         return;
       }
-      if (res.error === 'patient_not_found') {
+      if (res && 'error' in res && res.error === 'patient_not_found') {
         setError(t('patientNotFound'));
         return;
       }
-      if (res.error === 'invalid') {
+      if (res && 'error' in res && res.error === 'invalid') {
         setError(t('invalid'));
         return;
       }
-      if (res.error) {
+      if (res && 'error' in res && res.error) {
         setError(tErr('generic'));
         return;
       }
       onOpenChange(false);
+      if (onCreated) onCreated();
+      else router.refresh();
+    } catch {
+      setError(tErr('generic'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onDelete() {
+    if (!editing) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await deleteAppointment(editing.id);
+      onOpenChange(false);
+      push({ title: tCommon('deleted'), variant: 'default' });
       if (onCreated) onCreated();
       else router.refresh();
     } catch {
@@ -146,7 +222,9 @@ export function AppointmentDialog({
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
-            <Dialog.Title className="text-lg font-semibold">{t('new')}</Dialog.Title>
+            <Dialog.Title className="text-lg font-semibold">
+              {editing ? t('edit') : t('new')}
+            </Dialog.Title>
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon">
                 <X className="h-4 w-4" />
@@ -155,7 +233,17 @@ export function AppointmentDialog({
           </div>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label>{t('patient')}</Label>
+              <div className="flex items-center justify-between">
+                <Label>{t('patient')}</Label>
+                {editing ? (
+                  <Link
+                    href={`/patients/${editing.patient_id}`}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {t('viewPatient')}
+                  </Link>
+                ) : null}
+              </div>
               <PatientPicker
                 patients={patients}
                 value={patientId}
@@ -195,6 +283,23 @@ export function AppointmentDialog({
                 </SelectContent>
               </Select>
             </div>
+            {editing ? (
+              <div className="space-y-2">
+                <Label>{tCommon('status')}</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger data-testid="appt-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {t(`status.${s}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label htmlFor="starts_at">{t('startsAt')}</Label>
@@ -219,14 +324,52 @@ export function AppointmentDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="reason">{t('reason')}</Label>
-              <Input id="reason" name="reason" />
+              <Input id="reason" name="reason" defaultValue={editing?.reason ?? ''} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">{tCommon('notes')}</Label>
-              <Textarea id="notes" name="notes" rows={2} />
+              <Textarea id="notes" name="notes" rows={2} defaultValue={editing?.notes ?? ''} />
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <div className="flex justify-end gap-2">
+            <div className="flex items-center gap-2">
+              {editing ? (
+                <div className="flex-1 flex items-center gap-2">
+                  {confirmDelete ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={onDelete}
+                        disabled={loading}
+                      >
+                        {tCommon('delete')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmDelete(false)}
+                      >
+                        {tCommon('cancel')}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={loading}
+                      onClick={() => setConfirmDelete(true)}
+                      title={tCommon('delete')}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex-1" />
+              )}
               <Dialog.Close asChild>
                 <Button type="button" variant="outline">
                   {tCommon('cancel')}

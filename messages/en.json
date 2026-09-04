@@ -33,7 +33,8 @@
     "noClinicConfigured": "Configure the clinic before continuing",
     "configureClinic": "Configure clinic",
     "done": "Done",
-    "undo": "Undo"
+    "undo": "Undo",
+    "deleted": "Deleted"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -106,6 +107,7 @@
     },
     "conflict": "Dentist already has an appointment at that time",
     "patientNotFound": "That patient doesn't exist. Pick one from the list or create a new patient.",
+    "viewPatient": "View patient",
     "invalid": "Invalid data. Check the fields."
   },
   "odontogram": {

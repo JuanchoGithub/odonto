@@ -33,7 +33,8 @@
     "noClinicConfigured": "Configura la clínica antes de continuar",
     "configureClinic": "Configurar clínica",
     "done": "Listo",
-    "undo": "Deshacer"
+    "undo": "Deshacer",
+    "deleted": "Eliminado"
   },
   "nav": {
     "dashboard": "Panel",
@@ -106,6 +107,7 @@
     },
     "conflict": "El odontólogo ya tiene un turno en ese horario",
     "patientNotFound": "Ese paciente no existe. Selecciona uno de la lista o crea uno nuevo.",
+    "viewPatient": "Ver paciente",
     "invalid": "Datos inválidos. Revisá los campos."
   },
   "odontogram": {

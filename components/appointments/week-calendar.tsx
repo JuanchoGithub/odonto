@@ -1,11 +1,10 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
 import { addDays, startOfWeek, format, isSameDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ChevronLeft, ChevronRight, Plus, Share2 } from 'lucide-react';
-import { Link } from '@/lib/navigation';
 import { createAppointment, type ApptRow } from '@/server/actions/appointments';
 import { AppointmentDialog } from './appointment-dialog';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
@@ -28,6 +27,7 @@ export function WeekCalendar({
   const [appts, setAppts] = useState(initial);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogStart, setDialogStart] = useState<string | null>(null);
+  const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [, startTransition] = useTransition();
 
@@ -43,6 +43,12 @@ export function WeekCalendar({
     }
   }
 
+  // Refetch when the visible week changes
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart.toISOString()]);
+
   return (
     <Card>
       <CardContent className="pt-6">
@@ -51,6 +57,7 @@ export function WeekCalendar({
             <Button
               variant="outline"
               size="icon"
+              data-testid="week-prev"
               onClick={() => setWeekStart((d) => addDays(d, -7))}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -62,6 +69,7 @@ export function WeekCalendar({
             <Button
               variant="outline"
               size="icon"
+              data-testid="week-next"
               onClick={() => setWeekStart((d) => addDays(d, 7))}
             >
               <ChevronRight className="h-4 w-4" />
@@ -83,6 +91,7 @@ export function WeekCalendar({
             </Button>
             <Button
               onClick={() => {
+                setEditingAppt(null);
                 setDialogStart(null);
                 setDialogOpen(true);
               }}
@@ -113,7 +122,12 @@ export function WeekCalendar({
                 onCellClick={(d) => {
                   const start = new Date(d);
                   start.setHours(h, 0, 0, 0);
+                  setEditingAppt(null);
                   setDialogStart(start.toISOString());
+                  setDialogOpen(true);
+                }}
+                onApptClick={(a) => {
+                  setEditingAppt(a);
                   setDialogOpen(true);
                 }}
                 locale={dateFnsLocale}
@@ -124,9 +138,13 @@ export function WeekCalendar({
         </div>
         <AppointmentDialog
           open={dialogOpen}
-          onOpenChange={setDialogOpen}
+          onOpenChange={(o) => {
+            setDialogOpen(o);
+            if (!o) setEditingAppt(null);
+          }}
           defaultStart={dialogStart}
           dentists={dentists}
+          appointment={editingAppt}
           onCreated={refresh}
         />
         <GenerateTurnLinkDialog
@@ -144,6 +162,7 @@ function FragmentRow({
   days,
   appts,
   onCellClick,
+  onApptClick,
   locale,
   t,
 }: {
@@ -151,6 +170,7 @@ function FragmentRow({
   days: Date[];
   appts: ApptRow[];
   onCellClick: (d: Date) => void;
+  onApptClick: (a: ApptRow) => void;
   locale: typeof es;
   t: ReturnType<typeof useTranslations<'appointments'>>;
 }) {
@@ -165,18 +185,29 @@ function FragmentRow({
           return isSameDay(ad, d) && ad.getHours() === hour;
         });
         return (
-          <button
+          <div
             key={d.toISOString() + hour}
-            type="button"
+            role="button"
+            tabIndex={0}
             onClick={() => onCellClick(d)}
-            className="border-b border-r last:border-r-0 min-h-[56px] p-1 text-left hover:bg-accent/30 transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onCellClick(d);
+              }
+            }}
+            className="border-b border-r last:border-r-0 min-h-[56px] p-1 text-left hover:bg-accent/30 transition-colors cursor-pointer"
           >
             {dayAppts.map((a) => (
-              <Link
+              <button
                 key={a.id}
-                href={`/patients/${a.patient_id}`}
-                className="block"
-                onClick={(e) => e.stopPropagation()}
+                type="button"
+                data-testid="appt-badge"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onApptClick(a);
+                }}
+                className="block w-full"
               >
                 <Badge
                   variant={
@@ -192,9 +223,9 @@ function FragmentRow({
                 >
                   {format(new Date(a.starts_at), 'HH:mm')} {a.patient_name}
                 </Badge>
-              </Link>
+              </button>
             ))}
-          </button>
+          </div>
         );
       })}
     </>

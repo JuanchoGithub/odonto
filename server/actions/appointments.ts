@@ -81,6 +81,66 @@ export async function createAppointment(fd: FormData) {
   return { ok: true, id };
 }
 
+const UpdateApptSchema = ApptSchema.omit({ patient_id: true }).extend({
+  id: z.string().min(1),
+});
+
+export type UpdateApptResult =
+  | { ok: true; id: string }
+  | { error: 'invalid' | 'conflict' | 'not_found' };
+
+export async function updateAppointment(
+  fd: FormData,
+): Promise<UpdateApptResult> {
+  const user = await requireUser();
+  const parsed = UpdateApptSchema.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return { error: 'invalid' as const };
+  const data = parsed.data;
+
+  const existing = await queryOne<{ id: string }>(
+    'SELECT id FROM appointments WHERE id = ?',
+    [data.id],
+  );
+  if (!existing) return { error: 'not_found' as const };
+
+  // conflict check — ignore this appointment itself
+  const conflict = await queryOne(
+    `SELECT id FROM appointments
+     WHERE dentist_id = ? AND id != ?
+       AND status NOT IN ('cancelled','completed','no_show')
+       AND NOT (datetime(ends_at) <= datetime(?) OR datetime(starts_at) >= datetime(?))
+     LIMIT 1`,
+    [data.dentist_id, data.id, data.starts_at, data.ends_at],
+  );
+  if (conflict) return { error: 'conflict' as const };
+
+  const withinHours = await isWithinWorkingHours(
+    data.dentist_id,
+    data.starts_at,
+    data.ends_at,
+  );
+  if (!withinHours) return { error: 'conflict' as const };
+
+  await query(
+    `UPDATE appointments SET dentist_id=?, starts_at=?, ends_at=?, status=?, reason=?, notes=? WHERE id=?`,
+    [
+      data.dentist_id,
+      data.starts_at,
+      data.ends_at,
+      data.status,
+      data.reason || null,
+      data.notes || null,
+      data.id,
+    ],
+  );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,
+    [uid(), user.id, data.id, JSON.stringify({ status: data.status })],
+  );
+  revalidatePath('/appointments');
+  return { ok: true, id: data.id };
+}
+
 export async function updateAppointmentStatus(id: string, status: string) {
   const user = await requireUser();
   await query('UPDATE appointments SET status = ? WHERE id = ?', [status, id]);
