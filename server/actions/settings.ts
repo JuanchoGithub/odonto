@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { query, queryOne } from '@/lib/db';
 import { requireRole } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
+import { randomDentistColor } from '@/lib/colors';
 
 const ClinicSchema = z.object({
   name: z.string().min(1),
@@ -101,9 +102,18 @@ export async function createUser(fd: FormData) {
   const newId = uid();
   try {
     await query(
-      `INSERT INTO users (id, email, password_hash, name, role, locale, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [newId, d.email.toLowerCase(), hash, d.name, d.role, d.locale, nowIso()],
+      `INSERT INTO users (id, email, password_hash, name, role, locale, color, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newId,
+        d.email.toLowerCase(),
+        hash,
+        d.name,
+        d.role,
+        d.locale,
+        d.role === 'dentist' ? randomDentistColor() : null,
+        nowIso(),
+      ],
     );
   } catch (e: any) {
     if (String(e?.message ?? '').includes('UNIQUE')) {
@@ -116,5 +126,21 @@ export async function createUser(fd: FormData) {
     [uid(), me.id, newId],
   );
   revalidatePath('/settings');
+  return { ok: true };
+}
+
+const ColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+/** Admin-editable calendar color for a user (dentists in practice). */
+export async function updateUserColor(id: string, color: string) {
+  const me = await requireRole(['admin']);
+  if (!ColorSchema.safeParse(color).success) return { error: 'invalid' as const };
+  await query('UPDATE users SET color = ? WHERE id = ?', [color, id]);
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'user', ?, ?)`,
+    [uid(), me.id, id, JSON.stringify({ color })],
+  );
+  revalidatePath('/settings');
+  revalidatePath('/appointments');
   return { ok: true };
 }

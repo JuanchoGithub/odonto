@@ -45,9 +45,9 @@ async function run() {
 
   // Users
   const users = [
-    { email: 'admin@local', name: 'Admin', role: 'admin', password: 'Admin123!' },
-    { email: 'doc@local', name: 'Dr. Demo', role: 'dentist', password: 'Doctor123!' },
-    { email: 'front@local', name: 'Front Desk', role: 'receptionist', password: 'Front123!' },
+    { email: 'admin@local', name: 'Admin', role: 'admin', password: 'Admin123!', color: null },
+    { email: 'doc@local', name: 'Dr. Demo', role: 'dentist', password: 'Doctor123!', color: '#2563eb' },
+    { email: 'front@local', name: 'Front Desk', role: 'receptionist', password: 'Front123!', color: null },
   ];
   const userIds = {};
   for (const u of users) {
@@ -55,9 +55,9 @@ async function run() {
     const id = randomUUID();
     userIds[u.email] = id;
     await db.execute({
-      sql: `INSERT OR IGNORE INTO users (id, email, password_hash, name, role, locale, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [id, u.email, hash, u.name, u.role, locale, now],
+      sql: `INSERT OR IGNORE INTO users (id, email, password_hash, name, role, locale, color, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [id, u.email, hash, u.name, u.role, locale, u.color, now],
     });
   }
 

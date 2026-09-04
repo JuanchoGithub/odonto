@@ -105,10 +105,16 @@
       "cancelled": "Cancelled",
       "no_show": "No-show"
     },
-    "conflict": "Dentist already has an appointment at that time",
+    "conflict": "That time is outside the dentist's working hours",
     "patientNotFound": "That patient doesn't exist. Pick one from the list or create a new patient.",
     "viewPatient": "View patient",
-    "invalid": "Invalid data. Check the fields."
+    "invalid": "Invalid data. Check the fields.",
+    "duration": "Duration",
+    "time": "Time",
+    "allDentists": "All dentists",
+    "viewCalendar": "Calendar",
+    "viewList": "List",
+    "emptyList": "No appointments this week."
   },
   "odontogram": {
     "title": "Odontogram",
@@ -203,6 +209,7 @@
     "users": "Users",
     "newUser": "New user",
     "role": "Role",
+    "color": "Color",
     "password": "Password"
   },
   "insurers": {

@@ -31,15 +31,8 @@ export async function createAppointment(fd: FormData) {
   );
   if (!patient) return { error: 'patient_not_found' as const };
 
-  // conflict check — only blocks if the overlapping appointment is still active
-  const conflict = await queryOne(
-    `SELECT id FROM appointments
-     WHERE dentist_id = ? AND status NOT IN ('cancelled','completed','no_show')
-       AND NOT (datetime(ends_at) <= datetime(?) OR datetime(starts_at) >= datetime(?))
-     LIMIT 1`,
-    [data.dentist_id, data.starts_at, data.ends_at],
-  );
-  if (conflict) return { error: 'conflict' as const };
+  // Overlapping appointments are allowed (same or different dentists) —
+  // the calendar renders them side by side.
 
   // outside working hours (schedule / exceptions / business-hours fallback)
   const withinHours = await isWithinWorkingHours(
@@ -103,16 +96,7 @@ export async function updateAppointment(
   );
   if (!existing) return { error: 'not_found' as const };
 
-  // conflict check — ignore this appointment itself
-  const conflict = await queryOne(
-    `SELECT id FROM appointments
-     WHERE dentist_id = ? AND id != ?
-       AND status NOT IN ('cancelled','completed','no_show')
-       AND NOT (datetime(ends_at) <= datetime(?) OR datetime(starts_at) >= datetime(?))
-     LIMIT 1`,
-    [data.dentist_id, data.id, data.starts_at, data.ends_at],
-  );
-  if (conflict) return { error: 'conflict' as const };
+  // Overlapping appointments are allowed (same or different dentists).
 
   const withinHours = await isWithinWorkingHours(
     data.dentist_id,
@@ -168,13 +152,14 @@ export type ApptRow = {
   notes: string | null;
   patient_name: string;
   dentist_name: string;
+  dentist_color: string | null;
 };
 
 export async function listAppointmentsForWeek(startIso: string) {
   const end = new Date(new Date(startIso).getTime() + 7 * 86400_000).toISOString();
   return query<ApptRow>(
     `SELECT a.*, p.first_name || ' ' || p.last_name as patient_name,
-            u.name as dentist_name
+            u.name as dentist_name, u.color as dentist_color
      FROM appointments a
      JOIN patients p ON p.id = a.patient_id
      JOIN users u ON u.id = a.dentist_id

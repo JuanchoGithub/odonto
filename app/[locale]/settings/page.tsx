@@ -4,6 +4,7 @@ import { query, queryOne } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ClinicForm } from '@/components/settings/clinic-form';
 import { UserForm } from '@/components/settings/user-form';
+import { UserColorCell } from '@/components/settings/user-color-cell';
 import { Badge } from '@/components/ui/badge';
 
 type Clinic = {
@@ -25,6 +26,7 @@ type User = {
   role: string;
   locale: string;
   created_at: string;
+  color: string | null;
 };
 
 export default async function SettingsPage({
@@ -42,7 +44,7 @@ export default async function SettingsPage({
   const sp = await searchParams;
   const [clinic, users] = await Promise.all([
     queryOne<Clinic>('SELECT * FROM clinics LIMIT 1'),
-    query<User>('SELECT id, email, name, role, locale, created_at FROM users ORDER BY created_at'),
+    query<User>('SELECT id, email, name, role, locale, created_at, color FROM users ORDER BY created_at'),
   ]);
 
   return (
@@ -74,6 +76,7 @@ export default async function SettingsPage({
                   <th className="py-2 pr-4">{tCommon('email')}</th>
                   <th className="py-2 pr-4">{t('role')}</th>
                   <th className="py-2 pr-4">{tCommon('locale')}</th>
+                  <th className="py-2 pr-4">{t('color')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -85,6 +88,11 @@ export default async function SettingsPage({
                       <Badge variant="secondary">{u.role}</Badge>
                     </td>
                     <td className="py-2 pr-4">{u.locale}</td>
+                    <td className="py-2 pr-4">
+                      {u.role === 'dentist' ? (
+                        <UserColorCell userId={u.id} color={u.color} />
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>

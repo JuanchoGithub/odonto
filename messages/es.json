@@ -105,10 +105,16 @@
       "cancelled": "Cancelado",
       "no_show": "No asistió"
     },
-    "conflict": "El odontólogo ya tiene un turno en ese horario",
+    "conflict": "Ese horario está fuera del horario laboral del odontólogo",
     "patientNotFound": "Ese paciente no existe. Selecciona uno de la lista o crea uno nuevo.",
     "viewPatient": "Ver paciente",
-    "invalid": "Datos inválidos. Revisá los campos."
+    "invalid": "Datos inválidos. Revisá los campos.",
+    "duration": "Duración",
+    "time": "Hora",
+    "allDentists": "Todos los profesionales",
+    "viewCalendar": "Calendario",
+    "viewList": "Lista",
+    "emptyList": "No hay turnos en esta semana."
   },
   "odontogram": {
     "title": "Odontograma",
@@ -203,6 +209,7 @@
     "users": "Usuarios",
     "newUser": "Nuevo usuario",
     "role": "Rol",
+    "color": "Color",
     "password": "Contraseña"
   },
   "insurers": {

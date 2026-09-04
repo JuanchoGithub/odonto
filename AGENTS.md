@@ -10,7 +10,7 @@ This is the source of truth. README.md is a one-page pointer; everything operati
 
 Bilingual (es / en) clinic management app. Modules:
 - **Patients** — CRUD + insurance link + per-patient odontogram + treatments + invoices
-- **Appointments** — week calendar with conflict detection
+- **Appointments** — week calendar on a 15-minute slot grid; blocks are sized by duration; drag to move (cross-day too) and drag the bottom edge to extend; overlapping appointments are allowed (rendered side-by-side); each dentist has a color (random on creation, editable in Settings → Users); doctor filter for receptionists; calendar/list view toggle
 - **Insurers** (obras sociales) — master table, searchable, with inline onboarding
 - **Treatments** — per-patient pipeline + cost
 - **Billing** — invoices (two-rate tax) + payments + jsPDF export
@@ -19,6 +19,8 @@ Bilingual (es / en) clinic management app. Modules:
 - **Attachments** — Vercel Blob storage (X-rays, photos, consent)
 - **Dashboard** — KPIs
 - **Turn picker** — staff generate a signed, single-use, self-expiring link (`/pick-turn/[token]`) so patients book their own slot; single-use (consumed on booking), idle-revoked after 5 days (configurable via `TURN_PICKER_IDLE_MS`), absolute expiry default 14 days
+
+**Calendar grid** — `components/appointments/time-grid.tsx` is the source of truth for the time-axis layout: `SLOT_MINUTES` (15), `SLOT_PX` (14px per slot), and the 8:00–19:00 display window. Blocks are absolutely positioned (`top`/`height` from times), share a column equally when overlapping, and drag/resize is plain pointer events (no dnd library) that round to 15-min slots and call `updateAppointment`. Click (not drag) opens the edit dialog — a `suppressClick` ref swallows the click that follows a completed drag. Keep `data-testid="appt-badge"` on blocks and `day-col-N` on day columns — e2e depends on them.
 - **Soft delete (patients)** — `patients.deleted_at` timestamp; delete asks for confirmation, sets the flag, hidden from lists, undoable via toast action ("Undo") or the restore button on the deleted patient's page
 - **Schedules** — per-dentist weekly hours + day-level exceptions (`time_off` / `custom_hours`), clinic business hours as fallback when a dentist has no schedule rows, clinic holidays; editing a schedule that would leave existing appointments outside the new hours requires a per-appointment decision (reschedule / cancel / keep-as-exception); slot availability engine in `lib/availability.ts` is the single source of truth (also consulted by `createAppointment`)
 
@@ -254,7 +256,8 @@ Nav links are filtered in `components/nav/top-nav.tsx` based on `user.role`.
 - `clinics` — single-row v1, but designed to allow multi-clinic (don't add `clinic_id` to other tables without thinking through the migration).
 - `users` — Auth.js-compatible; `role` is checked at the app level.
 - `patients` — has `insurer_id` (FK to `insurers`) and a denormalized `insurance_provider` string for legacy / free-text cases.
-- `appointments` — `status` controls the calendar render. The conflict check in `createAppointment` ignores `cancelled`, `completed`, and `no_show` statuses (only active slots block).
+- `appointments` — `status` controls the calendar render. Overlapping appointments are **allowed** (same or different dentists); the calendar renders them side-by-side. Only the working-hours check (`isWithinWorkingHours`) can reject a write.
+- `users.color` — per-dentist calendar color (hex). NULL → deterministic palette fallback from `lib/colors.ts`. Set randomly on dentist creation, editable by admin in Settings → Users.
 - `teeth_chart` + `tooth_conditions` — per-tooth, per-surface conditions.
 - `treatments` — `cost_cents` (integer, never float), `tax_kind` (standard / reduced / none).
 - `invoices` + `invoice_lines` + `payments` — full balance tracking; `payments` sum vs `invoices.total_cents` determines paid status.

@@ -22,8 +22,8 @@ export default async function AppointmentsPage({
     : startOfWeek(new Date(), { weekStartsOn: 1 });
   const [appts, dentists] = await Promise.all([
     listAppointmentsForWeek(start.toISOString()),
-    query<{ id: string; name: string }>(
-      "SELECT id, name FROM users WHERE role = 'dentist' ORDER BY name",
+    query<{ id: string; name: string; color: string | null }>(
+      "SELECT id, name, color FROM users WHERE role = 'dentist' ORDER BY name",
     ),
   ]);
 
@@ -32,7 +32,7 @@ export default async function AppointmentsPage({
       <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
       <WeekCalendar
         initial={appts}
-        dentists={dentists.map((d) => ({ id: d.id, name: d.name }))}
+        dentists={dentists.map((d) => ({ id: d.id, name: d.name, color: d.color }))}
       />
     </div>
   );
