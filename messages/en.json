@@ -31,7 +31,8 @@
     "password": "Password",
     "emailOrPasswordWrong": "Wrong email or password",
     "noClinicConfigured": "Configure the clinic before continuing",
-    "configureClinic": "Configure clinic"
+    "configureClinic": "Configure clinic",
+    "done": "Done"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -42,7 +43,8 @@
     "billing": "Billing",
     "reports": "Reports",
     "settings": "Settings",
-    "insurers": "Insurers"
+    "insurers": "Insurers",
+    "schedules": "Schedules"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -222,6 +224,65 @@
       "doc": "Document",
       "consent": "Consent",
       "other": "Other"
+    }
+  },
+  "turnPicker": {
+    "shareButton": "Share appointment link",
+    "generate": "Generate link",
+    "generateAnother": "Generate another",
+    "dentist": "Dentist",
+    "duration": "Duration",
+    "duration15": "15 minutes",
+    "duration30": "30 minutes",
+    "expires": "Expires",
+    "link": "Patient link",
+    "copyUrl": "Copy link",
+    "copied": "Link copied!",
+    "idleNotice": "Also auto-expires 5 days after creation if unused.",
+    "activeLinks": "Active links",
+    "publicTitle": "Book your appointment",
+    "publicSubtitle": "Pick a day and time",
+    "noSlots": "No available slots in the next days",
+    "confirm": "Confirm appointment",
+    "booked": "Done! Your appointment is booked",
+    "with": "with",
+    "expired": "This link expired",
+    "consumed": "This link has already been used",
+    "invalid": "Invalid link",
+    "conflict": "That slot is no longer available. Pick another."
+  },
+  "schedules": {
+    "title": "Schedules",
+    "weekly": "Weekly hours",
+    "exceptions": "Exceptions",
+    "clinicHours": "Clinic business hours",
+    "clinicHoursDesc": "Used as fallback when a dentist hasn't configured their own hours.",
+    "clinicHolidays": "Clinic holidays",
+    "dentistTimeOff": "Time off",
+    "customHours": "Custom hours",
+    "timeOff": "Time off",
+    "addWindow": "Add hours",
+    "addHoliday": "Add holiday",
+    "addException": "Add exception",
+    "from": "From",
+    "to": "To",
+    "day": "Day",
+    "reason": "Reason",
+    "label": "Label",
+    "warnTitle": "These changes affect existing appointments",
+    "warnBody": "The following appointments fall outside the new hours. Choose what to do with each one.",
+    "reschedule": "Reschedule",
+    "cancelAppt": "Cancel appointment",
+    "keepException": "Keep as exception",
+    "needsDecisions": "You still need to decide what to do with {count} appointment(s).",
+    "weekdays": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
     }
   },
   "errors": {

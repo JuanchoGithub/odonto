@@ -18,6 +18,7 @@ import {
   BarChart3,
   Menu,
   X,
+  Clock,
 } from 'lucide-react';
 import type { Role } from '@/lib/schemas/common';
 
@@ -31,7 +32,8 @@ const links: {
     | 'billing'
     | 'reports'
     | 'settings'
-    | 'insurers';
+    | 'insurers'
+    | 'schedules';
   icon: React.ComponentType<{ className?: string }>;
   roles: Role[];
 }[] = [
@@ -41,6 +43,7 @@ const links: {
   { href: '/treatments', key: 'treatments', icon: Stethoscope, roles: ['admin', 'dentist'] },
   { href: '/billing', key: 'billing', icon: CreditCard, roles: ['admin', 'receptionist'] },
   { href: '/insurers', key: 'insurers', icon: Shield, roles: ['admin', 'dentist', 'receptionist'] },
+  { href: '/settings/schedules', key: 'schedules', icon: Clock, roles: ['admin', 'dentist'] },
   { href: '/reports', key: 'reports', icon: BarChart3, roles: ['admin', 'dentist', 'receptionist'] },
   { href: '/settings', key: 'settings', icon: Settings, roles: ['admin'] },
 ];

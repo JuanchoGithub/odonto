@@ -18,6 +18,8 @@ Bilingual (es / en) clinic management app. Modules:
 - **Settings** — clinic profile (currency, locale, tax rates) + user management
 - **Attachments** — Vercel Blob storage (X-rays, photos, consent)
 - **Dashboard** — KPIs
+- **Turn picker** — staff generate a signed, single-use, self-expiring link (`/pick-turn/[token]`) so patients book their own slot; single-use (consumed on booking), idle-revoked after 5 days (configurable via `TURN_PICKER_IDLE_MS`), absolute expiry default 14 days
+- **Schedules** — per-dentist weekly hours + day-level exceptions (`time_off` / `custom_hours`), clinic business hours as fallback when a dentist has no schedule rows, clinic holidays; editing a schedule that would leave existing appointments outside the new hours requires a per-appointment decision (reschedule / cancel / keep-as-exception); slot availability engine in `lib/availability.ts` is the single source of truth (also consulted by `createAppointment`)
 
 Default currency is per-clinic; default locale is `es` (ARS) or `en` (USD), editable in Settings.
 

@@ -39,11 +39,15 @@ async function run() {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = await readFile(join(migrationsDir, file), 'utf8');
-    // Skip comment-only or empty files
-    const statements = sql
-      .split(/;\s*\n/)
+    // Strip comment lines, then split into statements on `;` at end of line.
+    const stripped = sql
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('--'))
+      .join('\n');
+    const statements = stripped
+      .split(/;\s*$/m)
       .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !/^--/.test(s));
+      .filter((s) => s.length > 0);
     if (statements.length === 0) continue;
     for (const stmt of statements) {
       await db.execute(stmt);

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
 import { requireUser } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
+import { isWithinWorkingHours } from '@/lib/availability';
 
 const ApptSchema = z.object({
   patient_id: z.string().min(1),
@@ -39,6 +40,14 @@ export async function createAppointment(fd: FormData) {
     [data.dentist_id, data.starts_at, data.ends_at],
   );
   if (conflict) return { error: 'conflict' as const };
+
+  // outside working hours (schedule / exceptions / business-hours fallback)
+  const withinHours = await isWithinWorkingHours(
+    data.dentist_id,
+    data.starts_at,
+    data.ends_at,
+  );
+  if (!withinHours) return { error: 'conflict' as const };
 
   const id = uid();
   try {

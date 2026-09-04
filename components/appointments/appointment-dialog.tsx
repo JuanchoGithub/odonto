@@ -20,6 +20,8 @@ import { useRouter } from '@/lib/navigation';
 import { format } from 'date-fns';
 import { PatientForm } from '@/components/patients/patient-form';
 import { createPatientInline, type PatientRow } from '@/server/actions/patients';
+import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
+import { Share2 } from 'lucide-react';
 
 export function AppointmentDialog({
   open,
@@ -38,12 +40,15 @@ export function AppointmentDialog({
   const tCommon = useTranslations('common');
   const tErr = useTranslations('errors');
   const tPi = useTranslations('patientOnboarding');
+  const tTp = useTranslations('turnPicker');
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
   const [patientId, setPatientId] = useState<string>('');
   const [newPatientOpen, setNewPatientOpen] = useState(false);
+  const [dentistId, setDentistId] = useState<string>(dentists[0]?.id ?? '');
+  const [shareOpen, setShareOpen] = useState(false);
 
   // Load patients each time the dialog opens
   useEffect(() => {
@@ -159,8 +164,25 @@ export function AppointmentDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dentist_id">{t('dentist')}</Label>
-              <Select name="dentist_id" defaultValue={dentists[0]?.id}>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="dentist_id">{t('dentist')}</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={!patientId}
+                  onClick={() => setShareOpen(true)}
+                  title={tTp('shareButton')}
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  {tTp('shareButton')}
+                </Button>
+              </div>
+              <Select
+                name="dentist_id"
+                value={dentistId}
+                onValueChange={setDentistId}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -223,6 +245,16 @@ export function AppointmentDialog({
         onOpenChange={setNewPatientOpen}
         onCreated={onPatientCreated}
       />
+
+      {patientId ? (
+        <GenerateTurnLinkDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          patientId={patientId}
+          dentists={dentists}
+          defaultDentistId={dentistId}
+        />
+      ) : null}
     </Dialog.Root>
   );
 }

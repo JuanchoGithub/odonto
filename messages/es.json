@@ -31,7 +31,8 @@
     "password": "Contraseña",
     "emailOrPasswordWrong": "Email o contraseña incorrectos",
     "noClinicConfigured": "Configura la clínica antes de continuar",
-    "configureClinic": "Configurar clínica"
+    "configureClinic": "Configurar clínica",
+    "done": "Listo"
   },
   "nav": {
     "dashboard": "Panel",
@@ -42,7 +43,8 @@
     "billing": "Facturación",
     "reports": "Reportes",
     "settings": "Configuración",
-    "insurers": "Obras sociales"
+    "insurers": "Obras sociales",
+    "schedules": "Horarios"
   },
   "dashboard": {
     "title": "Panel",
@@ -222,6 +224,65 @@
       "doc": "Documento",
       "consent": "Consentimiento",
       "other": "Otro"
+    }
+  },
+  "turnPicker": {
+    "shareButton": "Compartir turno",
+    "generate": "Generar enlace",
+    "generateAnother": "Generar otro",
+    "dentist": "Odontólogo",
+    "duration": "Duración",
+    "duration15": "15 minutos",
+    "duration30": "30 minutos",
+    "expires": "Vence",
+    "link": "Enlace para el paciente",
+    "copyUrl": "Copiar enlace",
+    "copied": "¡Enlace copiado!",
+    "idleNotice": "También vence automáticamente 5 días después de su creación si no se usa.",
+    "activeLinks": "Enlaces activos",
+    "publicTitle": "Reservá tu turno",
+    "publicSubtitle": "Elegí día y horario disponible",
+    "noSlots": "No hay horarios disponibles en los próximos días",
+    "confirm": "Confirmar turno",
+    "booked": "¡Listo! Tu turno quedó reservado",
+    "with": "con",
+    "expired": "Este enlace expiró",
+    "consumed": "Este enlace ya fue utilizado",
+    "invalid": "Enlace inválido",
+    "conflict": "Ese horario ya no está disponible. Elegí otro."
+  },
+  "schedules": {
+    "title": "Horarios",
+    "weekly": "Horarios semanales",
+    "exceptions": "Excepciones",
+    "clinicHours": "Horario general de la clínica",
+    "clinicHoursDesc": "Se usa como respaldo cuando un odontólogo no tiene horarios propios configurados.",
+    "clinicHolidays": "Feriados de la clínica",
+    "dentistTimeOff": "Ausencias",
+    "customHours": "Horario especial",
+    "timeOff": "Ausencia",
+    "addWindow": "Agregar horario",
+    "addHoliday": "Agregar feriado",
+    "addException": "Agregar excepción",
+    "from": "Desde",
+    "to": "Hasta",
+    "day": "Día",
+    "reason": "Motivo",
+    "label": "Descripción",
+    "warnTitle": "Estos cambios afectan turnos existentes",
+    "warnBody": "Los siguientes turnos quedan fuera del nuevo horario. Elegí qué hacer con cada uno.",
+    "reschedule": "Reprogramar",
+    "cancelAppt": "Cancelar turno",
+    "keepException": "Mantener como excepción",
+    "needsDecisions": "Tenés que decidir qué hacer con {count} turno(s) afectado(s).",
+    "weekdays": {
+      "0": "Domingo",
+      "1": "Lunes",
+      "2": "Martes",
+      "3": "Miércoles",
+      "4": "Jueves",
+      "5": "Viernes",
+      "6": "Sábado"
     }
   },
   "errors": {

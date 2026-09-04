@@ -6,5 +6,5 @@ const intlMiddleware = createIntlMiddleware(routing);
 export default intlMiddleware;
 
 export const config = {
-  matcher: ['/((?!_next|api|.*\\..*).*)'],
+  matcher: ['/((?!_next|api|pick-turn|.*\\..*).*)'],
 };

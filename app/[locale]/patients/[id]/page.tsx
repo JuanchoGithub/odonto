@@ -12,8 +12,9 @@ import { PatientTreatments } from '@/components/treatments/patient-treatments';
 import { PatientInvoices } from '@/components/billing/patient-invoices';
 import { PatientAttachments } from '@/components/attachments/patient-attachments';
 import { formatDate } from '@/lib/format';
-import { queryOne } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
+import { ShareTurnButton } from '@/components/turn-picker/share-turn-button';
 
 type Clinic = { currency: string; locale: AppLocale };
 
@@ -27,9 +28,12 @@ export default async function PatientDetailPage({
   const user = await requireUser();
   const t = await getTranslations('patients');
   const tCommon = await getTranslations('common');
-  const [patient, clinic] = await Promise.all([
+  const [patient, clinic, dentists] = await Promise.all([
     getPatient(id),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
+    query<{ id: string; name: string }>(
+      "SELECT id, name FROM users WHERE role = 'dentist' ORDER BY name",
+    ),
   ]);
   if (!patient) notFound();
 
@@ -61,16 +65,24 @@ export default async function PatientDetailPage({
             · {patient.phone ?? '—'} · {patient.email ?? '—'}
           </p>
         </div>
-        <form
-          action={async () => {
-            'use server';
-            await deletePatient(id);
-          }}
-        >
-          <Button variant="destructive" type="submit">
-            {tCommon('delete')}
-          </Button>
-        </form>
+        <div className="flex items-center gap-2">
+          <ShareTurnButton
+            patientId={id}
+            dentists={dentists}
+            currentUserId={user.id}
+            role={user.role}
+          />
+          <form
+            action={async () => {
+              'use server';
+              await deletePatient(id);
+            }}
+          >
+            <Button variant="destructive" type="submit">
+              {tCommon('delete')}
+            </Button>
+          </form>
+        </div>
       </div>
 
       <Tabs defaultValue="general">
