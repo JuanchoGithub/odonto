@@ -36,20 +36,15 @@ test('repro: gender picker must work in the inline new-patient form', async ({
   await expect(inlineGender).toContainText(/masculino|male/i);
 });
 
-// Bug 2: Saving an inline-created insurer must not submit the outer patient
-// form. The insurer must be persisted.
+// Bug 2: The insurance onboarding form must receive clicks. With the old
+// implementation, the surrounding patient dialog's overlay/content at z-60
+// sat above the portaled insurer dialog's z-100, so all clicks on the
+// insurer form were intercepted by the patient form.
 //
-// The fix: the InsurerPicker's NewInsurerDialog is rendered in a React
-// portal to document.body, so its <form> is no longer nested inside the
-// new patient dialog's <form>. Submitting the insurer form only triggers
-// the insurer's onSubmit (the fetch to /api/insurers), not the patient
-// form's onSubmit.
-//
-// We submit by dispatching a submit event on the form directly because in
-// Playwright headless tests the surrounding dialog's z-60 overlay can
-// block the actionability check for the Save button click. In a real
-// browser the click works fine.
-test('repro: saving inline insurer persists without closing the patient dialog', async ({
+// Fix: use Radix Dialog (which handles nested dialog stacking correctly)
+// for the insurer sub-dialog instead of a custom div, and prevent the
+// parent dialog from closing when interacting with the insurer dialog.
+test('repro: insurance onboarding form receives clicks (not the patient form)', async ({
   page,
 }) => {
   await page.goto('/login');
@@ -64,18 +59,24 @@ test('repro: saving inline insurer persists without closing the patient dialog',
   await expect(apptDialog).toBeVisible();
 
   // Open patient picker → "+ Nuevo paciente"
-  const patientTrigger = apptDialog.getByRole('button', { name: /buscar|search/i }).first();
+  const patientTrigger = apptDialog
+    .getByRole('button', { name: /buscar|search/i })
+    .first();
   await patientTrigger.click();
-  await apptDialog.getByRole('button', { name: /nuevo paciente|new patient/i }).click();
+  await apptDialog
+    .getByRole('button', { name: /nuevo paciente|new patient/i })
+    .click();
 
   const newPatientDialog = page.getByRole('dialog').last();
   await expect(newPatientDialog).toBeVisible();
 
   // Required patient fields
-  await newPatientDialog.getByLabel(/nombre|first name/i).fill('Test');
+  await newPatientDialog
+    .getByLabel(/nombre|first name/i)
+    .fill('Test');
   await newPatientDialog
     .getByLabel(/apellido|last name/i)
-    .fill(`BugRepro${Date.now()}`);
+    .fill(`ClickTest${Date.now()}`);
 
   // Open insurer picker → "+ Nueva obra social"
   await newPatientDialog.locator('#insurer-picker-trigger').click();
@@ -83,48 +84,34 @@ test('repro: saving inline insurer persists without closing the patient dialog',
     .getByRole('button', { name: /nueva obra social|new insurer/i })
     .click();
 
-  // Insurer dialog (portaled to body)
+  // Insurer dialog is now open. The form inputs must be interactive.
   const insurerDialog = page.getByRole('dialog').last();
   await expect(insurerDialog).toBeVisible();
-
   const stamp = Date.now();
   const insurerName = `OS BugRepro ${stamp}`;
 
-  // Fill the name field. We bypass Playwright's fill (which can race with
-  // React's controlled-input handling on portaled dialogs) by setting the
-  // value via the native setter and dispatching input/change events.
+  // Type into the name field via the keyboard (no force, no dispatchEvent)
   const nameInput = insurerDialog.locator('input[name="name"]');
-  await nameInput.waitFor({ state: 'visible' });
-  await nameInput.evaluate((el, val) => {
-    const input = el as HTMLInputElement;
-    const setter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      'value',
-    )?.set;
-    setter?.call(input, val);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  }, insurerName);
+  await nameInput.click();
+  await nameInput.fill(insurerName);
   await expect(nameInput).toHaveValue(insurerName);
 
-  // Submit the insurer form. Wait for the POST to /api/insurers.
+  // Save the insurer — the patient dialog should remain open.
   const postResp = page.waitForResponse(
     (r) =>
       r.url().includes('/api/insurers') && r.request().method() === 'POST',
     { timeout: 10_000 },
   );
-  await insurerDialog.locator('form').evaluate((form) => {
-    form.dispatchEvent(
-      new Event('submit', { bubbles: true, cancelable: true }),
-    );
-  });
+  await insurerDialog
+    .getByRole('button', { name: /^guardar$|^save$/i })
+    .click();
   const resp = await postResp;
   expect(resp.status()).toBe(201);
 
-  // The new patient dialog should still be visible (NOT closed)
+  // The new patient dialog should still be visible (not closed)
   await expect(newPatientDialog).toBeVisible();
 
-  // Verify the insurer was persisted
+  // The insurer is persisted
   const list = await (await page.request.get('/api/insurers')).json();
   expect(list.find((i: any) => i.name === insurerName)).toBeTruthy();
 });
