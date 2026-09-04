@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { CONDITION_COLOR, CONDITION_TEXT } from './tooth-svg';
+import { CONDITION_BG, CONDITION_LABEL } from './tooth-svg';
 
 type Props = {
   condition: string;
@@ -35,8 +35,8 @@ export function ConditionChip({
       className={cn(
         'px-2 py-1 rounded text-xs border transition-all select-none',
         'cursor-grab active:cursor-grabbing',
-        CONDITION_COLOR[condition],
-        CONDITION_TEXT[condition],
+        CONDITION_BG[condition],
+        CONDITION_LABEL[condition],
         active && 'ring-2 ring-primary ring-offset-1',
         !active && paintModeActive && 'opacity-40',
       )}

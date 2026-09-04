@@ -25,6 +25,22 @@ export const CONDITION_COLOR: Record<string, string> = {
   healthy: 'fill-emerald-500',
 };
 
+// HTML counterparts of CONDITION_COLOR for use on non-SVG elements
+// (e.g. the condition chips in the legend). Tailwind's `fill-*` only
+// applies to SVG elements; HTML buttons need `bg-*` + `text-*`.
+export const CONDITION_BG: Record<string, string> = {
+  caries: 'bg-red-500',
+  filling: 'bg-blue-500',
+  crown: 'bg-yellow-400',
+  root_canal: 'bg-purple-500',
+  missing: 'bg-gray-700',
+  impacted: 'bg-orange-500',
+  fracture: 'bg-rose-600',
+  sealant: 'bg-cyan-500',
+  implant: 'bg-slate-500',
+  healthy: 'bg-emerald-500',
+};
+
 export const CONDITION_TEXT: Record<string, string> = {
   caries: 'fill-white',
   filling: 'fill-white',
@@ -36,6 +52,19 @@ export const CONDITION_TEXT: Record<string, string> = {
   sealant: 'fill-white',
   implant: 'fill-white',
   healthy: 'fill-white',
+};
+
+export const CONDITION_LABEL: Record<string, string> = {
+  caries: 'text-white',
+  filling: 'text-white',
+  crown: 'text-black',
+  root_canal: 'text-white',
+  missing: 'text-white',
+  impacted: 'text-white',
+  fracture: 'text-white',
+  sealant: 'text-white',
+  implant: 'text-white',
+  healthy: 'text-white',
 };
 
 type SurfaceState = { surface: SurfaceKey; condition: string };
