@@ -32,7 +32,8 @@
     "emailOrPasswordWrong": "Wrong email or password",
     "noClinicConfigured": "Configure the clinic before continuing",
     "configureClinic": "Configure clinic",
-    "done": "Done"
+    "done": "Done",
+    "undo": "Undo"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -71,6 +72,12 @@
     "insuranceNumber": "Member number",
     "medicalHistory": "Medical history",
     "allergies": "Allergies",
+    "deleteTitle": "Delete patient",
+    "deleteConfirm": "Delete {name}? You can undo this from the toast at the bottom right.",
+    "deleted": "Patient deleted",
+    "restored": "Patient restored",
+    "restore": "Restore",
+    "deletedBanner": "This patient is deleted. Restore them to edit again.",
     "tabs": {
       "general": "General",
       "medical": "Medical",

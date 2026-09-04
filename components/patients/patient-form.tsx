@@ -70,6 +70,7 @@ export function PatientForm({
           medical_history: null,
           allergies: null,
           notes: null,
+          deleted_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });

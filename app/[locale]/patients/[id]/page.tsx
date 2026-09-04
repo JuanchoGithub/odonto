@@ -1,11 +1,10 @@
 import { setRequestLocale, getTranslations } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
 import { requireUser } from '@/lib/rbac';
-import { getPatient, deletePatient } from '@/server/actions/patients';
+import { getPatient } from '@/server/actions/patients';
 import { Link } from '@/lib/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import { PatientForm } from '@/components/patients/patient-form';
 import { PatientOdontogram } from '@/components/odontogram/patient-odontogram';
 import { PatientTreatments } from '@/components/treatments/patient-treatments';
@@ -15,6 +14,8 @@ import { formatDate } from '@/lib/format';
 import { query, queryOne } from '@/lib/db';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
 import { ShareTurnButton } from '@/components/turn-picker/share-turn-button';
+import { DeletePatientButton } from '@/components/patients/delete-patient-button';
+import { RestorePatientButton } from '@/components/patients/restore-patient-button';
 
 type Clinic = { currency: string; locale: AppLocale };
 
@@ -27,7 +28,6 @@ export default async function PatientDetailPage({
   setRequestLocale(locale);
   const user = await requireUser();
   const t = await getTranslations('patients');
-  const tCommon = await getTranslations('common');
   const [patient, clinic, dentists] = await Promise.all([
     getPatient(id),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
@@ -44,10 +44,12 @@ export default async function PatientDetailPage({
       )
     : null;
 
+  const isDeleted = patient.deleted_at != null;
+
   return (
     <div className="container py-8 space-y-6">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="text-sm text-muted-foreground">
             <Link href="/patients" className="hover:underline">
               {t('title')}
@@ -65,25 +67,29 @@ export default async function PatientDetailPage({
             · {patient.phone ?? '—'} · {patient.email ?? '—'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <ShareTurnButton
-            patientId={id}
-            dentists={dentists}
-            currentUserId={user.id}
-            role={user.role}
-          />
-          <form
-            action={async () => {
-              'use server';
-              await deletePatient(id);
-            }}
-          >
-            <Button variant="destructive" type="submit">
-              {tCommon('delete')}
-            </Button>
-          </form>
-        </div>
+        {isDeleted ? (
+          <RestorePatientButton patientId={id} name={`${patient.first_name} ${patient.last_name}`} />
+        ) : (
+          <div className="flex shrink-0 items-center gap-2 pt-1">
+            <ShareTurnButton
+              patientId={id}
+              dentists={dentists}
+              currentUserId={user.id}
+              role={user.role}
+            />
+            <DeletePatientButton
+              patientId={id}
+              patientName={`${patient.first_name} ${patient.last_name}`}
+            />
+          </div>
+        )}
       </div>
+
+      {isDeleted && (
+        <div className="rounded-md border border-amber-500 bg-amber-50 dark:bg-amber-500/10 p-4 text-sm">
+          {t('deletedBanner')}
+        </div>
+      )}
 
       <Tabs defaultValue="general">
         <TabsList>

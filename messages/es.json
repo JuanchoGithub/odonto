@@ -32,7 +32,8 @@
     "emailOrPasswordWrong": "Email o contraseña incorrectos",
     "noClinicConfigured": "Configura la clínica antes de continuar",
     "configureClinic": "Configurar clínica",
-    "done": "Listo"
+    "done": "Listo",
+    "undo": "Deshacer"
   },
   "nav": {
     "dashboard": "Panel",
@@ -71,6 +72,12 @@
     "insuranceNumber": "Número de afiliado",
     "medicalHistory": "Antecedentes médicos",
     "allergies": "Alergias",
+    "deleteTitle": "Eliminar paciente",
+    "deleteConfirm": "¿Eliminar a {name}? Podés deshacer esto desde el aviso que aparece abajo a la derecha.",
+    "deleted": "Paciente eliminado",
+    "restored": "Paciente restaurado",
+    "restore": "Restaurar",
+    "deletedBanner": "Este paciente está eliminado. Podés restaurarlo para volver a editarlo.",
     "tabs": {
       "general": "General",
       "medical": "Médico",

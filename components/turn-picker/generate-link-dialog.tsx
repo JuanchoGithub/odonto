@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
-import { X, Copy, Check, Link2 } from 'lucide-react';
+import { X, Copy, Check, Link2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,33 +13,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import {
   createTurnPickerLink,
   listLinksForPatient,
   type TurnPickerLinkListItem,
 } from '@/server/actions/turn-picker';
+import type { PatientRow } from '@/server/actions/patients';
 import { useToast } from '@/components/ui/toaster';
 
 export function GenerateTurnLinkDialog({
   open,
   onOpenChange,
-  patientId,
+  patientId: fixedPatientId,
   dentists,
   defaultDentistId,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
-  patientId: string;
+  /** If provided, the patient is locked to this id (e.g. from patient page). */
+  patientId?: string;
   dentists: { id: string; name: string }[];
   /** Preselect a dentist (e.g. current user). */
   defaultDentistId?: string;
 }) {
   const t = useTranslations('turnPicker');
+  const tAppt = useTranslations('appointments');
   const tCommon = useTranslations('common');
   const { push } = useToast();
   const [url, setUrl] = useState<string | null>(null);
   const [slotMinutes, setSlotMinutes] = useState<string>('15');
   const [dentistId, setDentistId] = useState<string>(defaultDentistId ?? dentists[0]?.id ?? '');
+  const [patientId, setPatientId] = useState<string>(fixedPatientId ?? '');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +55,17 @@ export function GenerateTurnLinkDialog({
     setUrl(null);
     setError(null);
     if (defaultDentistId) setDentistId(defaultDentistId);
+    if (fixedPatientId) setPatientId(fixedPatientId);
+  }, [open, fixedPatientId, defaultDentistId]);
+
+  // Load links for the currently-selected patient whenever it changes.
+  useEffect(() => {
+    if (!open || !patientId) {
+      setLinks([]);
+      return;
+    }
     listLinksForPatient(patientId).then(setLinks).catch(() => setLinks([]));
-  }, [open, patientId, defaultDentistId]);
+  }, [open, patientId]);
 
   async function generate() {
     setSaving(true);
@@ -112,6 +126,15 @@ export function GenerateTurnLinkDialog({
 
           {!url ? (
             <div className="space-y-4">
+              {!fixedPatientId ? (
+                <div className="space-y-2">
+                  <Label>{tAppt('patient')}</Label>
+                  <PatientPickerInline
+                    value={patientId}
+                    onChange={setPatientId}
+                  />
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label>{t('dentist')}</Label>
                 <Select value={dentistId} onValueChange={setDentistId}>
@@ -147,7 +170,10 @@ export function GenerateTurnLinkDialog({
                 <Dialog.Close asChild>
                   <Button variant="outline">{tCommon('cancel')}</Button>
                 </Dialog.Close>
-                <Button onClick={generate} disabled={saving || !dentistId}>
+                <Button
+                  onClick={generate}
+                  disabled={saving || !dentistId || !patientId}
+                >
                   {saving ? tCommon('loading') : t('generate')}
                 </Button>
               </div>
@@ -207,5 +233,94 @@ export function GenerateTurnLinkDialog({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/** Simple patient search + select used when no patient is preselected. */
+function PatientPickerInline({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const tCommon = useTranslations('common');
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/patients?limit=200')
+      .then((r) => r.json())
+      .then((data) =>
+        setPatients(
+          data.map((p: PatientRow) => ({
+            id: p.id,
+            name: `${p.last_name}, ${p.first_name}`,
+          })),
+        ),
+      )
+      .catch(() => setPatients([]));
+  }, []);
+
+  const filtered = query
+    ? patients.filter((p) =>
+        p.name.toLowerCase().includes(query.toLowerCase()),
+      )
+    : patients;
+  const selected = patients.find((p) => p.id === value);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm',
+          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+        )}
+      >
+        <span className={cn(!selected && 'text-muted-foreground')}>
+          {selected ? selected.name : tCommon('search') + '…'}
+        </span>
+        <ChevronDown className="h-4 w-4 opacity-50" />
+      </button>
+      {open ? (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md p-1">
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tCommon('search') + '…'}
+            className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm mb-1"
+          />
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => {
+                  onChange(p.id);
+                  setOpen(false);
+                  setQuery('');
+                }}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                  'hover:bg-accent hover:text-accent-foreground',
+                  value === p.id && 'bg-accent',
+                )}
+              >
+                {value === p.id ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <span className="w-3.5" />
+                )}
+                <span className="truncate">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }

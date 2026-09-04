@@ -4,10 +4,11 @@ import { useTranslations } from 'next-intl';
 import { addDays, startOfWeek, format, isSameDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Share2 } from 'lucide-react';
 import { Link } from '@/lib/navigation';
 import { createAppointment, type ApptRow } from '@/server/actions/appointments';
 import { AppointmentDialog } from './appointment-dialog';
+import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import { Badge } from '@/components/ui/badge';
 import { es, enUS } from 'date-fns/locale';
 
@@ -21,11 +22,13 @@ export function WeekCalendar({
   dentists: { id: string; name: string }[];
 }) {
   const t = useTranslations('appointments');
+  const tTp = useTranslations('turnPicker');
   const tCommon = useTranslations('common');
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [appts, setAppts] = useState(initial);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogStart, setDialogStart] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -70,15 +73,24 @@ export function WeekCalendar({
               {tCommon('date')}
             </Button>
           </div>
-          <Button
-            onClick={() => {
-              setDialogStart(null);
-              setDialogOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            {t('new')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShareOpen(true)}
+            >
+              <Share2 className="h-4 w-4" />
+              {tTp('shareButton')}
+            </Button>
+            <Button
+              onClick={() => {
+                setDialogStart(null);
+                setDialogOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              {t('new')}
+            </Button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <div className="grid grid-cols-[60px_repeat(7,minmax(120px,1fr))] border rounded-md">
@@ -116,6 +128,11 @@ export function WeekCalendar({
           defaultStart={dialogStart}
           dentists={dentists}
           onCreated={refresh}
+        />
+        <GenerateTurnLinkDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          dentists={dentists}
         />
       </CardContent>
     </Card>

@@ -90,6 +90,7 @@ type ToastItem = {
   title?: string;
   description?: string;
   variant?: 'default' | 'destructive' | 'success';
+  action?: { label: string; onClick: () => void };
 };
 
 const ToastContext = React.createContext<{
@@ -103,7 +104,7 @@ export function Toaster({ children }: { children: React.ReactNode }) {
   function push(t: Omit<ToastItem, 'id'>) {
     const id = Math.random().toString(36).slice(2);
     setToasts((s) => [...s, { ...t, id }]);
-    setTimeout(() => dismiss(id), 4000);
+    setTimeout(() => dismiss(id), t.action ? 6000 : 4000);
   }
   function dismiss(id: string) {
     setToasts((s) => s.filter((t) => t.id !== id));
@@ -114,12 +115,24 @@ export function Toaster({ children }: { children: React.ReactNode }) {
         {children}
         {toasts.map((t) => (
           <Toast key={t.id} variant={t.variant}>
-            <div className="grid gap-0.5">
+            <div className="grid gap-0.5 flex-1">
               {t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
               {t.description ? (
                 <ToastDescription>{t.description}</ToastDescription>
               ) : null}
             </div>
+            {t.action ? (
+              <button
+                type="button"
+                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring"
+                onClick={() => {
+                  t.action!.onClick();
+                  dismiss(t.id);
+                }}
+              >
+                {t.action.label}
+              </button>
+            ) : null}
             <ToastClose onClick={() => dismiss(t.id)} />
           </Toast>
         ))}

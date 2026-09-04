@@ -114,14 +114,32 @@ export async function updatePatient(
 
 export async function deletePatient(id: string) {
   const user = await requireUser();
-  await query('DELETE FROM patients WHERE id=?', [id]);
   await query(
-    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'patient', ?)`,
+    `UPDATE patients SET deleted_at = ?, updated_at = ? WHERE id = ?`,
+    [nowIso(), nowIso(), id],
+  );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'soft_delete', 'patient', ?)`,
     [uid(), user.id, id],
   );
-  const created = await queryOne<PatientRow>('SELECT * FROM patients WHERE id = ?', [id]);
   revalidatePath('/patients');
-  return { ok: true, patient: created! };
+  revalidatePath(`/patients/${id}`);
+  return { ok: true, id };
+}
+
+export async function restorePatient(id: string) {
+  const user = await requireUser();
+  await query(
+    `UPDATE patients SET deleted_at = NULL, updated_at = ? WHERE id = ?`,
+    [nowIso(), id],
+  );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'restore', 'patient', ?)`,
+    [uid(), user.id, id],
+  );
+  revalidatePath('/patients');
+  revalidatePath(`/patients/${id}`);
+  return { ok: true, id };
 }
 export async function createPatientInline(
   _prev: PatientFormState,
@@ -186,6 +204,7 @@ export type PatientRow = {
   medical_history: string | null;
   allergies: string | null;
   notes: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -195,13 +214,14 @@ export async function listPatients(q?: string, limit = 200) {
     const like = `%${q.trim()}%`;
     return query<PatientRow>(
       `SELECT * FROM patients
-       WHERE first_name LIKE ? OR last_name LIKE ? OR document_id LIKE ? OR phone LIKE ? OR email LIKE ?
+       WHERE deleted_at IS NULL
+         AND (first_name LIKE ? OR last_name LIKE ? OR document_id LIKE ? OR phone LIKE ? OR email LIKE ?)
        ORDER BY last_name, first_name LIMIT ?`,
       [like, like, like, like, like, limit],
     );
   }
   return query<PatientRow>(
-    'SELECT * FROM patients ORDER BY last_name, first_name LIMIT ?',
+    'SELECT * FROM patients WHERE deleted_at IS NULL ORDER BY last_name, first_name LIMIT ?',
     [limit],
   );
 }
