@@ -32,6 +32,17 @@ async function run() {
     ],
   });
 
+  // Clinic business hours fallback (Mon–Fri 09:00–18:00). The 0003 migration
+  // seeds these only for clinics that exist at migration time; a fresh
+  // checkout runs migrations before seed, so the clinic doesn't exist yet.
+  for (let dow = 1; dow <= 5; dow++) {
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO clinic_business_hours (id, clinic_id, day_of_week, start_time, end_time)
+            VALUES (?, ?, ?, '09:00', '18:00')`,
+      args: [randomUUID(), clinicId, dow],
+    });
+  }
+
   // Users
   const users = [
     { email: 'admin@local', name: 'Admin', role: 'admin', password: 'Admin123!' },
