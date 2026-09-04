@@ -41,12 +41,22 @@ const STATUS_OPTIONS = [
 
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 
-const fmtLocal = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
+// 15-minute start times, 08:00 – 18:45 (mirrors the calendar display window)
+const TIME_OPTIONS: string[] = [];
+for (let h = 8; h < 19; h++) {
+  for (const m of [0, 15, 30, 45]) {
+    TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+  }
+}
+
+export type CreatedVia = 'manual' | 'click' | 'drag';
 
 export function AppointmentDialog({
   open,
   onOpenChange,
   defaultStart,
+  defaultEnd,
+  createdVia = 'manual',
   dentists,
   appointment,
   onCreated,
@@ -54,6 +64,10 @@ export function AppointmentDialog({
   open: boolean;
   onOpenChange: (b: boolean) => void;
   defaultStart: string | null;
+  /** Optional pre-selected end (e.g. drag-select on the grid). */
+  defaultEnd?: string | null;
+  /** How the user started this creation flow; recorded on the appointment. */
+  createdVia?: CreatedVia;
   dentists: { id: string; name: string; color?: string | null }[];
   /** When set, the dialog edits this appointment instead of creating. */
   appointment?: ApptRow | null;
@@ -75,8 +89,9 @@ export function AppointmentDialog({
   const [status, setStatus] = useState<string>('scheduled');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [startVal, setStartVal] = useState('');
-  const [endVal, setEndVal] = useState('');
+  const [dateVal, setDateVal] = useState('');
+  const [timeVal, setTimeVal] = useState('');
+  const [durVal, setDurVal] = useState('30');
 
   const editing = appointment ?? null;
 
@@ -126,34 +141,14 @@ export function AppointmentDialog({
         : new Date();
     const e = editing
       ? new Date(editing.ends_at)
-      : new Date(s.getTime() + 30 * 60000);
-    setStartVal(fmtLocal(s));
-    setEndVal(fmtLocal(e));
-  }, [open, editing, dentists, defaultStart]);
-
-  const durMin = (() => {
-    const s = new Date(startVal).getTime();
-    const e = new Date(endVal).getTime();
-    if (Number.isNaN(s) || Number.isNaN(e)) return null;
-    return Math.round((e - s) / 60000);
-  })();
-  const durSelectValue =
-    durMin !== null && DURATIONS.includes(durMin) ? String(durMin) : '';
-
-  function onStartChange(v: string) {
-    // Keep the same duration when the start moves.
-    setStartVal(v);
-    if (durMin !== null && durMin > 0) {
-      const s = new Date(v).getTime();
-      if (!Number.isNaN(s)) setEndVal(fmtLocal(new Date(s + durMin * 60000)));
-    }
-  }
-
-  function onDurationChange(v: string) {
-    const s = new Date(startVal).getTime();
-    if (Number.isNaN(s)) return;
-    setEndVal(fmtLocal(new Date(s + Number(v) * 60000)));
-  }
+      : defaultEnd
+        ? new Date(defaultEnd)
+        : new Date(s.getTime() + 30 * 60000);
+    setDateVal(format(s, 'yyyy-MM-dd'));
+    setTimeVal(format(s, 'HH:mm'));
+    const dur = Math.max(15, Math.round((e.getTime() - s.getTime()) / 60000));
+    setDurVal(DURATIONS.includes(dur) ? String(dur) : '30');
+  }, [open, editing, dentists, defaultStart, defaultEnd]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -165,6 +160,13 @@ export function AppointmentDialog({
     setLoading(true);
     try {
       const fd = new FormData(e.currentTarget);
+      // Send timezone-aware ISO instants: the naive y-m-d/HH:mm was a source
+      // of timezone ambiguity between browser and server.
+      const startLocal = new Date(`${dateVal}T${timeVal}:00`);
+      const endLocal = new Date(startLocal.getTime() + Number(durVal) * 60000);
+      fd.set('starts_at', startLocal.toISOString());
+      fd.set('ends_at', endLocal.toISOString());
+      fd.set('created_via', createdVia);
       fd.set('patient_id', patientId);
       fd.set('dentist_id', dentistId);
       fd.set('status', status);
@@ -333,25 +335,36 @@ export function AppointmentDialog({
             ) : null}
             <div className="grid grid-cols-3 gap-2">
               <div className="space-y-2">
-                <Label htmlFor="starts_at">{t('startsAt')}</Label>
+                <Label htmlFor="appt_date">{tCommon('date')}</Label>
                 <Input
-                  id="starts_at"
-                  name="starts_at"
-                  type="datetime-local"
-                  step={900}
-                  value={startVal}
-                  onChange={(e) => onStartChange(e.target.value)}
+                  id="appt_date"
+                  name="appt_date"
+                  type="date"
+                  value={dateVal}
+                  onChange={(e) => setDateVal(e.target.value)}
                   required
                 />
               </div>
               <div className="space-y-2">
+                <Label>{t('startTime')}</Label>
+                <Select value={timeVal} onValueChange={setTimeVal} name="appt_start_time">
+                  <SelectTrigger data-testid="appt-start-time">
+                    <SelectValue placeholder={t('startTime')} />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {TIME_OPTIONS.map((hm) => (
+                      <SelectItem key={hm} value={hm}>
+                        {hm}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label>{t('duration')}</Label>
-                <Select
-                  value={durSelectValue}
-                  onValueChange={onDurationChange}
-                >
+                <Select value={durVal} onValueChange={setDurVal}>
                   <SelectTrigger data-testid="appt-duration">
-                    <SelectValue placeholder={`${durMin ?? '—'} min`} />
+                    <SelectValue placeholder={`${durVal} min`} />
                   </SelectTrigger>
                   <SelectContent>
                     {DURATIONS.map((m) => (
@@ -361,18 +374,6 @@ export function AppointmentDialog({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ends_at">{t('endsAt')}</Label>
-                <Input
-                  id="ends_at"
-                  name="ends_at"
-                  type="datetime-local"
-                  step={900}
-                  value={endVal}
-                  onChange={(e) => setEndVal(e.target.value)}
-                  required
-                />
               </div>
             </div>
             <div className="space-y-2">

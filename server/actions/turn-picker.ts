@@ -186,8 +186,8 @@ export async function bookViaPicker(
   const apptId = uid();
   await query(
     `INSERT INTO appointments
-       (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_at)
-     VALUES (?, ?, ?, ?, ?, 'scheduled', ?, NULL, ?)`,
+       (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at)
+     VALUES (?, ?, ?, ?, ?, 'scheduled', ?, NULL, ?, 'shared', ?)`,
     [
       apptId,
       link.patient_id,
@@ -195,6 +195,7 @@ export async function bookViaPicker(
       start.toISOString(),
       end.toISOString(),
       'self-booked',
+      link.created_by,
       nowIso(),
     ],
   );

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { fillWhen } from './helpers';
 
 test('clicking an appointment opens the edit dialog (not the patient page)', async ({
   page,
@@ -21,10 +22,7 @@ test('clicking an appointment opens the edit dialog (not the patient page)', asy
   const startHm = `${String(start.getHours()).padStart(2, '0')}:${String(
     start.getMinutes(),
   ).padStart(2, '0')}`;
-  const end = new Date(start.getTime() + 15 * 60000);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
 
   await page.goto('/appointments');
   await page
@@ -44,8 +42,7 @@ test('clicking an appointment opens the edit dialog (not the patient page)', asy
     .filter({ hasText: /García/ })
     .first()
     .click();
-  await dialog.locator('input[name="starts_at"]').fill(fmt(start));
-  await dialog.locator('input[name="ends_at"]').fill(fmt(end));
+  await fillWhen(dialog, page, start, 15);
   await dialog
     .getByRole('button', { name: /^guardar$|^save$/i })
     .click();

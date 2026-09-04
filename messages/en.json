@@ -111,10 +111,21 @@
     "invalid": "Invalid data. Check the fields.",
     "duration": "Duration",
     "time": "Time",
+    "startTime": "Start time",
     "allDentists": "All dentists",
     "viewCalendar": "Calendar",
     "viewList": "List",
-    "emptyList": "No appointments this week."
+    "emptyList": "No appointments this week.",
+    "addedBy": "Added by",
+    "method": "Method",
+    "pendingLinks": "Pending bookings (shared links)",
+    "linkCopied": "Link copied to clipboard",
+    "slotMinutes": "{minutes} min",
+    "method.manual": "Manual",
+    "method.click": "Click",
+    "method.drag": "Drag",
+    "method.shared": "Shared",
+    "status.pending": "Pending"
   },
   "odontogram": {
     "title": "Odontogram",

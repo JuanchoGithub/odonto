@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
 import { requireUser } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
-import { isWithinWorkingHours } from '@/lib/availability';
+import { isWithinWorkingHours, getWeekWindows, type DayWindows } from '@/lib/availability';
 
 const ApptSchema = z.object({
   patient_id: z.string().min(1),
@@ -16,6 +16,7 @@ const ApptSchema = z.object({
   status: z
     .enum(['scheduled', 'arrived', 'in_chair', 'completed', 'cancelled', 'no_show'])
     .default('scheduled'),
+  created_via: z.enum(['manual', 'click', 'drag']).default('manual'),
 });
 
 export async function createAppointment(fd: FormData) {
@@ -45,8 +46,8 @@ export async function createAppointment(fd: FormData) {
   const id = uid();
   try {
     await query(
-      `INSERT INTO appointments (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO appointments (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.patient_id,
@@ -56,6 +57,8 @@ export async function createAppointment(fd: FormData) {
         data.status,
         data.reason || null,
         data.notes || null,
+        user.id,
+        data.created_via,
         nowIso(),
       ],
     );
@@ -153,18 +156,62 @@ export type ApptRow = {
   patient_name: string;
   dentist_name: string;
   dentist_color: string | null;
+  created_by: string | null;
+  created_via: string | null;
+  creator_name: string | null;
 };
 
 export async function listAppointmentsForWeek(startIso: string) {
   const end = new Date(new Date(startIso).getTime() + 7 * 86400_000).toISOString();
   return query<ApptRow>(
     `SELECT a.*, p.first_name || ' ' || p.last_name as patient_name,
-            u.name as dentist_name, u.color as dentist_color
+            u.name as dentist_name, u.color as dentist_color,
+            cu.name as creator_name
      FROM appointments a
      JOIN patients p ON p.id = a.patient_id
      JOIN users u ON u.id = a.dentist_id
+     LEFT JOIN users cu ON cu.id = a.created_by
      WHERE datetime(a.starts_at) >= datetime(?) AND datetime(a.starts_at) < datetime(?)
      ORDER BY a.starts_at`,
     [startIso, end],
+  );
+}
+
+/** Working windows per day for calendar shading (null dentistId = clinic-wide "all" view). */
+export async function getWeekWindowsAction(
+  dentistId: string | null,
+  weekStartIso: string,
+): Promise<DayWindows[]> {
+  await requireUser();
+  return getWeekWindows(dentistId, weekStartIso);
+}
+
+/** Shared turn-picker links that are still waiting for the patient to book. */
+export type PendingLinkRow = {
+  id: string;
+  token: string;
+  slot_minutes: number;
+  created_at: string;
+  expires_at: string;
+  dentist_id: string;
+  patient_name: string;
+  dentist_name: string;
+  dentist_color: string | null;
+  creator_name: string | null;
+};
+
+export async function listPendingTurnLinks(): Promise<PendingLinkRow[]> {
+  await requireUser();
+  return query<PendingLinkRow>(
+    `SELECT l.id, l.token, l.slot_minutes, l.created_at, l.expires_at, l.dentist_id,
+            p.first_name || ' ' || p.last_name as patient_name,
+            u.name as dentist_name, u.color as dentist_color,
+            cu.name as creator_name
+     FROM turn_picker_links l
+     JOIN patients p ON p.id = l.patient_id
+     JOIN users u ON u.id = l.dentist_id
+     LEFT JOIN users cu ON cu.id = l.created_by
+     WHERE l.used_at IS NULL
+     ORDER BY l.created_at DESC`,
   );
 }

@@ -111,10 +111,21 @@
     "invalid": "Datos inválidos. Revisá los campos.",
     "duration": "Duración",
     "time": "Hora",
+    "startTime": "Inicio",
     "allDentists": "Todos los profesionales",
     "viewCalendar": "Calendario",
     "viewList": "Lista",
-    "emptyList": "No hay turnos en esta semana."
+    "emptyList": "No hay turnos en esta semana.",
+    "addedBy": "Agregado por",
+    "method": "Método",
+    "pendingLinks": "Turnos pendientes (enlaces compartidos)",
+    "linkCopied": "Enlace copiado al portapapeles",
+    "slotMinutes": "{minutes} min",
+    "method.manual": "Manual",
+    "method.click": "Click",
+    "method.drag": "Arrastre",
+    "method.shared": "Compartido",
+    "status.pending": "Pendiente"
   },
   "odontogram": {
     "title": "Odontograma",

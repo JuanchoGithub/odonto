@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { fillWhen } from './helpers';
 
 test('appointment dialog is a searchable combobox, not a free-text id field', async ({
   page,
@@ -40,8 +41,7 @@ test('appointment dialog is a searchable combobox, not a free-text id field', as
   await firstResult.click();
 
   // Pick a far-future time
-  await dialog.locator('input[name="starts_at"]').fill('2030-04-12T09:00');
-  await dialog.locator('input[name="ends_at"]').fill('2030-04-12T09:30');
+  await fillWhen(dialog, page, new Date(2030, 3, 12, 9, 0), 30);
 
   // Save should now be enabled
   await expect(saveBtn).toBeEnabled();
@@ -95,8 +95,7 @@ test('inline "create new patient" from appointment dialog', async ({
   await expect(dialog).toBeVisible();
 
   // Pick a far-future time
-  await dialog.locator('input[name="starts_at"]').fill('2030-05-20T14:00');
-  await dialog.locator('input[name="ends_at"]').fill('2030-05-20T14:30');
+  await fillWhen(dialog, page, new Date(2030, 4, 20, 14, 0), 30);
 
   // Appointment dialog save should be enabled (new patient is auto-selected)
   const appointmentSave = dialog.getByRole('button', { name: /^guardar$|^save$/i });

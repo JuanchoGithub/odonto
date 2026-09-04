@@ -5,10 +5,18 @@ import { addDays, startOfWeek, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ChevronLeft, ChevronRight, Plus, Share2 } from 'lucide-react';
-import { updateAppointment, type ApptRow } from '@/server/actions/appointments';
-import { AppointmentDialog } from './appointment-dialog';
+import {
+  updateAppointment,
+  getWeekWindowsAction,
+  type ApptRow,
+  type PendingLinkRow,
+} from '@/server/actions/appointments';
+import {
+  AppointmentDialog,
+  type CreatedVia,
+} from './appointment-dialog';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
-import { TimeGrid } from './time-grid';
+import { TimeGrid, type WorkingWindow } from './time-grid';
 import { AppointmentList } from './appointment-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -19,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toaster';
+import { effectiveExpiryMs } from '@/lib/turn-picker';
 import { es, enUS } from 'date-fns/locale';
 
 export type DentistRef = { id: string; name: string; color: string | null };
@@ -26,9 +35,13 @@ export type DentistRef = { id: string; name: string; color: string | null };
 export function WeekCalendar({
   initial,
   dentists,
+  pendingLinks,
+  initialWeekStart,
 }: {
   initial: ApptRow[];
   dentists: DentistRef[];
+  pendingLinks: PendingLinkRow[];
+  initialWeekStart?: string;
 }) {
   const t = useTranslations('appointments');
   const tTp = useTranslations('turnPicker');
@@ -38,10 +51,20 @@ export function WeekCalendar({
   const dateFnsLocale = localeStr.startsWith('en') ? enUS : es;
   const { push } = useToast();
 
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [weekStart, setWeekStart] = useState(() =>
+    initialWeekStart
+      ? new Date(initialWeekStart)
+      : startOfWeek(new Date(), { weekStartsOn: 1 }),
+  );
   const [appts, setAppts] = useState(initial);
+  const [windowsByDate, setWindowsByDate] = useState<Record<
+    string,
+    WorkingWindow[]
+  > | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogStart, setDialogStart] = useState<string | null>(null);
+  const [dialogEnd, setDialogEnd] = useState<string | null>(null);
+  const [dialogMethod, setDialogMethod] = useState<CreatedVia>('manual');
   const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
@@ -52,6 +75,12 @@ export function WeekCalendar({
     dentistFilter === 'all'
       ? appts
       : appts.filter((a) => a.dentist_id === dentistFilter);
+  const now = Date.now();
+  const filteredPending = pendingLinks.filter(
+    (l) =>
+      effectiveExpiryMs(l) > now &&
+      (dentistFilter === 'all' || l.dentist_id === dentistFilter),
+  );
 
   async function refresh() {
     const params = new URLSearchParams({ start: weekStart.toISOString() });
@@ -62,15 +91,31 @@ export function WeekCalendar({
     }
   }
 
-  // Refetch when the visible week changes
+  // Refetch appointments + working windows when the week (or filter) changes
   useEffect(() => {
     refresh();
+    getWeekWindowsAction(
+      dentistFilter === 'all' ? null : dentistFilter,
+      weekStart.toISOString(),
+    )
+      .then((rows) => {
+        const m: Record<string, WorkingWindow[]> = {};
+        for (const r of rows) m[r.date] = r.windows;
+        setWindowsByDate(m);
+      })
+      .catch(() => setWindowsByDate(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart.toISOString()]);
+  }, [weekStart.toISOString(), dentistFilter]);
 
-  function openCreate(d: Date | null) {
+  function openCreate(
+    start: Date | null,
+    end: Date | null = null,
+    method: CreatedVia = 'manual',
+  ) {
     setEditingAppt(null);
-    setDialogStart(d ? d.toISOString() : null);
+    setDialogStart(start ? start.toISOString() : null);
+    setDialogEnd(end ? end.toISOString() : null);
+    setDialogMethod(method);
     setDialogOpen(true);
   }
 
@@ -81,20 +126,21 @@ export function WeekCalendar({
 
   // Called after a drag (move) or resize (extend) on the grid.
   async function onMoveAppt(appt: ApptRow, start: Date, end: Date) {
-    const fmt = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
     const snapshot = appts;
+    const isoStart = start.toISOString();
+    const isoEnd = end.toISOString();
     setAppts((cur) =>
       cur.map((a) =>
         a.id === appt.id
-          ? { ...a, starts_at: fmt(start), ends_at: fmt(end) }
+          ? { ...a, starts_at: isoStart, ends_at: isoEnd }
           : a,
       ),
     );
     const fd = new FormData();
     fd.set('id', appt.id);
     fd.set('dentist_id', appt.dentist_id);
-    fd.set('starts_at', fmt(start));
-    fd.set('ends_at', fmt(end));
+    fd.set('starts_at', isoStart);
+    fd.set('ends_at', isoEnd);
     fd.set('status', appt.status);
     fd.set('reason', appt.reason ?? '');
     fd.set('notes', appt.notes ?? '');
@@ -175,37 +221,57 @@ export function WeekCalendar({
               <Share2 className="h-4 w-4" />
               {tTp('shareButton')}
             </Button>
-            <Button onClick={() => openCreate(null)}>
+            <Button onClick={() => openCreate(null, null, 'manual')}>
               <Plus className="h-4 w-4" />
               {t('new')}
             </Button>
           </div>
         </div>
         <TabsContent value="calendar">
-            <TimeGrid
-              days={days}
-              appts={filtered}
-              locale={dateFnsLocale}
-              onSlotClick={(d) => openCreate(d)}
-              onOpenAppt={openEdit}
-              onMoveAppt={onMoveAppt}
-            />
-          </TabsContent>
-          <TabsContent value="list">
-            <AppointmentList
-              appts={filtered}
-              locale={dateFnsLocale}
-              labels={{
-                date: tCommon('date'),
-                time: t('time'),
-                patient: t('patient'),
-                dentist: t('dentist'),
-                status: tCommon('status'),
-                reason: t('reason'),
-                empty: t('emptyList'),
-              }}
-              statusLabel={(s) => t(`status.${s}`)}
+          <TimeGrid
+            days={days}
+            appts={filtered}
+            locale={dateFnsLocale}
+            windowsByDate={windowsByDate}
+            onSlotClick={(d) => openCreate(d, null, 'click')}
+            onRangeSelect={(day, fromMin, toMin) => {
+              const s = new Date(day);
+              s.setHours(Math.floor(fromMin / 60), fromMin % 60, 0, 0);
+              const e = new Date(day);
+              e.setHours(Math.floor(toMin / 60), toMin % 60, 0, 0);
+              openCreate(s, e, 'drag');
+            }}
             onOpenAppt={openEdit}
+            onMoveAppt={onMoveAppt}
+          />
+        </TabsContent>
+        <TabsContent value="list">
+          <AppointmentList
+            appts={filtered}
+            pending={filteredPending}
+            locale={dateFnsLocale}
+            labels={{
+              date: tCommon('date'),
+              time: t('time'),
+              patient: t('patient'),
+              dentist: t('dentist'),
+              status: tCommon('status'),
+              reason: t('reason'),
+              empty: t('emptyList'),
+              addedBy: t('addedBy'),
+              method: t('method'),
+              pendingTitle: t('pendingLinks'),
+              pending: t('status.pending'),
+              slotMinutes: t('slotMinutes'),
+            }}
+            methodLabel={(m) => (m ? t(`method.${m}`) : '—')}
+            statusLabel={(s) => t(`status.${s}`)}
+            onOpenAppt={openEdit}
+            onCopyLink={(token) => {
+              const url = `${window.location.origin}/pick-turn/${token}`;
+              navigator.clipboard.writeText(url).catch(() => undefined);
+              push({ title: t('linkCopied') });
+            }}
           />
         </TabsContent>
         </Tabs>
@@ -216,6 +282,8 @@ export function WeekCalendar({
             if (!o) setEditingAppt(null);
           }}
           defaultStart={dialogStart}
+          defaultEnd={dialogEnd}
+          createdVia={dialogMethod}
           dentists={dentists}
           appointment={editingAppt}
           onCreated={refresh}

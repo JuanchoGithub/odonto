@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { fillWhen } from './helpers';
 
 async function login(page: Page) {
   await page.goto('/login');
@@ -52,10 +53,7 @@ test('editing a weekly schedule that orphans an appointment forces a decision', 
   base.setDate(base.getDate() + weekOffset * 7);
   const slotStart = new Date(base);
   slotStart.setHours(9 + Math.floor(quarter / 4), (quarter % 4) * 15, 0, 0);
-  const slotEnd = new Date(slotStart.getTime() + 15 * 60_000);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
 
   await page.goto('/appointments');
   await page
@@ -75,8 +73,7 @@ test('editing a weekly schedule that orphans an appointment forces a decision', 
     .filter({ hasText: /García/ })
     .first()
     .click();
-  await dialog.locator('input[name="starts_at"]').fill(fmt(slotStart));
-  await dialog.locator('input[name="ends_at"]').fill(fmt(slotEnd));
+  await fillWhen(dialog, page, slotStart, 15);
   await dialog
     .getByRole('button', { name: /^guardar$|^save$/i })
     .click();

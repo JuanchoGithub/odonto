@@ -377,3 +377,102 @@ export function wallClockInTz(iso: string, tz: string): {
     dayOfWeek: weekday,
   };
 }
+
+export type DayWindows = {
+  date: string; // YYYY-MM-DD, clinic-local
+  windows: WorkingWindow[]; // empty = closed / non-working day
+};
+
+/**
+ * Working windows for the 7 days starting at weekStartIso, used for the
+ * calendar's shaded "not attending" areas. dentistId = null resolves clinic
+ * business hours + clinic exceptions only (the "all dentists" view).
+ */
+export async function getWeekWindows(
+  dentistId: string | null,
+  weekStartIso: string,
+): Promise<DayWindows[]> {
+  const tz = await getClinicTimezone();
+  const startDate = wallClockInTz(weekStartIso, tz).date;
+  const [sy, sm, sd] = startDate.split('-').map(Number);
+  const endD = new Date(Date.UTC(sy, sm - 1, sd + 6));
+  const endDate = `${endD.getUTCFullYear()}-${pad2(endD.getUTCMonth() + 1)}-${pad2(endD.getUTCDate())}`;
+  const dates = datesBetween(startDate, endDate);
+
+  const [clinicExRows, exRows, schedRows, bizRows] = await Promise.all([
+    query<{ date: string }>(
+      `SELECT date FROM clinic_exceptions WHERE date BETWEEN ? AND ?`,
+      [startDate, endDate],
+    ),
+    dentistId
+      ? query<{
+          date: string;
+          kind: string;
+          start_time: string | null;
+          end_time: string | null;
+        }>(
+          `SELECT date, kind, start_time, end_time FROM dentist_exceptions
+           WHERE dentist_id = ? AND date BETWEEN ? AND ?`,
+          [dentistId, startDate, endDate],
+        )
+      : Promise.resolve([]),
+    dentistId
+      ? query<{ day_of_week: number; start_time: string; end_time: string }>(
+          `SELECT day_of_week, start_time, end_time FROM dentist_schedules
+           WHERE dentist_id = ?
+             AND (effective_from IS NULL OR effective_from <= ?)
+             AND (effective_to IS NULL OR effective_to >= ?)`,
+          [dentistId, endDate, startDate],
+        )
+      : Promise.resolve([]),
+    query<{ day_of_week: number; start_time: string; end_time: string }>(
+      `SELECT day_of_week, start_time, end_time FROM clinic_business_hours`,
+    ),
+  ]);
+
+  const clinicExceptionDates = new Set(
+    (clinicExRows as { date: string }[]).map((r) => r.date),
+  );
+  const dentistExceptions = new Map(
+    (exRows as { date: string; kind: string; start_time: string | null; end_time: string | null }[]).map(
+      (r) => [r.date, r],
+    ),
+  );
+  const toDayMap = (
+    rows: { day_of_week: number; start_time: string; end_time: string }[],
+  ) => {
+    const m = new Map<number, { start_time: string; end_time: string }[]>();
+    for (const r of rows) {
+      const list = m.get(r.day_of_week) ?? [];
+      list.push({ start_time: r.start_time, end_time: r.end_time });
+      m.set(r.day_of_week, list);
+    }
+    return m;
+  };
+  const schedRowsTyped = schedRows as {
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+  }[];
+  // null = dentist never configured a schedule → fall back to business hours
+  const schedules = dentistId
+    ? schedRowsTyped.length > 0
+      ? toDayMap(schedRowsTyped)
+      : null
+    : null;
+  const businessHours = toDayMap(
+    bizRows as { day_of_week: number; start_time: string; end_time: string }[],
+  );
+
+  return dates.map((date) => ({
+    date,
+    windows: resolveWindowsForDate(
+      date,
+      weekdayInTz(date, tz),
+      clinicExceptionDates,
+      dentistExceptions,
+      schedules,
+      businessHours,
+    ).windows,
+  }));
+}

@@ -62,18 +62,41 @@ function layoutDay(dayAppts: ApptRow[]): LaidBlock[] {
   return out;
 }
 
+export type WorkingWindow = { startMin: number; endMin: number };
+
+// Segments of the display window that are NOT covered by working windows.
+function nonWorkingSegments(
+  wins: { startMin: number; endMin: number }[],
+): WorkingWindow[] {
+  const segs: WorkingWindow[] = [];
+  let cur = DAY_START_MIN;
+  for (const w of [...wins].sort((a, b) => a.startMin - b.startMin)) {
+    const s = Math.max(w.startMin, DAY_START_MIN);
+    const e = Math.min(w.endMin, DAY_END_MIN);
+    if (s > cur) segs.push({ startMin: cur, endMin: Math.min(s, DAY_END_MIN) });
+    cur = Math.max(cur, e);
+  }
+  if (cur < DAY_END_MIN) segs.push({ startMin: cur, endMin: DAY_END_MIN });
+  return segs;
+}
+
 export function TimeGrid({
   days,
   appts,
   locale,
+  windowsByDate,
   onSlotClick,
+  onRangeSelect,
   onOpenAppt,
   onMoveAppt,
 }: {
   days: Date[];
   appts: ApptRow[];
   locale: Locale;
+  /** Working windows per date (yyyy-MM-dd). Missing/undefined = no shading info. */
+  windowsByDate: Record<string, WorkingWindow[]> | null;
   onSlotClick: (d: Date) => void;
+  onRangeSelect: (day: Date, startMin: number, endMin: number) => void;
   onOpenAppt: (a: ApptRow) => void;
   onMoveAppt: (a: ApptRow, start: Date, end: Date) => void;
 }) {
@@ -132,7 +155,9 @@ export function TimeGrid({
                 new Date(a.starts_at).toDateString() === d.toDateString(),
             )}
             lines={hourLines}
+            windows={windowsByDate?.[format(d, 'yyyy-MM-dd')] ?? null}
             onSlotClick={onSlotClick}
+            onRangeSelect={onRangeSelect}
             onOpenAppt={onOpenAppt}
             onMoveAppt={onMoveAppt}
           />
@@ -148,7 +173,9 @@ function DayColumn({
   dayCount,
   appts,
   lines,
+  windows,
   onSlotClick,
+  onRangeSelect,
   onOpenAppt,
   onMoveAppt,
 }: {
@@ -157,32 +184,115 @@ function DayColumn({
   dayCount: number;
   appts: ApptRow[];
   lines: number[];
+  /** Working windows for this date; null = no shading info. */
+  windows: WorkingWindow[] | null;
   onSlotClick: (d: Date) => void;
+  onRangeSelect: (day: Date, startMin: number, endMin: number) => void;
   onOpenAppt: (a: ApptRow) => void;
   onMoveAppt: (a: ApptRow, start: Date, end: Date) => void;
 }) {
   const laid = layoutDay(appts);
+  const colRef = useRef<HTMLDivElement>(null);
+  const dragSel = useRef<{ startMin: number; moved: boolean } | null>(null);
+  const [sel, setSel] = useState<{ fromMin: number; toMin: number } | null>(
+    null,
+  );
+
+  const shades = windows ? nonWorkingSegments(windows) : [];
+
+  function yToMin(clientY: number): number {
+    const rect = colRef.current!.getBoundingClientRect();
+    const slot = Math.min(
+      Math.max(Math.floor((clientY - rect.top) / SLOT_PX), 0),
+      TOTAL_MIN / SLOT_MINUTES - 1,
+    );
+    return DAY_START_MIN + slot * SLOT_MINUTES;
+  }
+
+  function onColPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    colRef.current?.setPointerCapture(e.pointerId);
+    dragSel.current = { startMin: yToMin(e.clientY), moved: false };
+  }
+
+  function onColPointerMove(e: React.PointerEvent) {
+    const d = dragSel.current;
+    if (!d) return;
+    const m = yToMin(e.clientY);
+    if (m !== d.startMin) d.moved = true;
+    if (d.moved) {
+      setSel({
+        fromMin: Math.min(d.startMin, m),
+        toMin: Math.max(d.startMin, m) + SLOT_MINUTES,
+      });
+    }
+  }
+
+  function onColPointerUp(e: React.PointerEvent) {
+    const d = dragSel.current;
+    if (!d) return;
+    dragSel.current = null;
+    try {
+      colRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    if (d.moved && sel) {
+      onRangeSelect(day, sel.fromMin, sel.toMin);
+      setSel(null);
+      return;
+    }
+    setSel(null);
+    // Plain click → create at the clicked 15-min slot
+    const mins = d.startMin;
+    const dt = new Date(day);
+    dt.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
+    onSlotClick(dt);
+  }
+
   return (
     <div
+      ref={colRef}
       data-testid={`day-col-${dayIndex}`}
+      role="button"
+      tabIndex={0}
+      aria-label={format(day, 'PPP')}
       className={cn(
-        'relative border-r last:border-r-0 cursor-pointer',
+        'relative border-r last:border-r-0 cursor-pointer select-none touch-pan-x',
         isToday(day) && 'bg-primary/5',
       )}
       style={{ height: GRID_HEIGHT }}
-      onClick={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const raw = (e.clientY - rect.top) / SLOT_PX;
-        const mins =
-          Math.min(
-            Math.max(Math.floor(raw), 0),
-            TOTAL_MIN / SLOT_MINUTES - 1,
-          ) * SLOT_MINUTES;
-        const d = new Date(day);
-        d.setHours(DAY_START_HOUR + Math.floor(mins / 60), mins % 60, 0, 0);
-        onSlotClick(d);
+      onPointerDown={onColPointerDown}
+      onPointerMove={onColPointerMove}
+      onPointerUp={onColPointerUp}
+      onPointerCancel={() => {
+        dragSel.current = null;
+        setSel(null);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const first = windows?.[0];
+          const d = new Date(day);
+          const startMin = first?.startMin ?? 9 * 60;
+          d.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
+          onSlotClick(d);
+        }
       }}
     >
+      {/* shaded "not attending" regions */}
+      {shades.map((s) => (
+        <div
+          key={s.startMin}
+          aria-hidden
+          data-testid="off-hours"
+          className="pointer-events-none absolute inset-x-0 bg-muted/50"
+          style={{
+            top: ((s.startMin - DAY_START_MIN) / SLOT_MINUTES) * SLOT_PX,
+            height: ((s.endMin - s.startMin) / SLOT_MINUTES) * SLOT_PX,
+          }}
+        />
+      ))}
       {lines.map((i) => (
         <div
           key={i}
@@ -194,6 +304,17 @@ function DayColumn({
           style={{ top: i * SLOT_PX }}
         />
       ))}
+      {sel ? (
+        <div
+          aria-hidden
+          data-testid="drag-select"
+          className="pointer-events-none absolute inset-x-0 border-2 border-dashed border-primary bg-primary/10 z-30 rounded-md"
+          style={{
+            top: ((sel.fromMin - DAY_START_MIN) / SLOT_MINUTES) * SLOT_PX,
+            height: ((sel.toMin - sel.fromMin) / SLOT_MINUTES) * SLOT_PX,
+          }}
+        />
+      ) : null}
       {laid.map((b) => (
         <ApptBlock
           key={b.appt.id}
