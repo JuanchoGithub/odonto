@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
-import { requireUser } from '@/lib/rbac';
+import { can, requireUser } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 
 const CondSchema = z.object({
@@ -23,8 +23,18 @@ const CondSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
+const ClearSchema = z.object({
+  tooth_number: z.coerce.number().int().min(1).max(48),
+  surface: z.enum(['occlusal', 'buccal', 'lingual', 'mesial', 'distal', 'root', 'whole']),
+});
+
+function forbid() {
+  return { error: 'Forbidden' as const };
+}
+
 export async function setToothCondition(patientId: string, fd: FormData) {
   const user = await requireUser();
+  if (!can(user.role, 'odontogram:write')) return forbid();
   const parsed = CondSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: 'Invalid' };
   const data = parsed.data;
@@ -42,7 +52,6 @@ export async function setToothCondition(patientId: string, fd: FormData) {
     chart = { id };
   }
 
-  // Delete existing condition for that surface, then insert new
   await query('DELETE FROM tooth_conditions WHERE tooth_chart_id = ? AND surface = ?', [
     chart.id,
     data.surface,
@@ -52,13 +61,42 @@ export async function setToothCondition(patientId: string, fd: FormData) {
      VALUES (?, ?, ?, ?, ?, ?)`,
     [uid(), chart.id, data.surface, data.condition, data.note || null, nowIso()],
   );
-  await query(
-    `UPDATE teeth_chart SET updated_at = ? WHERE id = ?`,
-    [nowIso(), chart.id],
-  );
+  await query(`UPDATE teeth_chart SET updated_at = ? WHERE id = ?`, [
+    nowIso(),
+    chart.id,
+  ]);
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'tooth_condition', ?, ?)`,
     [uid(), user.id, chart.id, JSON.stringify(data)],
+  );
+  revalidatePath(`/patients/${patientId}`);
+  return { ok: true };
+}
+
+export async function clearToothSurface(patientId: string, fd: FormData) {
+  const user = await requireUser();
+  if (!can(user.role, 'odontogram:write')) return forbid();
+  const parsed = ClearSchema.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return { error: 'Invalid' };
+  const data = parsed.data;
+
+  const chart = await queryOne<{ id: string }>(
+    'SELECT id FROM teeth_chart WHERE patient_id = ? AND tooth_number = ?',
+    [patientId, data.tooth_number],
+  );
+  if (!chart) return { ok: true };
+
+  await query(
+    'DELETE FROM tooth_conditions WHERE tooth_chart_id = ? AND surface = ?',
+    [chart.id, data.surface],
+  );
+  await query(`UPDATE teeth_chart SET updated_at = ? WHERE id = ?`, [
+    nowIso(),
+    chart.id,
+  ]);
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'delete', 'tooth_condition', ?, ?)`,
+    [uid(), user.id, chart.id, JSON.stringify({ surface: data.surface })],
   );
   revalidatePath(`/patients/${patientId}`);
   return { ok: true };

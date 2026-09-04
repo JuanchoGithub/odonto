@@ -142,7 +142,13 @@
       "distal": "Distal",
       "root": "Root",
       "whole": "Whole"
-    }
+    },
+    "advancedPicker": "Advanced editor",
+    "surfaceSelected": "Selected surface: {surface}",
+    "paintModeActive": "Painting: {condition} — Esc to exit",
+    "paintModeHint": "Click a condition to paint it on each surface",
+    "dragHint": "or drag a condition onto a surface",
+    "surfaceCleared": "Surface cleared"
   },
   "treatments": {
     "title": "Treatments",
