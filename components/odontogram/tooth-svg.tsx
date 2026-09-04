@@ -83,6 +83,7 @@ type Props = {
   onSurfaceDrop: (surface: SurfaceKey, e: React.DragEvent) => void;
   onSurfaceDragLeave: (surface: SurfaceKey) => void;
   draggingCondition: string | null;
+  className?: string;
 };
 
 const CX = 28;
@@ -209,6 +210,7 @@ export function ToothSvg({
   onSurfaceDrop,
   onSurfaceDragLeave,
   draggingCondition,
+  className,
 }: Props) {
   const byKey: Partial<Record<SurfaceKey, SurfaceState>> = {};
   for (const c of conditions) byKey[c.surface] = c;
@@ -308,9 +310,8 @@ export function ToothSvg({
   return (
     <svg
       viewBox="0 0 56 80"
-      width={56}
-      height={80}
-      className={cn('bg-white dark:bg-background')}
+      preserveAspectRatio="xMidYMid meet"
+      className={cn('bg-white dark:bg-background', className)}
       role="img"
       aria-label={`Tooth ${toothNumber}`}
       data-tooth-svg={toothNumber}

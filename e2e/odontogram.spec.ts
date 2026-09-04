@@ -53,7 +53,9 @@ test('odontogram: click a surface then a condition chip paints it', async ({
   await login(page, DENTIST);
   await createPatientAndOpenOdontogram(page);
 
-  const tooth = page.locator('[data-tooth-svg="16"]');
+  const tooth = page
+    .getByTestId('upper-row')
+    .locator('[data-tooth-svg="16"]');
   await expect(tooth).toBeVisible();
   await tooth.locator('[data-surface="occlusal"]').click();
 
@@ -77,7 +79,9 @@ test('odontogram: paint mode applies a condition to every clicked surface until 
   await expect(page.getByTestId('paint-mode-banner')).toBeVisible();
 
   // Paint two surfaces on tooth 26
-  const tooth26 = page.locator('[data-tooth-svg="26"]');
+  const tooth26 = page
+    .getByTestId('upper-row')
+    .locator('[data-tooth-svg="26"]');
   await tooth26.locator('[data-surface="occlusal"]').click();
   await tooth26.locator('[data-surface="buccal"]').click();
 
@@ -107,6 +111,7 @@ test('odontogram: drag a condition chip onto a surface applies it', async ({
 
   const chip = page.getByTestId('condition-chip-sealant');
   const target = page
+    .getByTestId('lower-row')
     .locator('[data-tooth-svg="36"]')
     .locator('[data-surface="mesial"]');
 
@@ -138,7 +143,9 @@ test('odontogram: receptionist cannot write to odontogram (server action returns
   await expect(page.getByTestId('odontogram-root')).toBeVisible();
 
   // Try the click-to-pick flow as receptionist: server should reject.
-  const tooth = page.locator('[data-tooth-svg="11"]');
+  const tooth = page
+    .getByTestId('upper-row')
+    .locator('[data-tooth-svg="11"]');
   await tooth.locator('[data-surface="occlusal"]').click();
   await page.getByTestId('condition-chip-caries').click();
 
@@ -146,4 +153,105 @@ test('odontogram: receptionist cannot write to odontogram (server action returns
   await expect(
     tooth.locator('[data-surface="occlusal"]'),
   ).not.toHaveClass(/fill-red-500/);
+});
+
+test('odontogram: mobile viewport shows the tooth-list picker and edit sheet', async ({
+  page,
+}) => {
+  // iPhone 13
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // No horizontal overflow
+  const docWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  );
+  expect(docWidth).toBeLessThanOrEqual(390);
+
+  // Desktop rows hidden on mobile
+  await expect(page.getByTestId('upper-row')).toBeHidden();
+  await expect(page.getByTestId('lower-row')).toBeHidden();
+
+  // Tooth-list picker visible with all 16 teeth across 4 quadrants
+  const list = page.getByTestId('tooth-list-picker');
+  await expect(list).toBeVisible();
+
+  const urTeeth = await page
+    .getByTestId('list-upper-right')
+    .locator('[data-tooth-list-item]')
+    .evaluateAll((els) =>
+      els.map((e) => Number(e.getAttribute('data-tooth-list-item'))),
+    );
+  const ulTeeth = await page
+    .getByTestId('list-upper-left')
+    .locator('[data-tooth-list-item]')
+    .evaluateAll((els) =>
+      els.map((e) => Number(e.getAttribute('data-tooth-list-item'))),
+    );
+  const lrTeeth = await page
+    .getByTestId('list-lower-right')
+    .locator('[data-tooth-list-item]')
+    .evaluateAll((els) =>
+      els.map((e) => Number(e.getAttribute('data-tooth-list-item'))),
+    );
+  const llTeeth = await page
+    .getByTestId('list-lower-left')
+    .locator('[data-tooth-list-item]')
+    .evaluateAll((els) =>
+      els.map((e) => Number(e.getAttribute('data-tooth-list-item'))),
+    );
+  expect(urTeeth).toEqual([18, 17, 16, 15, 14, 13, 12, 11]);
+  expect(ulTeeth).toEqual([21, 22, 23, 24, 25, 26, 27, 28]);
+  expect(lrTeeth).toEqual([48, 47, 46, 45, 44, 43, 42, 41]);
+  expect(llTeeth).toEqual([31, 32, 33, 34, 35, 36, 37, 38]);
+
+  // Open the edit sheet for tooth 16
+  await page.locator('[data-tooth-list-item="16"]').click();
+  await expect(page.getByTestId('tooth-edit-sheet')).toBeVisible();
+  // The default surface is occlusal and all surfaces are listed
+  await expect(page.getByTestId('sheet-surface-occlusal')).toBeVisible();
+  await expect(page.getByTestId('sheet-surface-buccal')).toBeVisible();
+  await expect(page.getByTestId('sheet-surface-lingual')).toBeVisible();
+  await expect(page.getByTestId('sheet-surface-mesial')).toBeVisible();
+  await expect(page.getByTestId('sheet-surface-distal')).toBeVisible();
+
+  // Pick buccal + caries, save
+  await page.getByTestId('sheet-surface-buccal').click();
+  await page.locator('[data-testid="sheet-condition-grid"]')
+    .getByTestId('condition-chip-caries')
+    .click();
+  await page.getByTestId('sheet-save').click();
+
+  // Sheet closes, tooth 16 now shows as having a painted condition
+  await expect(page.getByTestId('tooth-edit-sheet')).not.toBeVisible();
+  const sixteen = page.locator('[data-tooth-list-item="16"]');
+  await expect(sixteen).toHaveClass(/bg-red-500/);
+
+  // Reload to confirm persistence (DB round-trip)
+  await page.reload();
+  await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
+  await expect(page.getByTestId('tooth-list-picker')).toBeVisible();
+  const sixteenAfter = page.locator('[data-tooth-list-item="16"]');
+  await expect(sixteenAfter).toHaveClass(/bg-red-500/);
+});
+
+test('odontogram: tablet viewport (md) keeps the 2-row chart layout', async ({
+  page,
+}) => {
+  // Tailwind md = 768px; the 2-row layout needs >= ~768 to fit 16 teeth
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // No horizontal overflow at 768
+  const docWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  );
+  expect(docWidth).toBeLessThanOrEqual(768);
+
+  // Desktop rows visible, mobile list hidden
+  await expect(page.getByTestId('upper-row')).toBeVisible();
+  await expect(page.getByTestId('lower-row')).toBeVisible();
+  await expect(page.getByTestId('tooth-list-picker')).toBeHidden();
 });

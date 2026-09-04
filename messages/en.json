@@ -103,7 +103,8 @@
       "in_chair": "In chair",
       "completed": "Completed",
       "cancelled": "Cancelled",
-      "no_show": "No-show"
+      "no_show": "No-show",
+      "pending": "Pending"
     },
     "conflict": "That time is outside the dentist's working hours",
     "patientNotFound": "That patient doesn't exist. Pick one from the list or create a new patient.",
@@ -117,15 +118,14 @@
     "viewList": "List",
     "emptyList": "No appointments this week.",
     "addedBy": "Added by",
-    "method": "Method",
+    "method": {
+      "manual": "Manual",
+      "click": "Click",
+      "drag": "Drag",
+      "shared": "Shared"
+    },
     "pendingLinks": "Pending bookings (shared links)",
-    "linkCopied": "Link copied to clipboard",
-    "slotMinutes": "{minutes} min",
-    "method.manual": "Manual",
-    "method.click": "Click",
-    "method.drag": "Drag",
-    "method.shared": "Shared",
-    "status.pending": "Pending"
+    "linkCopied": "Link copied to clipboard"
   },
   "odontogram": {
     "title": "Odontogram",
@@ -159,7 +159,13 @@
     "paintModeActive": "Painting: {condition} — Esc to exit",
     "paintModeHint": "Click a condition to paint it on each surface",
     "dragHint": "or drag a condition onto a surface",
-    "surfaceCleared": "Surface cleared"
+    "surfaceCleared": "Surface cleared",
+    "archUpperRight": "Upper right (18–11)",
+    "archUpperLeft": "Upper left (21–28)",
+    "archLowerRight": "Lower right (48–41)",
+    "archLowerLeft": "Lower left (31–38)",
+    "editSurface": "Edit surface",
+    "clearSurface": "Clear surface"
   },
   "treatments": {
     "title": "Treatments",

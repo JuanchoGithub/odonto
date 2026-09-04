@@ -24,6 +24,8 @@ import {
   type SurfaceKey,
 } from './tooth-svg';
 import { ConditionChip } from './condition-chip';
+import { ToothListPicker } from './tooth-list-picker';
+import { ToothEditSheet } from './tooth-edit-sheet';
 
 const UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11];
 const UPPER_LEFT = [21, 22, 23, 24, 25, 26, 27, 28];
@@ -116,11 +118,31 @@ export function Odontogram({
   const [pickerNote, setPickerNote] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetTooth, setSheetTooth] = useState<number | null>(null);
+  const [sheetInitialSurface, setSheetSurface] = useState<SurfaceKey>('occlusal');
+  const [sheetInitialCondition, setSheetInitialCondition] = useState<string>('healthy');
+  const [sheetInitialNote, setSheetInitialNote] = useState<string>('');
+
   const toothMap = useMemo<Record<number, ToothRow>>(() => {
     const m: Record<number, ToothRow> = {};
     for (const t of teeth) m[t.tooth_number] = t;
     return m;
   }, [teeth]);
+
+  const paintedSurfacesFor = useCallback(
+    (n: number | null): { surface: SurfaceKey; condition: string }[] => {
+      if (n == null) return [];
+      const row = toothMap[n];
+      if (!row) return [];
+      return row.conditions
+        .filter((c): c is { surface: SurfaceKey; condition: string; note: string | null } =>
+          (SURFACE_KEYS as readonly string[]).includes(c.surface),
+        )
+        .map((c) => ({ surface: c.surface, condition: c.condition }));
+    },
+    [toothMap],
+  );
 
   const applyCondition = useCallback(
     async (
@@ -343,6 +365,7 @@ export function Odontogram({
         <ToothSvg
           toothNumber={n}
           conditions={surfaces}
+          className="w-8 h-[44px] md:w-10 md:h-14 lg:w-14 lg:h-20"
           selectedSurface={
             selectedTooth === n ? selectedSurface : null
           }
@@ -375,15 +398,33 @@ export function Odontogram({
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="flex justify-center">
-            <div className="space-y-2">
-              <div className="flex gap-1.5 justify-center" data-testid="upper-row">
+            <div className="space-y-2 w-full">
+              {/* Desktop / tablet: 2 rows with the dashed midline between them */}
+              <div className="hidden md:flex md:gap-1.5 md:justify-center" data-testid="upper-row">
                 {UPPER_RIGHT.map(renderTooth)}
                 {UPPER_LEFT.map(renderTooth)}
               </div>
-              <div className="border-t-2 border-b-2 border-dashed" />
-              <div className="flex gap-1.5 justify-center" data-testid="lower-row">
+              <div className="hidden md:block md:border-t-2 md:border-b-2 md:border-dashed" />
+              <div className="hidden md:flex md:gap-1.5 md:justify-center" data-testid="lower-row">
                 {LOWER_RIGHT.map(renderTooth)}
                 {LOWER_LEFT.map(renderTooth)}
+              </div>
+
+              {/* Mobile: 4-row tooth list. Tap a tooth to open the edit sheet. */}
+              <div className="md:hidden">
+                <ToothListPicker
+                  teeth={teeth}
+                  onPick={(n) => {
+                    setSheetTooth(n);
+                    setSheetSurface('occlusal');
+                    const existing = toothMap[n]?.conditions.find(
+                      (c) => c.surface === 'occlusal',
+                    );
+                    setSheetInitialCondition(existing?.condition ?? 'healthy');
+                    setSheetInitialNote(existing?.note ?? '');
+                    setSheetOpen(true);
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -514,6 +555,68 @@ export function Odontogram({
           ) : null}
         </CardContent>
       </Card>
+
+      <ToothEditSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        tooth={sheetTooth}
+        initialSurface={sheetInitialSurface}
+        initialCondition={sheetInitialCondition}
+        initialNote={sheetInitialNote}
+        paintedSurfaces={paintedSurfacesFor(sheetTooth)}
+        saving={saving}
+        onSave={async ({ surface, condition, note }) => {
+          if (sheetTooth == null) return;
+          setSaving(true);
+          const previous = teeth;
+          setTeeth((curr) =>
+            upsertSurfaceLocal(curr, sheetTooth, surface, condition),
+          );
+          try {
+            const fd = new FormData();
+            fd.set('tooth_number', String(sheetTooth));
+            fd.set('surface', surface);
+            fd.set('condition', condition);
+            fd.set('note', note);
+            const res = await setToothCondition(patientId, fd);
+            if (res && 'error' in res && res.error) {
+              setTeeth(previous);
+              toast({ title: 'Error', description: String(res.error), variant: 'destructive' });
+            } else {
+              const refreshed = await getOdontogram(patientId);
+              setTeeth(refreshed);
+              setSheetInitialNote('');
+              setSheetOpen(false);
+            }
+          } catch (e) {
+            setTeeth(previous);
+            toast({ title: 'Error', description: String(e), variant: 'destructive' });
+          } finally {
+            setSaving(false);
+          }
+        }}
+        onClear={async (surface) => {
+          if (sheetTooth == null) return;
+          const previous = teeth;
+          setTeeth((curr) => removeSurfaceLocal(curr, sheetTooth, surface));
+          try {
+            const fd = new FormData();
+            fd.set('tooth_number', String(sheetTooth));
+            fd.set('surface', surface);
+            const res = await clearToothSurface(patientId, fd);
+            if (res && 'error' in res && res.error) {
+              setTeeth(previous);
+              toast({ title: 'Error', description: String(res.error), variant: 'destructive' });
+            } else {
+              const refreshed = await getOdontogram(patientId);
+              setTeeth(refreshed);
+            }
+          } catch (e) {
+            setTeeth(previous);
+            toast({ title: 'Error', description: String(e), variant: 'destructive' });
+          }
+        }}
+      />
     </div>
   );
 }

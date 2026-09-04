@@ -76,7 +76,7 @@ export function TopNav({
             ) : null}
           </Link>
         </div>
-        <nav className="hidden md:flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-1">
           {links
             .filter((l) => l.roles.includes(user.role))
             .map((l) => {
@@ -113,7 +113,7 @@ export function TopNav({
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="lg:hidden"
             onClick={() => setOpen((o) => !o)}
           >
             {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -121,7 +121,7 @@ export function TopNav({
         </div>
       </div>
       {open ? (
-        <div className="md:hidden border-t">
+        <div className="lg:hidden border-t">
           <div className="container py-2 flex flex-col gap-1">
             {links
               .filter((l) => l.roles.includes(user.role))

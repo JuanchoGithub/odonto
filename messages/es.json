@@ -103,7 +103,8 @@
       "in_chair": "En consultorio",
       "completed": "Completado",
       "cancelled": "Cancelado",
-      "no_show": "No asistió"
+      "no_show": "No asistió",
+      "pending": "Pendiente"
     },
     "conflict": "Ese horario está fuera del horario laboral del odontólogo",
     "patientNotFound": "Ese paciente no existe. Selecciona uno de la lista o crea uno nuevo.",
@@ -117,15 +118,14 @@
     "viewList": "Lista",
     "emptyList": "No hay turnos en esta semana.",
     "addedBy": "Agregado por",
-    "method": "Método",
+    "method": {
+      "manual": "Manual",
+      "click": "Click",
+      "drag": "Arrastre",
+      "shared": "Compartido"
+    },
     "pendingLinks": "Turnos pendientes (enlaces compartidos)",
-    "linkCopied": "Enlace copiado al portapapeles",
-    "slotMinutes": "{minutes} min",
-    "method.manual": "Manual",
-    "method.click": "Click",
-    "method.drag": "Arrastre",
-    "method.shared": "Compartido",
-    "status.pending": "Pendiente"
+    "linkCopied": "Enlace copiado al portapapeles"
   },
   "odontogram": {
     "title": "Odontograma",
@@ -159,7 +159,13 @@
     "paintModeActive": "Pintando: {condition} — Esc para salir",
     "paintModeHint": "Hacé click en una condición para pintarla en cada superficie",
     "dragHint": "o arrastrá una condición a una superficie",
-    "surfaceCleared": "Superficie borrada"
+    "surfaceCleared": "Superficie borrada",
+    "archUpperRight": "Superior derecho (18–11)",
+    "archUpperLeft": "Superior izquierdo (21–28)",
+    "archLowerRight": "Inferior derecho (48–41)",
+    "archLowerLeft": "Inferior izquierdo (31–38)",
+    "editSurface": "Editar superficie",
+    "clearSurface": "Borrar superficie"
   },
   "treatments": {
     "title": "Tratamientos",
