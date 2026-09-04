@@ -27,3 +27,6 @@ next-env.d.ts
 tsconfig.tsbuildinfo
 .vercel
 .turso
+# Local-only secrets, configs, and runtime state. Never committed.
+# See AGENTS.md → "Secrets and local config" for the convention.
+.local/
