@@ -21,8 +21,6 @@ import {
 import {
   ToothSvg,
   SURFACE_KEYS,
-  CONDITION_COLOR,
-  CONDITION_TEXT,
   type SurfaceKey,
 } from './tooth-svg';
 import { ConditionChip } from './condition-chip';
@@ -54,28 +52,6 @@ const ALL_SURFACES = [
   'root',
   'whole',
 ] as const;
-
-const CONDITION_PRIORITY = [
-  'missing',
-  'implant',
-  'crown',
-  'root_canal',
-  'caries',
-  'fracture',
-  'filling',
-  'sealant',
-  'impacted',
-  'healthy',
-] as const;
-
-function worstCondition(tooth: ToothRow | undefined): string {
-  if (!tooth || tooth.conditions.length === 0) return '';
-  for (const c of CONDITION_PRIORITY) {
-    if (tooth.conditions.find((cc) => cc.surface === c || cc.condition === c))
-      return c;
-  }
-  return tooth.conditions[0].condition;
-}
 
 type SurfaceState = { surface: SurfaceKey; condition: string };
 
@@ -354,7 +330,6 @@ export function Odontogram({
 
   function renderTooth(n: number) {
     const tooth = toothMap[n];
-    const wc = worstCondition(tooth);
     const surfaces: SurfaceState[] = (tooth?.conditions ?? [])
       .filter((c): c is { surface: SurfaceKey; condition: string; note: string | null } =>
         (SURFACE_KEYS as readonly string[]).includes(c.surface),
@@ -383,8 +358,6 @@ export function Odontogram({
           onSurfaceDrop={handleSurfaceDrop(n)}
           onSurfaceDragLeave={() => setDragOverSurface(null)}
           draggingCondition={draggingCondition}
-          worstConditionClass={wc ? CONDITION_COLOR[wc] : ''}
-          worstConditionTextClass={wc ? CONDITION_TEXT[wc] : ''}
         />
       </div>
     );
@@ -403,12 +376,12 @@ export function Odontogram({
         <CardContent className="pt-6 space-y-4">
           <div className="flex justify-center">
             <div className="space-y-2">
-              <div className="flex gap-1 justify-center" data-testid="upper-row">
+              <div className="flex gap-1.5 justify-center" data-testid="upper-row">
                 {UPPER_RIGHT.map(renderTooth)}
                 {UPPER_LEFT.map(renderTooth)}
               </div>
               <div className="border-t-2 border-b-2 border-dashed" />
-              <div className="flex gap-1 justify-center" data-testid="lower-row">
+              <div className="flex gap-1.5 justify-center" data-testid="lower-row">
                 {LOWER_RIGHT.map(renderTooth)}
                 {LOWER_LEFT.map(renderTooth)}
               </div>
