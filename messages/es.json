@@ -135,15 +135,14 @@
     "note": "Nota",
     "conditions": {
       "caries": "Caries",
-      "filling": "Restauración",
+      "restoration": "Restauración",
       "crown": "Corona",
-      "root_canal": "Endodoncia",
       "missing": "Ausente",
-      "impacted": "Incluido",
-      "fracture": "Fractura",
+      "to_extract": "A extraer",
+      "perno": "Perno",
       "sealant": "Sellador",
-      "implant": "Implante",
-      "healthy": "Sano"
+      "conduct_todo": "Conducto a tratar",
+      "conduct_done": "Conducto tratado"
     },
     "surfaces": {
       "occlusal": "Oclusal",
@@ -165,7 +164,9 @@
     "archLowerRight": "Inferior derecho (48–41)",
     "archLowerLeft": "Inferior izquierdo (31–38)",
     "editSurface": "Editar superficie",
-    "clearSurface": "Borrar superficie"
+    "clearSurface": "Borrar superficie",
+    "chartAdult": "Dentición permanente",
+    "chartKid": "Dentición temporaria (niños)"
   },
   "treatments": {
     "title": "Tratamientos",

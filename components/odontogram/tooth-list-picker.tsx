@@ -7,22 +7,28 @@ import { CONDITION_BG } from './tooth-svg';
 type SurfaceRow = { surface: string; condition: string };
 type ToothRow = { tooth_number: number; conditions: SurfaceRow[] };
 
-const UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11];
-const UPPER_LEFT = [21, 22, 23, 24, 25, 26, 27, 28];
-const LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41];
-const LOWER_LEFT = [31, 32, 33, 34, 35, 36, 37, 38];
+const UPPER_RIGHT_ADULT = [18, 17, 16, 15, 14, 13, 12, 11];
+const UPPER_LEFT_ADULT = [21, 22, 23, 24, 25, 26, 27, 28];
+const LOWER_RIGHT_ADULT = [48, 47, 46, 45, 44, 43, 42, 41];
+const LOWER_LEFT_ADULT = [31, 32, 33, 34, 35, 36, 37, 38];
 
+const UPPER_RIGHT_KID = [55, 54, 53, 52, 51];
+const UPPER_LEFT_KID = [61, 62, 63, 64, 65];
+const LOWER_RIGHT_KID = [85, 84, 83, 82, 81];
+const LOWER_LEFT_KID = [71, 72, 73, 74, 75];
+
+// "Whole-tooth" conditions render as overlays in the chart; in the list
+// picker we just use their color to tint the button.
 const CONDITION_PRIORITY = [
   'missing',
-  'implant',
+  'perno',
   'crown',
-  'root_canal',
-  'caries',
-  'fracture',
-  'filling',
+  'to_extract',
   'sealant',
-  'impacted',
-  'healthy',
+  'conduct_todo',
+  'conduct_done',
+  'caries',
+  'restoration',
 ] as const;
 
 function worstCondition(tooth: ToothRow | undefined): string {
@@ -77,13 +83,30 @@ function ToothButton({
 export function ToothListPicker({
   teeth,
   onPick,
+  variant = 'adult',
 }: {
   teeth: ToothRow[];
   onPick: (tooth: number) => void;
+  variant?: 'adult' | 'kid';
 }) {
   const t = useTranslations('odontogram');
   const toothMap: Record<number, ToothRow> = {};
-  for (const t of teeth) toothMap[t.tooth_number] = t;
+  for (const tt of teeth) toothMap[tt.tooth_number] = tt;
+
+  const sets =
+    variant === 'kid'
+      ? {
+          upperRight: UPPER_RIGHT_KID,
+          upperLeft: UPPER_LEFT_KID,
+          lowerRight: LOWER_RIGHT_KID,
+          lowerLeft: LOWER_LEFT_KID,
+        }
+      : {
+          upperRight: UPPER_RIGHT_ADULT,
+          upperLeft: UPPER_LEFT_ADULT,
+          lowerRight: LOWER_RIGHT_ADULT,
+          lowerLeft: LOWER_LEFT_ADULT,
+        };
 
   const renderRow = (
     label: string,
@@ -108,11 +131,15 @@ export function ToothListPicker({
   );
 
   return (
-    <div className="space-y-3" data-testid="tooth-list-picker">
-      {renderRow(t('archUpperRight'), UPPER_RIGHT, 'list-upper-right')}
-      {renderRow(t('archUpperLeft'), UPPER_LEFT, 'list-upper-left')}
-      {renderRow(t('archLowerRight'), LOWER_RIGHT, 'list-lower-right')}
-      {renderRow(t('archLowerLeft'), LOWER_LEFT, 'list-lower-left')}
+    <div
+      className="space-y-3"
+      data-testid="tooth-list-picker"
+      data-variant={variant}
+    >
+      {renderRow(t('archUpperRight'), sets.upperRight, 'list-upper-right')}
+      {renderRow(t('archUpperLeft'), sets.upperLeft, 'list-upper-left')}
+      {renderRow(t('archLowerRight'), sets.lowerRight, 'list-lower-right')}
+      {renderRow(t('archLowerLeft'), sets.lowerLeft, 'list-lower-left')}
     </div>
   );
 }

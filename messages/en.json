@@ -135,15 +135,14 @@
     "note": "Note",
     "conditions": {
       "caries": "Caries",
-      "filling": "Filling",
+      "restoration": "Restoration",
       "crown": "Crown",
-      "root_canal": "Root canal",
       "missing": "Missing",
-      "impacted": "Impacted",
-      "fracture": "Fracture",
+      "to_extract": "To extract",
+      "perno": "Post (perno)",
       "sealant": "Sealant",
-      "implant": "Implant",
-      "healthy": "Healthy"
+      "conduct_todo": "Root canal pending",
+      "conduct_done": "Root canal done"
     },
     "surfaces": {
       "occlusal": "Occlusal",
@@ -165,7 +164,9 @@
     "archLowerRight": "Lower right (48–41)",
     "archLowerLeft": "Lower left (31–38)",
     "editSurface": "Edit surface",
-    "clearSurface": "Clear surface"
+    "clearSurface": "Clear surface",
+    "chartAdult": "Permanent dentition",
+    "chartKid": "Primary dentition (children)"
   },
   "treatments": {
     "title": "Treatments",

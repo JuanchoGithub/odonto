@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 
-export type SurfaceKey = 'occlusal' | 'buccal' | 'lingual' | 'mesial' | 'distal';
+export type SurfaceKey = 'occlusal' | 'buccal' | 'lingual' | 'mesial' | 'distal' | 'whole';
 
 export const SURFACE_KEYS: SurfaceKey[] = [
   'occlusal',
@@ -10,68 +10,75 @@ export const SURFACE_KEYS: SurfaceKey[] = [
   'lingual',
   'mesial',
   'distal',
+  'whole',
 ];
 
+// Conditions that apply to a single surface (per-surface markers).
+// The remaining conditions (missing, crown, to_extract, perno, sealant,
+// conduct_todo, conduct_done) apply to the WHOLE tooth and are rendered
+// as overlays on top of the per-surface wedges.
+export const PER_SURFACE_CONDITIONS = new Set([
+  'caries',
+  'restoration',
+]);
+
+// SVG fill classes for per-surface conditions. Used on the wedge paths.
 export const CONDITION_COLOR: Record<string, string> = {
-  caries: 'fill-red-500',
-  filling: 'fill-blue-500',
-  crown: 'fill-yellow-400',
-  root_canal: 'fill-purple-500',
-  missing: 'fill-gray-700',
-  impacted: 'fill-orange-500',
-  fracture: 'fill-rose-600',
+  caries: 'fill-blue-500',
+  restoration: 'fill-red-500',
+  missing: 'fill-gray-400',
+  crown: 'fill-red-600',
+  to_extract: 'fill-amber-500',
+  perno: 'fill-red-600',
   sealant: 'fill-cyan-500',
-  implant: 'fill-slate-500',
-  healthy: 'fill-emerald-500',
+  conduct_todo: 'fill-blue-500',
+  conduct_done: 'fill-red-500',
 };
 
-// HTML counterparts of CONDITION_COLOR for use on non-SVG elements
-// (e.g. the condition chips in the legend). Tailwind's `fill-*` only
-// applies to SVG elements; HTML buttons need `bg-*` + `text-*`.
+// HTML counterparts (for legend chips and the tooth-list picker).
 export const CONDITION_BG: Record<string, string> = {
-  caries: 'bg-red-500',
-  filling: 'bg-blue-500',
-  crown: 'bg-yellow-400',
-  root_canal: 'bg-purple-500',
-  missing: 'bg-gray-700',
-  impacted: 'bg-orange-500',
-  fracture: 'bg-rose-600',
+  caries: 'bg-blue-500',
+  restoration: 'bg-red-500',
+  missing: 'bg-gray-500',
+  crown: 'bg-red-600',
+  to_extract: 'bg-amber-500',
+  perno: 'bg-red-600',
   sealant: 'bg-cyan-500',
-  implant: 'bg-slate-500',
-  healthy: 'bg-emerald-500',
+  conduct_todo: 'bg-blue-500',
+  conduct_done: 'bg-red-500',
 };
 
 export const CONDITION_TEXT: Record<string, string> = {
   caries: 'fill-white',
-  filling: 'fill-white',
-  crown: 'fill-black',
-  root_canal: 'fill-white',
+  restoration: 'fill-white',
   missing: 'fill-white',
-  impacted: 'fill-white',
-  fracture: 'fill-white',
+  crown: 'fill-white',
+  to_extract: 'fill-white',
+  perno: 'fill-white',
   sealant: 'fill-white',
-  implant: 'fill-white',
-  healthy: 'fill-white',
+  conduct_todo: 'fill-white',
+  conduct_done: 'fill-white',
 };
 
 export const CONDITION_LABEL: Record<string, string> = {
   caries: 'text-white',
-  filling: 'text-white',
-  crown: 'text-black',
-  root_canal: 'text-white',
+  restoration: 'text-white',
   missing: 'text-white',
-  impacted: 'text-white',
-  fracture: 'text-white',
+  crown: 'text-white',
+  to_extract: 'text-white',
+  perno: 'text-white',
   sealant: 'text-white',
-  implant: 'text-white',
-  healthy: 'text-white',
+  conduct_todo: 'text-white',
+  conduct_done: 'text-white',
 };
 
 type SurfaceState = { surface: SurfaceKey; condition: string };
+type WholeState = { condition: string };
 
 type Props = {
   toothNumber: number;
   conditions: SurfaceState[];
+  whole: WholeState | null;
   selectedSurface: SurfaceKey | null;
   hoverSurface: SurfaceKey | null;
   paintMode: boolean;
@@ -91,25 +98,16 @@ const CY = 28;
 const R = 26;
 const R_INNER = 9;
 const LABEL_DY = 72;
+const TOOTH_STROKE = '#1e293b';
 
-function ringFill(state: SurfaceState | undefined, paintMode: boolean): string {
+function surfaceFill(state: SurfaceState | undefined, paintMode: boolean): string {
   if (!state) return paintMode ? 'fill-muted/30' : 'fill-white';
   return CONDITION_COLOR[state.condition] ?? 'fill-white';
 }
 
-function ringStroke(state: SurfaceState | undefined): string {
-  if (!state) return 'stroke-foreground';
-  return 'stroke-foreground';
-}
-
-function ringLabelColor(state: SurfaceState | undefined): string {
+function surfaceLabelColor(state: SurfaceState | undefined): string {
   if (!state) return 'fill-foreground';
-  return CONDITION_TEXT[state.condition] ?? 'text-foreground';
-}
-
-function ringLabel(state: SurfaceState | undefined, key: SurfaceKey): string {
-  if (state) return key[0].toUpperCase();
-  return '';
+  return CONDITION_TEXT[state.condition] ?? 'fill-foreground';
 }
 
 type WedgeProps = {
@@ -156,14 +154,14 @@ function Wedge({
         data-surface={surface}
         className={cn(
           'transition-colors duration-100',
-          ringFill(state, paintMode),
-          ringStroke(state),
+          surfaceFill(state, paintMode),
           'stroke-1',
           paintMode ? 'cursor-crosshair' : 'cursor-pointer',
           isSelected && 'stroke-primary stroke-2',
           !isSelected && isHover && 'stroke-primary/70 stroke-1.5',
           isDropTarget && 'stroke-primary stroke-2',
         )}
+        style={{ stroke: TOOTH_STROKE }}
         onClick={(e) => {
           e.stopPropagation();
           onSurfaceClick(surface);
@@ -185,13 +183,154 @@ function Wedge({
           textAnchor="middle"
           dominantBaseline="middle"
           className={cn(
-            'pointer-events-none select-none text-[11px] font-bold',
-            ringLabelColor(state),
+            'pointer-events-none select-none text-[10px] font-bold',
+            surfaceLabelColor(state),
           )}
         >
-          {ringLabel(state, surface)}
+          {surface[0].toUpperCase()}
         </text>
       ) : null}
+    </g>
+  );
+}
+
+function WholeSymbol({ condition }: { condition: string }) {
+  switch (condition) {
+    case 'missing':
+      // Gray translucent fill + two crossing lines (X)
+      return (
+        <g pointerEvents="none">
+          <circle
+            cx={CX}
+            cy={CY}
+            r={R}
+            className="fill-gray-400"
+            fillOpacity={0.45}
+          />
+          <line
+            x1={CX - R * 0.7}
+            y1={CY - R * 0.7}
+            x2={CX + R * 0.7}
+            y2={CY + R * 0.7}
+            stroke="#0f172a"
+            strokeWidth={2.2}
+            strokeLinecap="round"
+          />
+          <line
+            x1={CX - R * 0.7}
+            y1={CY + R * 0.7}
+            x2={CX + R * 0.7}
+            y2={CY - R * 0.7}
+            stroke="#0f172a"
+            strokeWidth={2.2}
+            strokeLinecap="round"
+          />
+        </g>
+      );
+    case 'crown':
+      // Red ring around the tooth
+      return (
+        <g pointerEvents="none">
+          <circle
+            cx={CX}
+            cy={CY}
+            r={R + 3}
+            fill="none"
+            stroke="#dc2626"
+            strokeWidth={2.5}
+          />
+        </g>
+      );
+    case 'to_extract':
+      // Two diagonal slashes across the tooth
+      return (
+        <g pointerEvents="none">
+          <line
+            x1={CX - R * 0.75}
+            y1={CY - R * 0.75}
+            x2={CX + R * 0.75}
+            y2={CY + R * 0.75}
+            stroke="#0f172a"
+            strokeWidth={2.4}
+            strokeLinecap="round"
+          />
+          <line
+            x1={CX - R * 0.75}
+            y1={CY + R * 0.75}
+            x2={CX + R * 0.75}
+            y2={CY - R * 0.75}
+            stroke="#dc2626"
+            strokeWidth={2.4}
+            strokeLinecap="round"
+          />
+        </g>
+      );
+    case 'perno':
+      // Whole tooth filled red
+      return (
+        <g pointerEvents="none">
+          <circle
+            cx={CX}
+            cy={CY}
+            r={R}
+            className="fill-red-600"
+          />
+          <text
+            x={CX}
+            y={CY}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            className="fill-white text-[10px] font-bold select-none"
+          >
+            P
+          </text>
+        </g>
+      );
+    case 'sealant':
+      // Horizontal dash over the top of the tooth
+      return (
+        <g pointerEvents="none">
+          <line
+            x1={CX - R * 0.6}
+            y1={CY - R * 0.55}
+            x2={CX + R * 0.6}
+            y2={CY - R * 0.55}
+            stroke="#0891b2"
+            strokeWidth={3.5}
+            strokeLinecap="round"
+          />
+        </g>
+      );
+    case 'conduct_todo':
+      return <ConductMarker color="#2563eb" />;
+    case 'conduct_done':
+      return <ConductMarker color="#dc2626" />;
+    default:
+      return null;
+  }
+}
+
+function ConductMarker({ color }: { color: string }) {
+  // A small blue/red "TC" pill above the tooth
+  return (
+    <g pointerEvents="none">
+      <rect
+        x={CX - 7}
+        y={2}
+        width={14}
+        height={9}
+        rx={2}
+        fill={color}
+      />
+      <text
+        x={CX}
+        y={9}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        className="fill-white text-[7px] font-bold select-none"
+      >
+        TC
+      </text>
     </g>
   );
 }
@@ -199,6 +338,7 @@ function Wedge({
 export function ToothSvg({
   toothNumber,
   conditions,
+  whole,
   selectedSurface,
   hoverSurface,
   paintMode,
@@ -215,38 +355,33 @@ export function ToothSvg({
   const byKey: Partial<Record<SurfaceKey, SurfaceState>> = {};
   for (const c of conditions) byKey[c.surface] = c;
 
-  // Outer ring divided into 4 quarter-pie wedges by angle from center.
-  // 0° = right (3 o'clock), 90° = down, etc. We compute the four wedges:
-  //   distal:   -45° .. 45°   (right)
-  //   lingual:   45° .. 135°  (bottom)
-  //   mesial:   135° .. 225°  (left)
-  //   buccal:   225° .. 315°  (top)
-  // For a top-down occlusal view, "top of screen" is buccal, so we map
-  // screen-y=2 (north) to the buccal wedge, which is angle 270° in SVG
-  // coordinates (where y grows downward, so angle 270° = up).
-  // The pie wedge for an angle range [a, b] in SVG coords:
-  //   M cx,cy  L (cx + R*cos a, cy + R*sin a)  A R,R 0 0 1 (cx + R*cos b, cy + R*sin b)  Z
-  // We pre-compute these for cleanliness.
-  const polar = (deg: number) => {
-    const rad = (deg * Math.PI) / 180;
-    return { x: CX + R * Math.cos(rad), y: CY + R * Math.sin(rad) };
-  };
+  // Cardinal points on the outer circle
+  const N = { x: CX, y: CY - R };
+  const E = { x: CX + R, y: CY };
+  const S = { x: CX, y: CY + R };
+  const W = { x: CX - R, y: CY };
 
-  // Wedge endpoints (using the same convention as the visual cross):
-  // - buccal wedge top center: y=2 (north)
-  // - mesial wedge left center: x=2 (west)
-  // - distal wedge right center: x=42 (east)
-  // - lingual wedge bottom center: y=42 (south)
-  // Build wedges using these cardinal endpoints.
+  const LABEL_R = (R + R_INNER) / 2;
+  const labelAt = (angleDeg: number) => {
+    const rad = (angleDeg * Math.PI) / 180;
+    return {
+      x: CX + LABEL_R * Math.cos(rad),
+      y: CY + LABEL_R * Math.sin(rad),
+    };
+  };
+  const buccalLabel = labelAt(-45);
+  const distalLabel = labelAt(45);
+  const lingualLabel = labelAt(135);
+  const mesialLabel = labelAt(225);
+
   const wedge = (
     surface: SurfaceKey,
     a: { x: number; y: number },
     b: { x: number; y: number },
-    largeArc: 0 | 1,
     labelX: number,
     labelY: number,
   ) => {
-    const d = `M ${CX} ${CY} L ${a.x} ${a.y} A ${R} ${R} 0 ${largeArc} 1 ${b.x} ${b.y} Z`;
+    const d = `M ${CX} ${CY} L ${a.x} ${a.y} A ${R} ${R} 0 0 1 ${b.x} ${b.y} Z`;
     const state = byKey[surface];
     const isSelected = selectedSurface === surface;
     const isHover = hoverSurface === surface;
@@ -274,34 +409,6 @@ export function ToothSvg({
     );
   };
 
-  // Cardinal points on the outer circle
-  const N = { x: CX, y: CY - R }; // (22, 2)
-  const E = { x: CX + R, y: CY }; // (42, 22)
-  const S = { x: CX, y: CY + R }; // (22, 42)
-  const W = { x: CX - R, y: CY }; // (2, 22)
-
-  // Wedge labels sit at the center of each wedge (midway between adjacent
-  // cardinals) at a radius halfway between the inner and outer circle.
-  const LABEL_R = (R + R_INNER) / 2; // midpoint of the ring
-  const labelAt = (angleDeg: number) => {
-    const rad = (angleDeg * Math.PI) / 180;
-    return {
-      x: CX + LABEL_R * Math.cos(rad),
-      y: CY + LABEL_R * Math.sin(rad),
-    };
-  };
-  // Each wedge spans 90° between two adjacent cardinals; label at the
-  // wedge's center angle.
-  //   buccal wedge: -90° → 0° (center -45°)
-  //   distal wedge:    0° → 90° (center  45°)
-  //   lingual wedge:  90° → 180° (center 135°)
-  //   mesial wedge:  180° → 270° (center 225°)
-  const buccalLabel = labelAt(-45);
-  const distalLabel = labelAt(45);
-  const lingualLabel = labelAt(135);
-  const mesialLabel = labelAt(225);
-
-  // Build occlusal inner-circle hit-area
   const occlusalState = byKey.occlusal;
   const occlusalSelected = selectedSurface === 'occlusal';
   const occlusalHover = hoverSurface === 'occlusal';
@@ -316,12 +423,11 @@ export function ToothSvg({
       aria-label={`Tooth ${toothNumber}`}
       data-tooth-svg={toothNumber}
     >
-      {wedge('buccal', N, E, 0, buccalLabel.x, buccalLabel.y)}
-      {wedge('mesial', W, N, 0, mesialLabel.x, mesialLabel.y)}
-      {wedge('lingual', S, W, 0, lingualLabel.x, lingualLabel.y)}
-      {wedge('distal', E, S, 0, distalLabel.x, distalLabel.y)}
+      {wedge('buccal', N, E, buccalLabel.x, buccalLabel.y)}
+      {wedge('mesial', W, N, mesialLabel.x, mesialLabel.y)}
+      {wedge('lingual', S, W, lingualLabel.x, lingualLabel.y)}
+      {wedge('distal', E, S, distalLabel.x, distalLabel.y)}
 
-      {/* Inner occlusal circle as a hit-area */}
       <circle
         data-surface="occlusal"
         cx={CX}
@@ -329,13 +435,14 @@ export function ToothSvg({
         r={R_INNER}
         className={cn(
           'transition-colors duration-100',
-          ringFill(occlusalState, paintMode),
-          'stroke-foreground stroke-1',
+          surfaceFill(occlusalState, paintMode),
+          'stroke-1',
           paintMode ? 'cursor-crosshair' : 'cursor-pointer',
           occlusalSelected && 'stroke-primary stroke-2',
           !occlusalSelected && occlusalHover && 'stroke-primary/70 stroke-1.5',
           occlusalDropTarget && 'stroke-primary stroke-2',
         )}
+        style={{ stroke: TOOTH_STROKE }}
         onClick={(e) => {
           e.stopPropagation();
           onSurfaceClick('occlusal');
@@ -357,8 +464,8 @@ export function ToothSvg({
           textAnchor="middle"
           dominantBaseline="middle"
           className={cn(
-            'pointer-events-none select-none text-[11px] font-bold',
-            ringLabelColor(occlusalState),
+            'pointer-events-none select-none text-[10px] font-bold',
+            surfaceLabelColor(occlusalState),
           )}
         >
           O
@@ -371,7 +478,7 @@ export function ToothSvg({
         y1={CY - R}
         x2={CX}
         y2={CY + R}
-        stroke="#1e293b"
+        stroke={TOOTH_STROKE}
         strokeWidth={1.4}
         strokeLinecap="round"
         pointerEvents="none"
@@ -381,7 +488,7 @@ export function ToothSvg({
         y1={CY}
         x2={CX + R}
         y2={CY}
-        stroke="#1e293b"
+        stroke={TOOTH_STROKE}
         strokeWidth={1.4}
         strokeLinecap="round"
         pointerEvents="none"
@@ -393,10 +500,13 @@ export function ToothSvg({
         cy={CY}
         r={R}
         fill="none"
-        stroke="#1e293b"
-        strokeWidth={1.8}
+        stroke={TOOTH_STROKE}
+        strokeWidth={1.6}
         pointerEvents="none"
       />
+
+      {/* Whole-tooth condition symbol (overlays everything) */}
+      {whole ? <WholeSymbol condition={whole.condition} /> : null}
 
       {/* Tooth number label, outside the tooth body for readability */}
       <text

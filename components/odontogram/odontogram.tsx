@@ -17,6 +17,7 @@ import {
   clearToothSurface,
   getOdontogram,
   type ToothRow,
+  type OdontogramMode,
 } from '@/server/actions/odontogram';
 import {
   ToothSvg,
@@ -27,22 +28,30 @@ import { ConditionChip } from './condition-chip';
 import { ToothListPicker } from './tooth-list-picker';
 import { ToothEditSheet } from './tooth-edit-sheet';
 
-const UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11];
-const UPPER_LEFT = [21, 22, 23, 24, 25, 26, 27, 28];
-const LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41];
-const LOWER_LEFT = [31, 32, 33, 34, 35, 36, 37, 38];
+// Adult dentition (FDI): 18-11 on screen-left, 21-28 on screen-right
+const UPPER_RIGHT_ADULT = [18, 17, 16, 15, 14, 13, 12, 11];
+const UPPER_LEFT_ADULT = [21, 22, 23, 24, 25, 26, 27, 28];
+const LOWER_RIGHT_ADULT = [48, 47, 46, 45, 44, 43, 42, 41];
+const LOWER_LEFT_ADULT = [31, 32, 33, 34, 35, 36, 37, 38];
 
-const ALL_CONDITIONS = [
+// Pediatric (primary) dentition: 55-51 on screen-left, 61-65 on screen-right
+const UPPER_RIGHT_KID = [55, 54, 53, 52, 51];
+const UPPER_LEFT_KID = [61, 62, 63, 64, 65];
+const LOWER_RIGHT_KID = [85, 84, 83, 82, 81];
+const LOWER_LEFT_KID = [71, 72, 73, 74, 75];
+
+// The full set of conditions the user can apply. Per-surface (caries,
+// restoration) use surface wedges; the rest are whole-tooth overlays.
+export const ALL_CONDITIONS = [
   'caries',
-  'filling',
-  'crown',
-  'root_canal',
+  'restoration',
   'missing',
-  'impacted',
-  'fracture',
+  'crown',
+  'to_extract',
+  'perno',
   'sealant',
-  'implant',
-  'healthy',
+  'conduct_todo',
+  'conduct_done',
 ] as const;
 
 const ALL_SURFACES = [
@@ -55,7 +64,18 @@ const ALL_SURFACES = [
   'whole',
 ] as const;
 
+const WHOLE_CONDITIONS = new Set([
+  'missing',
+  'crown',
+  'to_extract',
+  'perno',
+  'sealant',
+  'conduct_todo',
+  'conduct_done',
+]);
+
 type SurfaceState = { surface: SurfaceKey; condition: string };
+type WholeState = { condition: string };
 
 function upsertSurfaceLocal(
   teeth: ToothRow[],
@@ -91,10 +111,12 @@ function removeSurfaceLocal(
 export function Odontogram({
   initial,
   patientId,
+  mode,
 }: {
   initial: ToothRow[];
   patientId: string;
   locale: string;
+  mode: OdontogramMode;
 }) {
   const t = useTranslations('odontogram');
   const tCommon = useTranslations('common');
@@ -114,32 +136,50 @@ export function Odontogram({
 
   const [pickerTooth, setPickerTooth] = useState<number | null>(null);
   const [pickerSurface, setPickerSurface] = useState<string>('whole');
-  const [pickerCondition, setPickerCondition] = useState<string>('healthy');
+  const [pickerCondition, setPickerCondition] = useState<string>(
+    ALL_CONDITIONS[0],
+  );
   const [pickerNote, setPickerNote] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetTooth, setSheetTooth] = useState<number | null>(null);
   const [sheetInitialSurface, setSheetSurface] = useState<SurfaceKey>('occlusal');
-  const [sheetInitialCondition, setSheetInitialCondition] = useState<string>('healthy');
+  const [sheetInitialCondition, setSheetInitialCondition] = useState<string>(
+    ALL_CONDITIONS[0],
+  );
   const [sheetInitialNote, setSheetInitialNote] = useState<string>('');
 
   const toothMap = useMemo<Record<number, ToothRow>>(() => {
     const m: Record<number, ToothRow> = {};
-    for (const t of teeth) m[t.tooth_number] = t;
+    for (const tt of teeth) m[tt.tooth_number] = tt;
     return m;
   }, [teeth]);
 
   const paintedSurfacesFor = useCallback(
-    (n: number | null): { surface: SurfaceKey; condition: string }[] => {
+    (n: number | null): { surface: SurfaceKey | 'whole'; condition: string }[] => {
       if (n == null) return [];
       const row = toothMap[n];
       if (!row) return [];
       return row.conditions
-        .filter((c): c is { surface: SurfaceKey; condition: string; note: string | null } =>
-          (SURFACE_KEYS as readonly string[]).includes(c.surface),
+        .filter((c) =>
+          (SURFACE_KEYS as readonly string[]).includes(c.surface) ||
+          c.surface === 'whole',
         )
-        .map((c) => ({ surface: c.surface, condition: c.condition }));
+        .map((c) => ({ surface: c.surface as SurfaceKey | 'whole', condition: c.condition }));
+    },
+    [toothMap],
+  );
+
+  const wholeFor = useCallback(
+    (n: number | null): WholeState | null => {
+      if (n == null) return null;
+      const row = toothMap[n];
+      if (!row) return null;
+      const whole = row.conditions.find((c) => c.surface === 'whole');
+      if (!whole) return null;
+      if (!WHOLE_CONDITIONS.has(whole.condition)) return null;
+      return { condition: whole.condition };
     },
     [toothMap],
   );
@@ -365,6 +405,7 @@ export function Odontogram({
         <ToothSvg
           toothNumber={n}
           conditions={surfaces}
+          whole={wholeFor(n)}
           className="w-8 h-[44px] md:w-10 md:h-14 lg:w-14 lg:h-20"
           selectedSurface={
             selectedTooth === n ? selectedSurface : null
@@ -389,46 +430,107 @@ export function Odontogram({
   const selectedToothRow =
     selectedTooth != null ? toothMap[selectedTooth] : undefined;
 
+  // Decide which rows to render based on the mode.
+  const showAdult =
+    mode.kind === 'adult' ||
+    (mode.kind === 'both' && mode.order === 'adult-then-kid');
+  const showKid =
+    mode.kind === 'kid' ||
+    (mode.kind === 'both' && mode.order === 'adult-then-kid') ||
+    (mode.kind === 'both' && mode.order === 'kid-then-adult');
+
+  type ChartSet = {
+    label: string;
+    testId: string;
+    upperRight: number[];
+    upperLeft: number[];
+    lowerRight: number[];
+    lowerLeft: number[];
+  };
+
+  const adultSet: ChartSet = {
+    label: t('chartAdult'),
+    testId: 'adult',
+    upperRight: UPPER_RIGHT_ADULT,
+    upperLeft: UPPER_LEFT_ADULT,
+    lowerRight: LOWER_RIGHT_ADULT,
+    lowerLeft: LOWER_LEFT_ADULT,
+  };
+  const kidSet: ChartSet = {
+    label: t('chartKid'),
+    testId: 'kid',
+    upperRight: UPPER_RIGHT_KID,
+    upperLeft: UPPER_LEFT_KID,
+    lowerRight: LOWER_RIGHT_KID,
+    lowerLeft: LOWER_LEFT_KID,
+  };
+
+  const charts: ChartSet[] = [];
+  if (mode.kind === 'both' && mode.order === 'kid-then-adult') {
+    charts.push(kidSet, adultSet);
+  } else {
+    if (showAdult) charts.push(adultSet);
+    if (showKid) charts.push(kidSet);
+  }
+
   return (
     <div
       className="space-y-4"
       data-testid="odontogram-root"
       onMouseLeave={() => setHoverSurface(null)}
     >
-      <Card>
-        <CardContent className="pt-6 space-y-4">
-          <div className="flex justify-center">
-            <div className="space-y-2 w-full">
-              {/* Desktop / tablet: 2 rows with the dashed midline between them */}
-              <div className="hidden md:flex md:gap-1.5 md:justify-center" data-testid="upper-row">
-                {UPPER_RIGHT.map(renderTooth)}
-                {UPPER_LEFT.map(renderTooth)}
-              </div>
-              <div className="hidden md:block md:border-t-2 md:border-b-2 md:border-dashed" />
-              <div className="hidden md:flex md:gap-1.5 md:justify-center" data-testid="lower-row">
-                {LOWER_RIGHT.map(renderTooth)}
-                {LOWER_LEFT.map(renderTooth)}
-              </div>
+      {charts.map((chart, idx) => (
+        <Card key={chart.testId} data-testid={`chart-${chart.testId}`}>
+          <CardContent className="pt-6 space-y-4">
+            <div className="text-sm font-medium text-muted-foreground">
+              {chart.label}
+            </div>
+            <div className="flex justify-center">
+              <div className="space-y-2 w-full">
+                {/* Desktop / tablet: 2 rows with the dashed midline between them */}
+                <div
+                  className="hidden md:flex md:gap-1.5 md:justify-center"
+                  data-testid={`upper-row-${chart.testId}`}
+                >
+                  {chart.upperRight.map(renderTooth)}
+                  {chart.upperLeft.map(renderTooth)}
+                </div>
+                <div className="hidden md:block md:border-t-2 md:border-b-2 md:border-dashed" />
+                <div
+                  className="hidden md:flex md:gap-1.5 md:justify-center"
+                  data-testid={`lower-row-${chart.testId}`}
+                >
+                  {chart.lowerRight.map(renderTooth)}
+                  {chart.lowerLeft.map(renderTooth)}
+                </div>
 
-              {/* Mobile: 4-row tooth list. Tap a tooth to open the edit sheet. */}
-              <div className="md:hidden">
-                <ToothListPicker
-                  teeth={teeth}
-                  onPick={(n) => {
-                    setSheetTooth(n);
-                    setSheetSurface('occlusal');
-                    const existing = toothMap[n]?.conditions.find(
-                      (c) => c.surface === 'occlusal',
-                    );
-                    setSheetInitialCondition(existing?.condition ?? 'healthy');
-                    setSheetInitialNote(existing?.note ?? '');
-                    setSheetOpen(true);
-                  }}
-                />
+                {/* Mobile: 4-row tooth list. Tap a tooth to open the edit sheet. */}
+                <div className="md:hidden">
+                  <ToothListPicker
+                    teeth={teeth}
+                    variant={chart.testId as 'adult' | 'kid'}
+                    onPick={(n) => {
+                      setSheetTooth(n);
+                      setSheetSurface('occlusal');
+                      const existing = toothMap[n]?.conditions.find(
+                        (c) => c.surface === 'occlusal',
+                      );
+                      setSheetInitialCondition(
+                        existing?.condition ?? ALL_CONDITIONS[0],
+                      );
+                      setSheetInitialNote(existing?.note ?? '');
+                      setSheetOpen(true);
+                    }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          </CardContent>
+        </Card>
+      ))}
 
+      <Card>
+        <CardContent className="pt-6 space-y-4">
           <div
             className={cn(
               'flex flex-wrap items-center gap-2 justify-center text-xs pt-2',

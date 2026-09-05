@@ -19,6 +19,7 @@ const ALL_SURFACES: SurfaceKey[] = [
   'lingual',
   'mesial',
   'distal',
+  'whole',
 ];
 
 const SURFACE_GLYPH: Record<SurfaceKey, string> = {
@@ -27,6 +28,7 @@ const SURFACE_GLYPH: Record<SurfaceKey, string> = {
   lingual: 'L',
   mesial: 'M',
   distal: 'D',
+  whole: '⌖',
 };
 
 export function ToothEditSheet({
@@ -47,7 +49,7 @@ export function ToothEditSheet({
   initialSurface: SurfaceKey;
   initialCondition: string;
   initialNote: string;
-  paintedSurfaces: { surface: SurfaceKey; condition: string }[];
+  paintedSurfaces: { surface: SurfaceKey | 'whole'; condition: string }[];
   onSave: (args: {
     surface: SurfaceKey;
     condition: string;
@@ -105,7 +107,7 @@ export function ToothEditSheet({
             <div>
               <div className="text-sm font-medium mb-2">{t('surface')}</div>
               <div
-                className="grid grid-cols-5 gap-2"
+                className="grid grid-cols-6 gap-2"
                 data-testid="sheet-surface-grid"
               >
                 {ALL_SURFACES.map((s) => {

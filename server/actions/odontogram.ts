@@ -6,25 +6,24 @@ import { can, requireUser } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 
 const CondSchema = z.object({
-  tooth_number: z.coerce.number().int().min(1).max(48),
+  tooth_number: z.coerce.number().int().min(1).max(85),
   surface: z.enum(['occlusal', 'buccal', 'lingual', 'mesial', 'distal', 'root', 'whole']),
   condition: z.enum([
     'caries',
-    'filling',
-    'crown',
-    'root_canal',
+    'restoration',
     'missing',
-    'impacted',
-    'fracture',
+    'crown',
+    'to_extract',
+    'perno',
     'sealant',
-    'implant',
-    'healthy',
+    'conduct_todo',
+    'conduct_done',
   ]),
   note: z.string().optional().nullable(),
 });
 
 const ClearSchema = z.object({
-  tooth_number: z.coerce.number().int().min(1).max(48),
+  tooth_number: z.coerce.number().int().min(1).max(85),
   surface: z.enum(['occlusal', 'buccal', 'lingual', 'mesial', 'distal', 'root', 'whole']),
 });
 
@@ -110,6 +109,59 @@ export type ToothRow = {
     note: string | null;
   }[];
 };
+
+export type OdontogramMode =
+  | { kind: 'kid' }
+  | { kind: 'adult' }
+  | { kind: 'both'; order: 'kid-then-adult' | 'adult-then-kid' };
+
+/**
+ * Decides which odontogram(s) to show for a patient based on age and
+ * whether the kid odontogram has any history in the database.
+ *
+ *   age < 10  -> kid only
+ *   10 <= age <= 12  -> both, kid first
+ *   age > 12  -> adult only
+ *   age > 12 but the kid odontogram has a record -> adult first, kid second
+ */
+export async function getOdontogramMode(patientId: string): Promise<OdontogramMode> {
+  const patient = await queryOne<{ birth_date: string | null }>(
+    'SELECT birth_date FROM patients WHERE id = ?',
+    [patientId],
+  );
+  const now = new Date();
+  const age = patient?.birth_date
+    ? Math.floor(
+        (now.getTime() - new Date(patient.birth_date).getTime()) /
+          (365.25 * 86400_000),
+      )
+    : null;
+
+  // Count kid teeth (51-85) that have any conditions recorded.
+  const kidHistory = await queryOne<{ c: number }>(
+    `SELECT COUNT(*) AS c
+     FROM teeth_chart tc
+     JOIN tooth_conditions c ON c.tooth_chart_id = tc.id
+     WHERE tc.patient_id = ? AND tc.tooth_number BETWEEN 51 AND 85`,
+    [patientId],
+  );
+  const hasKidHistory = (kidHistory?.c ?? 0) > 0;
+
+  if (age == null) {
+    // Unknown age -> default to adult only
+    return { kind: 'adult' };
+  }
+  if (age < 10) {
+    return { kind: 'kid' };
+  }
+  if (age <= 12) {
+    return { kind: 'both', order: 'kid-then-adult' };
+  }
+  if (hasKidHistory) {
+    return { kind: 'both', order: 'adult-then-kid' };
+  }
+  return { kind: 'adult' };
+}
 
 export async function getOdontogram(patientId: string) {
   const rows = await query<{
