@@ -252,7 +252,14 @@ test('odontogram: arming "missing" then clicking any surface marks the whole too
   const tooth = page
     .getByTestId('upper-row-adult')
     .locator('[data-tooth-svg="17"]');
+  // Wait for the server-action round trip so the write has landed before
+  // we reload (the click flow is fire-and-forget + optimistic).
+  const saveResp = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/patients/'),
+    { timeout: 15_000 },
+  );
   await tooth.locator('[data-surface="mesial"]').click();
+  await saveResp;
 
   // The X lines are rendered (whole symbol: 2 cross + 2 X lines), and
   // the mesial wedge itself stays unpainted (no gray fill).
