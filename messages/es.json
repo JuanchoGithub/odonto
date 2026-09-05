@@ -125,7 +125,8 @@
       "shared": "Compartido"
     },
     "pendingLinks": "Turnos pendientes (enlaces compartidos)",
-    "linkCopied": "Enlace copiado al portapapeles"
+    "linkCopied": "Enlace copiado al portapapeles",
+    "contact": "Contacto"
   },
   "odontogram": {
     "title": "Odontograma",

@@ -51,11 +51,15 @@ export function WeekCalendar({
   const dateFnsLocale = localeStr.startsWith('en') ? enUS : es;
   const { push } = useToast();
 
-  const [weekStart, setWeekStart] = useState(() =>
-    initialWeekStart
-      ? new Date(initialWeekStart)
-      : startOfWeek(new Date(), { weekStartsOn: 1 }),
-  );
+  const [weekStart, setWeekStart] = useState(() => {
+    if (initialWeekStart) {
+      // 'yyyy-MM-dd' — build a local date from parts; Date(string) would
+      // parse as UTC and shift the week in non-UTC timezones.
+      const [y, mo, d] = initialWeekStart.split('-').map(Number);
+      return new Date(y, mo - 1, d);
+    }
+    return startOfWeek(new Date(), { weekStartsOn: 1 });
+  });
   const [appts, setAppts] = useState(initial);
   const [windowsByDate, setWindowsByDate] = useState<Record<
     string,
@@ -259,11 +263,14 @@ export function WeekCalendar({
               reason: t('reason'),
               empty: t('emptyList'),
               addedBy: t('addedBy'),
+              contact: t('contact'),
               method: t('method'),
               pendingTitle: t('pendingLinks'),
               pending: t('status.pending'),
             }}
-            methodLabel={(m) => (m ? t(`method.${m}`) : '—')}
+            methodLabel={(m) =>
+              m ? ((t.has(`method.${m}`) ? t(`method.${m}`) : m) as string) : '—'
+            }
             statusLabel={(s) => t(`status.${s}`)}
             onOpenAppt={openEdit}
             onCopyLink={(token) => {

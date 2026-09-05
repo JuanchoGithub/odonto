@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/rbac';
 import { listAppointmentsForWeek, listPendingTurnLinks } from '@/server/actions/appointments';
 import { query } from '@/lib/db';
 import { WeekCalendar } from '@/components/appointments/week-calendar';
-import { startOfWeek } from 'date-fns';
+import { startOfWeek, format } from 'date-fns';
 
 export default async function AppointmentsPage({
   params,
@@ -35,7 +35,9 @@ export default async function AppointmentsPage({
         initial={appts}
         dentists={dentists.map((d) => ({ id: d.id, name: d.name, color: d.color }))}
         pendingLinks={pendingLinks}
-        initialWeekStart={startOfWeek(start, { weekStartsOn: 1 }).toISOString()}
+        // Date-only string: parsing a full ISO in the browser would shift
+        // the day when the clinic timezone differs from UTC.
+        initialWeekStart={format(startOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
       />
     </div>
   );

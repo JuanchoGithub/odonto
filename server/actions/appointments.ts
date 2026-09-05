@@ -159,12 +159,15 @@ export type ApptRow = {
   created_by: string | null;
   created_via: string | null;
   creator_name: string | null;
+  patient_phone: string | null;
+  patient_email: string | null;
 };
 
 export async function listAppointmentsForWeek(startIso: string) {
   const end = new Date(new Date(startIso).getTime() + 7 * 86400_000).toISOString();
   return query<ApptRow>(
     `SELECT a.*, p.first_name || ' ' || p.last_name as patient_name,
+            p.phone as patient_phone, p.email as patient_email,
             u.name as dentist_name, u.color as dentist_color,
             cu.name as creator_name
      FROM appointments a
@@ -195,6 +198,8 @@ export type PendingLinkRow = {
   expires_at: string;
   dentist_id: string;
   patient_name: string;
+  patient_phone: string | null;
+  patient_email: string | null;
   dentist_name: string;
   dentist_color: string | null;
   creator_name: string | null;
@@ -205,6 +210,7 @@ export async function listPendingTurnLinks(): Promise<PendingLinkRow[]> {
   return query<PendingLinkRow>(
     `SELECT l.id, l.token, l.slot_minutes, l.created_at, l.expires_at, l.dentist_id,
             p.first_name || ' ' || p.last_name as patient_name,
+            p.phone as patient_phone, p.email as patient_email,
             u.name as dentist_name, u.color as dentist_color,
             cu.name as creator_name
      FROM turn_picker_links l
