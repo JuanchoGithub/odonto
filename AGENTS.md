@@ -4,6 +4,11 @@ Onboarding for AI agents and human contributors working on **Odonto**, a Next.js
 
 This is the source of truth. README.md is a one-page pointer; everything operational lives here.
 
+> **Deploy path (read this first).** Production deploys use a **Vercel Deploy Hook** — a per-project URL whose unique token is the URL itself. No CLI, no `vercel` token.
+> - **CI** (`.github/workflows/deploy.yml`): `POST $DEPLOY_HOOK_URL` on push to `main`, then polls `/es/login` until 200.
+> - **Local** (`scripts/deploy.mjs`): `node scripts/deploy.mjs --wait`.
+> - The hook URL lives in `DEPLOY_HOOK_URL` (GitHub repo secret) and is mirrored in `.local/.env.production`. The old `VERCEL_TOKEN` secret is unused and can be deleted. Full details in §11; the `vcp_` reason is in §12.9.
+
 ---
 
 ## 1. What is Odonto?
@@ -47,11 +52,39 @@ Default currency is per-clinic; default locale is `es` (ARS) or `en` (USD), edit
 | Date | `date-fns` + `date-fns-tz` |
 | Tests | Playwright (e2e) |
 | CI | GitHub Actions (`.github/workflows/`) |
-| Hosting | Vercel (auto-deploy on push to `main`) |
+| Hosting | Vercel — **deploys via a Deploy Hook URL, not the CLI** (see §11) |
 
 ---
 
-## 3. Repo layout
+## 3. Deploy in 30 seconds
+
+For the live production URL `https://midentista.vercel.app`:
+
+```bash
+# Local
+set -a; source .local/.env.production; set +a
+node scripts/deploy.mjs --wait
+```
+
+```bash
+# CI
+git push origin main   # .github/workflows/deploy.yml does the same thing
+```
+
+**Required secret / env** (one URL, two places):
+
+- **GitHub repo secret** `DEPLOY_HOOK_URL` → https://github.com/JuanchoGithub/odonto/settings/secrets/actions
+- **Local** `DEPLOY_HOOK_URL` line in `/Users/jayjay/gitrepos/odonto/.local/.env.production`
+
+How to create the hook: Vercel → `midentista` project → **Settings → Git → Deploy Hooks → Create Hook** (name it, branch `main`). Copy the URL. **Treat the URL like a password.**
+
+The `VERCEL_TOKEN` GitHub secret is no longer used by any workflow — safe to delete from https://github.com/JuanchoGithub/odonto/settings/secrets/actions.
+
+See §11 for the full details (rollback, bootstrap, troubleshooting) and §12.9 for why the Vercel CLI is deliberately avoided.
+
+---
+
+## 4. Repo layout
 
 ```
 odonto/
@@ -115,7 +148,7 @@ odonto/
 ├── scripts/
 │   ├── migrate.mjs               # applies migrations, tracks in _migrations
 │   ├── seed.mjs                  # 3 users + 10 patients + sample appointments/treatments/invoices
-│   └── vercel-setup.mjs          # one-shot Vercel bootstrap (see §10)
+│   └── vercel-setup.mjs          # one-shot Vercel bootstrap (see §11)
 ├── e2e/                          # Playwright tests
 │   ├── smoke.spec.ts             # login, dashboard, create patient, role gates
 │   ├── repro-appointment.spec.ts # appointment dialog (searchable picker, inline new patient)
@@ -136,13 +169,13 @@ odonto/
 
 ---
 
-## 4. Local development
+## 5. Local development
 
 ```bash
 # 1. Install
 npm install
 
-# 2. Configure (NO real secrets in this file — see §6)
+# 2. Configure (NO real secrets in this file — see §7)
 cp .env.example .env.local
 #   edit .env.local to set TURSO_URL=file:./local.db for a fully local DB,
 #   or paste a real Turso URL+token for a cloud DB
@@ -182,7 +215,7 @@ The seed is idempotent for users (`INSERT OR IGNORE`) but will duplicate patient
 
 ---
 
-## 5. Migrations
+## 6. Migrations
 
 Plain `.sql` files in `migrations/`, applied in lexical order by `scripts/migrate.mjs`. The runner records applied filenames in a `_migrations` table.
 
@@ -198,7 +231,7 @@ Idempotency: prefer `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, 
 
 ---
 
-## 6. Secrets and local config
+## 7. Secrets and local config
 
 > **Rule: no real secrets are ever committed to the repo.**
 
@@ -231,11 +264,11 @@ This file:
 4. In the Vercel dashboard for `midentista` (or run `scripts/vercel-setup.mjs` which does the same thing programmatically), set the five env vars above on all three targets (production / preview / development).
 5. Add `VERCEL_TOKEN` as a GitHub Actions repository secret so the Deploy workflow can run `vercel build --prod && vercel deploy --prebuilt --prod`.
 
-Detailed step-by-step in §10.
+Detailed step-by-step in §11.
 
 ---
 
-## 7. RBAC
+## 8. RBAC
 
 Three roles, enforced in `lib/rbac.ts`:
 
@@ -251,7 +284,7 @@ Nav links are filtered in `components/nav/top-nav.tsx` based on `user.role`.
 
 ---
 
-## 8. Database schema
+## 9. Database schema
 
 - `clinics` — single-row v1, but designed to allow multi-clinic (don't add `clinic_id` to other tables without thinking through the migration).
 - `users` — Auth.js-compatible; `role` is checked at the app level.
@@ -271,7 +304,7 @@ Nav links are filtered in `components/nav/top-nav.tsx` based on `user.role`.
 
 ---
 
-## 9. Common tasks for agents
+## 10. Common tasks for agents
 
 ### Add a new field to patients
 1. Add a column to `migrations/000N_patients_<field>.sql`:
@@ -328,7 +361,7 @@ git commit --allow-empty -m "chore: trigger redeploy" && git push
 
 ---
 
-## 10. Deploy
+## 11. Deploy
 
 The `midentista` project is on Vercel. Deployments are triggered by **Vercel Deploy Hooks** — a unique URL that takes a `POST` and rebuilds the project. No CLI, no auth header, the URL itself is the credential.
 
@@ -375,7 +408,7 @@ The current `VERCEL_TOKEN` GitHub secret is a `vcp_` personal access token, whic
 
 ---
 
-## 11. Known gotchas
+## 12. Known gotchas
 
 1. **Nested forms** are invalid HTML and cause subtle bugs. If you need a form inside another (e.g. inline onboarding from a dialog), use a **Radix `Dialog` portal** with `onPointerDownOutside={(e) => e.preventDefault()}` to prevent the parent dialog from closing. Custom `<div>` portals with `z-index` tricks WILL fail — the surrounding Radix dialog's content wins the click.
 
@@ -403,11 +436,11 @@ The current `VERCEL_TOKEN` GitHub secret is a `vcp_` personal access token, whic
 
 ---
 
-## 12. Quick reference: "how do I…?"
+## 13. Quick reference: "how do I…?"
 
-- **Add a new patient field** → §9
-- **Add a new module** → §9
-- **Run a migration against prod** → §9
+- **Add a new patient field** → §10
+- **Add a new module** → §10
+- **Run a migration against prod** → §10
 - **Debug a failing e2e test** → check `test-results/` for the screenshot and `error-context.md`. Re-run with `npx playwright test --reporter=list` for verbose output.
 - **Reset the prod DB** → run `npm run seed` (it uses `INSERT OR IGNORE` for users, but will duplicate patients — for a real reset, drop the Turso DB and recreate).
 - **See who is logged in** → `curl -b cookies.txt https://midentista.vercel.app/api/auth/session`
