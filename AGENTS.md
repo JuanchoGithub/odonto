@@ -303,6 +303,13 @@ Nav links are filtered in `components/nav/top-nav.tsx` based on `user.role`.
 set -a; source .local/.env.production; set +a
 npm run migrate
 ```
+
+### Trigger a production deploy
+```bash
+set -a; source .local/.env.production; set +a
+node scripts/deploy.mjs --wait    # polls /es/login until 200
+```
+Or push to `main` — `.github/workflows/deploy.yml` calls the same hook and waits for the prod URL to return 200.
 The `postinstall` script also runs `migrate` against whatever env vars are set, so a fresh Vercel build (with `TURSO_URL` + `TURSO_TOKEN` set) will auto-apply pending migrations.
 
 ### Inspect a patient
@@ -323,7 +330,12 @@ git commit --allow-empty -m "chore: trigger redeploy" && git push
 
 ## 10. Deploy
 
-The `midentista` project is on Vercel, auto-deploys on push to `main`. The GitHub Actions Deploy workflow (`.github/workflows/deploy.yml`) also runs `vercel build --prod && vercel deploy --prebuilt --prod` using the `VERCEL_TOKEN` GitHub secret. Either path produces the same production URL.
+The `midentista` project is on Vercel. Deployments are triggered by **Vercel Deploy Hooks** — a unique URL that takes a `POST` and rebuilds the project. No CLI, no auth header, the URL itself is the credential.
+
+- **GitHub Actions** (`.github/workflows/deploy.yml`) fires on every push to `main`, calls the hook, then polls `/es/login` until 200.
+- **Local** (`scripts/deploy.mjs`) does the same thing from your terminal with `node scripts/deploy.mjs --wait`.
+
+**Required GitHub secret**: `DEPLOY_HOOK_URL` — a deploy-hook URL created at Vercel → `midentista` → Settings → Git → Deploy Hooks. Store it at https://github.com/JuanchoGithub/odonto/settings/secrets/actions. Mirror it in `.local/.env.production` so `scripts/deploy.mjs` works locally.
 
 **Live URL**: `https://midentista.vercel.app`
 
@@ -347,18 +359,19 @@ The script will:
 2. Create a Vercel Blob store named `odonto` if one doesn't exist, and capture its `BLOB_READ_WRITE_TOKEN`.
 3. Push `TURSO_URL`, `TURSO_TOKEN`, `AUTH_SECRET` (random 32-byte), `AUTH_URL`, `BLOB_READ_WRITE_TOKEN` to Vercel for all three env targets.
 4. Run `npm run migrate` against the production Turso DB.
-5. `git push origin main` to trigger the first deploy via the GitHub Action.
-
-**Required GitHub secret**: `VERCEL_TOKEN` (a Vercel personal access token). Add it at https://github.com/JuanchoGithub/odonto/settings/secrets/actions.
+5. Create a deploy hook (or reuse `DEPLOY_HOOK_URL` from env) so future pushes auto-deploy.
 
 ### Post-deploy verification
 ```bash
-curl -sS -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/login
+curl -sS -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/es/login
 # 200 = up
 ```
 
 ### Rollback
 Vercel dashboard → midentista → Deployments → click a previous successful deployment → Promote to Production.
+
+### Why not the Vercel CLI?
+The current `VERCEL_TOKEN` GitHub secret is a `vcp_` personal access token, which the Vercel CLI rejects with "token is not valid" (the CLI expects the older 24-char format). Deploy hooks sidestep this entirely: the URL is the credential, no CLI binary, no token validation.
 
 ---
 
@@ -384,7 +397,7 @@ Vercel dashboard → midentista → Deployments → click a previous successful 
 
 10. **Mass "outside working hours" rejections → check `clinics.timezone` first.** If staff report that every create/move fails, verify the clinic timezone in Settings (it applies to every availability check). A common trap: saving the clinic form while the wrong timezone is shown silently persists it. Also verify the dentist's own weekly schedule (Settings → Schedules) — a narrow dentist schedule overrides clinic business hours and legitimately blocks writes outside it.
 
-9. **Vercel CLI + `vcp_` tokens**: `vcp_` personal access tokens work for the REST API but the Vercel CLI rejects them with "token is not valid" when used via `--token`. Use them only for REST API calls (which is what `scripts/vercel-setup.mjs` does). The Deploy workflow is auto-triggered by Vercel's GitHub App integration, not by the CLI.
+9. **Vercel CLI + `vcp_` tokens**: `vcp_` personal access tokens work for the REST API but the Vercel CLI rejects them with "token is not valid" when used via `--token`. Use them only for REST API calls (which is what `scripts/vercel-setup.mjs` does). **Production deploys are triggered by a Vercel Deploy Hook** (created in `midentista → Settings → Git → Deploy Hooks`) — `POST` to that URL from `.github/workflows/deploy.yml` and from `scripts/deploy.mjs`. The URL itself is the credential; store it in `DEPLOY_HOOK_URL` (GitHub repo secret) and `.local/.env.production` (local). No CLI, no token.
 
 10. **The build step on Vercel runs `postinstall`** which is `node scripts/migrate.mjs || true`. So fresh deploys auto-apply migrations as long as `TURSO_URL` + `TURSO_TOKEN` are set in the build env. If they're missing, the build still succeeds (because of `|| true`) and you must apply migrations manually.
 

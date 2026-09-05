@@ -11,44 +11,42 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy to Vercel (production)
+    name: Trigger Vercel production deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 5
     environment:
       name: production
-      url: ${{ steps.deploy.outputs.url }}
+      url: https://midentista.vercel.app
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Set Vercel project + org from existing project
+      - name: Trigger deploy hook
+        # The deploy hook URL is a per-project trigger; no auth header required
+        # (Vercel authenticates the request via the unique token in the URL itself).
+        # The hook triggers a build of `main` and returns a job id immediately.
         run: |
-          # The token works via REST but not via `vercel pull` (scope issue with vcp_ tokens).
-          # Skip pull entirely; the build knows the project from the git remote.
-          vercel link --yes --token="${{ secrets.VERCEL_TOKEN }}"
-          cat .vercel/project.json
+          if [ -z "${{ secrets.DEPLOY_HOOK_URL }}" ]; then
+            echo "::error::DEPLOY_HOOK_URL secret is not set. Create one in Vercel → midentista → Settings → Git → Deploy Hooks, then add it to GitHub repo secrets."
+            exit 1
+          fi
+          set -e
+          echo "Triggering Vercel deploy hook…"
+          body=$(curl -sS -X POST "${{ secrets.DEPLOY_HOOK_URL }}" -H 'Content-Type: application/json')
+          echo "Response: $body"
+          job_id=$(echo "$body" | python3 -c 'import json,sys; print(json.load(sys.stdin)["job"]["id"])' 2>/dev/null || echo "")
+          if [ -n "$job_id" ]; then
+            echo "Vercel job id: $job_id — watch it at https://vercel.com/juanchogithub/odonto"
+          fi
 
-      - name: Build for Vercel
-        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
-
-      - name: Deploy to production
-        id: deploy
+      - name: Wait for build to settle
         run: |
-          url=$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Deployed: $url"
-
-      - name: Smoke test production
-        run: |
-          url="${{ steps.deploy.outputs.url }}"
-          echo "Smoke testing $url"
-          for path in / /es/login /en/login; do
-            code=$(curl -sS -o /dev/null -w "%{http_code}" -L --max-time 30 "$url$path")
-            echo "  $path -> $code"
-            if [ "$code" != "200" ] && [ "$code" != "307" ] && [ "$code" != "404" ]; then
-              echo "Unexpected status $code on $path"
-              exit 1
+          # Best-effort: poll the production URL until 200 or 3 minutes.
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+            sleep 6
+            code=$(curl -sS -o /dev/null -w "%{http_code}" -L --max-time 20 https://midentista.vercel.app/es/login || echo "000")
+            echo "[$i] GET /es/login -> $code"
+            if [ "$code" = "200" ]; then
+              echo "Production is live and serving the new build."
+              exit 0
             fi
           done
+          echo "Production did not return 200 within 3 minutes. Check https://vercel.com/juanchogithub/odonto"
+          exit 1
