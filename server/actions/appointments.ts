@@ -2,25 +2,41 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
-import { requireUser } from '@/lib/rbac';
+import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 import { isWithinWorkingHours, getWeekWindows, type DayWindows } from '@/lib/availability';
+import { effectiveExpiryMs } from '@/lib/turn-picker';
 
-const ApptSchema = z.object({
+const ApptStatusSchema = z.enum(['scheduled', 'arrived', 'in_chair', 'completed', 'cancelled', 'no_show']);
+
+const ApptObject = z.object({
   patient_id: z.string().min(1),
   dentist_id: z.string().min(1),
   starts_at: z.string().min(1),
   ends_at: z.string().min(1),
   reason: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  status: z
-    .enum(['scheduled', 'arrived', 'in_chair', 'completed', 'cancelled', 'no_show'])
-    .default('scheduled'),
+  status: ApptStatusSchema.default('scheduled'),
   created_via: z.enum(['manual', 'click', 'drag']).default('manual'),
 });
 
+function validRange(d: { starts_at: string; ends_at: string }): boolean {
+  const s = new Date(d.starts_at).getTime();
+  const e = new Date(d.ends_at).getTime();
+  return Number.isFinite(s) && Number.isFinite(e) && e > s;
+}
+
+const ApptSchema = ApptObject.refine(validRange, {
+  message: 'ends_at must be after starts_at',
+});
+
+function forbidden() {
+  return { error: 'forbidden' as const };
+}
+
 export async function createAppointment(fd: FormData) {
   const user = await requireUser();
+  if (!can(user.role, 'appointments:write')) return forbidden();
   const parsed = ApptSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: 'invalid' as const };
   const data = parsed.data;
@@ -77,18 +93,21 @@ export async function createAppointment(fd: FormData) {
   return { ok: true, id };
 }
 
-const UpdateApptSchema = ApptSchema.omit({ patient_id: true }).extend({
-  id: z.string().min(1),
-});
+const UpdateApptSchema = ApptObject.omit({ patient_id: true })
+  .extend({
+    id: z.string().min(1),
+  })
+  .refine(validRange, { message: 'ends_at must be after starts_at' });
 
 export type UpdateApptResult =
   | { ok: true; id: string }
-  | { error: 'invalid' | 'conflict' | 'not_found' };
+  | { error: 'invalid' | 'conflict' | 'not_found' | 'forbidden' };
 
 export async function updateAppointment(
   fd: FormData,
 ): Promise<UpdateApptResult> {
   const user = await requireUser();
+  if (!can(user.role, 'appointments:write')) return { error: 'forbidden' as const };
   const parsed = UpdateApptSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: 'invalid' as const };
   const data = parsed.data;
@@ -130,18 +149,34 @@ export async function updateAppointment(
 
 export async function updateAppointmentStatus(id: string, status: string) {
   const user = await requireUser();
-  await query('UPDATE appointments SET status = ? WHERE id = ?', [status, id]);
+  if (!can(user.role, 'appointments:write')) return { error: 'forbidden' as const };
+  const parsed = ApptStatusSchema.safeParse(status);
+  if (!parsed.success) return { error: 'invalid' as const };
+  const existing = await queryOne<{ id: string }>(
+    'SELECT id FROM appointments WHERE id = ?',
+    [id],
+  );
+  if (!existing) return { error: 'not_found' as const };
+  await query('UPDATE appointments SET status = ? WHERE id = ?', [parsed.data, id]);
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,
-    [uid(), user.id, id, JSON.stringify({ status })],
+    [uid(), user.id, id, JSON.stringify({ status: parsed.data })],
   );
   revalidatePath('/appointments');
+  return { ok: true as const };
 }
 
 export async function deleteAppointment(id: string) {
-  await requireUser();
-  await query('DELETE FROM appointments WHERE id = ?', [id]);
+  const user = await requireUser();
+  if (!can(user.role, 'appointments:write')) return { error: 'forbidden' as const };
+  // Soft-cancel instead of hard-delete: preserves history + audit trail.
+  await query("UPDATE appointments SET status = 'cancelled' WHERE id = ?", [id]);
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'cancel', 'appointment', ?, ?)`,
+    [uid(), user.id, id, JSON.stringify({ via: 'deleteAppointment' })],
+  );
   revalidatePath('/appointments');
+  return { ok: true as const };
 }
 
 export type ApptRow = {
@@ -207,7 +242,7 @@ export type PendingLinkRow = {
 
 export async function listPendingTurnLinks(): Promise<PendingLinkRow[]> {
   await requireUser();
-  return query<PendingLinkRow>(
+  const rows = await query<PendingLinkRow>(
     `SELECT l.id, l.token, l.slot_minutes, l.created_at, l.expires_at, l.dentist_id,
             p.first_name || ' ' || p.last_name as patient_name,
             p.phone as patient_phone, p.email as patient_email,
@@ -220,4 +255,7 @@ export async function listPendingTurnLinks(): Promise<PendingLinkRow[]> {
      WHERE l.used_at IS NULL
      ORDER BY l.created_at DESC`,
   );
+  // Exclude expired links server-side (effective expiry = min(expires_at, created+idle)).
+  const now = Date.now();
+  return rows.filter((r) => effectiveExpiryMs(r) > now);
 }

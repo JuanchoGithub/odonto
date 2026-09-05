@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { format, isToday, type Locale } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { dentistColor } from '@/lib/colors';
@@ -63,6 +63,14 @@ function layoutDay(dayAppts: ApptRow[]): LaidBlock[] {
 }
 
 export type WorkingWindow = { startMin: number; endMin: number };
+
+/** True on touch-first devices — drag/resize/select gestures are disabled there. */
+function useCoarsePointer(): boolean {
+  return useMemo(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(pointer: coarse)').matches;
+  }, []);
+}
 
 // Segments of the display window that are NOT covered by working windows.
 function nonWorkingSegments(
@@ -193,6 +201,7 @@ function DayColumn({
 }) {
   const laid = layoutDay(appts);
   const colRef = useRef<HTMLDivElement>(null);
+  const coarse = useCoarsePointer();
   const dragSel = useRef<{ startMin: number; moved: boolean } | null>(null);
   const [sel, setSel] = useState<{ fromMin: number; toMin: number } | null>(
     null,
@@ -218,6 +227,9 @@ function DayColumn({
   function onColPointerMove(e: React.PointerEvent) {
     const d = dragSel.current;
     if (!d) return;
+    // Touch devices: no drag-select (it hijacks vertical scroll). Plain taps
+    // still create via onPointerUp.
+    if (coarse) return;
     const m = yToMin(e.clientY);
     if (m !== d.startMin) d.moved = true;
     if (d.moved) {
@@ -258,7 +270,8 @@ function DayColumn({
       tabIndex={0}
       aria-label={format(day, 'PPP')}
       className={cn(
-        'relative border-r last:border-r-0 cursor-pointer select-none touch-pan-x',
+        'relative border-r last:border-r-0 cursor-pointer select-none',
+        coarse ? 'touch-pan-y' : 'touch-pan-x',
         isToday(day) && 'bg-primary/5',
       )}
       style={{ height: GRID_HEIGHT }}
@@ -350,6 +363,7 @@ function ApptBlock({
 }) {
   const { appt, col, cols } = block;
   const rootRef = useRef<HTMLDivElement>(null);
+  const coarse = useCoarsePointer();
   const dragRef = useRef<{
     mode: 'move' | 'resize';
     startX: number;
@@ -394,8 +408,12 @@ function ApptBlock({
 
   const inactive =
     appt.status === 'cancelled' || appt.status === 'no_show';
+  const done = appt.status === 'completed';
 
   function onPointerDown(e: React.PointerEvent, mode: 'move' | 'resize') {
+    // Touch devices: tap opens the dialog; drag/resize need pixel precision
+    // that fingers don't have (and they hijack scrolling).
+    if (coarse) return;
     if (e.button !== 0) return;
     e.stopPropagation();
     const el = rootRef.current;
@@ -495,10 +513,12 @@ function ApptBlock({
       tabIndex={0}
       aria-label={`${format(new Date(dispStart), 'HH:mm')} ${appt.patient_name}`}
       className={cn(
-        'absolute rounded-[4px] border text-white overflow-hidden select-none touch-none',
-        'cursor-grab active:cursor-grabbing shadow-sm',
+        'absolute rounded-[4px] border text-white overflow-hidden select-none',
+        coarse ? 'touch-pan-y cursor-pointer' : 'touch-none cursor-grab active:cursor-grabbing',
+        'shadow-sm',
         preview && 'opacity-80 shadow-lg z-20',
         inactive && 'opacity-50',
+        done && !preview && 'opacity-70',
       )}
       style={{
         top,
@@ -534,7 +554,7 @@ function ApptBlock({
         }
       }}
     >
-      <div className="px-1 leading-tight text-[10px]">
+      <div className="px-1 py-0.5 leading-tight text-[11px]">
         <div className={cn('font-semibold', inactive && 'line-through')}>
           {format(new Date(dispStart), 'HH:mm')}–
           {format(new Date(dispEnd), 'HH:mm')}
@@ -551,9 +571,11 @@ function ApptBlock({
       <div
         aria-hidden
         data-testid="appt-resize"
-        className="absolute bottom-0 inset-x-0 h-[6px] cursor-ns-resize"
+        className="absolute bottom-0 inset-x-0 flex h-[24px] cursor-ns-resize items-end justify-center pb-0.5"
         onPointerDown={(e) => onPointerDown(e, 'resize')}
-      />
+      >
+        <span className="h-[5px] w-10 rounded-full bg-white/70" />
+      </div>
     </div>
   );
 }

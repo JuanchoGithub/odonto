@@ -29,7 +29,7 @@ export default async function PickTurnPage({
           ) : null}
         </div>
       </header>
-      <main className="flex-1 container py-8 max-w-2xl">
+      <main className="flex-1 container py-4 md:py-8 max-w-2xl">
         {info.ok ? (
           <TurnPickerClient
             token={token}

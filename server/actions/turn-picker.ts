@@ -2,14 +2,14 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
-import { query, queryOne } from '@/lib/db';
+import { query, queryOne, transaction } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
-import { getSlots, getClinicTimezone, wallClockInTz } from '@/lib/availability';
+import { getSlots, getClinicTimezone, wallClockInTz, isWithinWorkingHours } from '@/lib/availability';
 import { effectiveExpiryMs, linkStatus, type LinkStatus } from '@/lib/turn-picker';
 export type { LinkStatus } from '@/lib/turn-picker';
 
-const SlotMinutesSchema = z.union([z.literal(15), z.literal(30)]);
+const SlotMinutesSchema = z.union([z.literal(15), z.literal(30), z.literal(45), z.literal(60)]);
 
 const CreateLinkSchema = z.object({
   patient_id: z.string().min(1),
@@ -32,6 +32,13 @@ export type TurnPickerLinkRow = {
 
 function newToken(): string {
   return randomBytes(24).toString('base64url'); // 32 chars, 192 bits
+}
+
+function daysBetweenLen(fromDate: string, toDate: string): number {
+  const f = new Date(`${fromDate}T00:00:00Z`).getTime();
+  const t = new Date(`${toDate}T00:00:00Z`).getTime();
+  if (!Number.isFinite(f) || !Number.isFinite(t) || t < f) return 32; // invalid → reject
+  return Math.round((t - f) / 86400_000) + 1;
 }
 
 export async function createTurnPickerLink(
@@ -127,6 +134,9 @@ export async function getAvailability(
   );
   if (!link) return { ok: false };
   if (linkStatus(link) !== 'active') return { ok: false };
+  // Bound the range: at most 31 days to avoid unbounded scans.
+  const days = daysBetweenLen(fromDate, toDate);
+  if (days > 31) return { ok: false };
   const slots = await getSlots(link.dentist_id, fromDate, toDate, link.slot_minutes);
   const nowIsoStr = new Date().toISOString();
   return {
@@ -155,6 +165,7 @@ export async function bookViaPicker(
 
   const start = new Date(slotStartIso);
   const end = new Date(start.getTime() + link.slot_minutes * 60_000);
+  if (!Number.isFinite(start.getTime())) return { ok: false, reason: 'invalid' as const };
 
   // Defensive: re-check the slot is still available (handles stale pages & races).
   // Use the clinic timezone so late-evening slots aren't misattributed to tomorrow.
@@ -166,49 +177,53 @@ export async function bookViaPicker(
   );
   if (!stillAvailable) return { ok: false, reason: 'slot_unavailable' };
 
-  // Atomic consume: flip used_at only if still NULL.
-  const res = await query(
-    `UPDATE turn_picker_links SET used_at = datetime('now')
-     WHERE id = ? AND used_at IS NULL`,
-    [link.id],
+  // Working-hours re-check: the schedule may have changed since getSlots.
+  const withinHours = await isWithinWorkingHours(
+    link.dentist_id,
+    start.toISOString(),
+    end.toISOString(),
   );
-  // query() discards rowsAffected; re-check via SELECT.
-  const after = await queryOne<{ used_at: string | null }>(
-    'SELECT used_at FROM turn_picker_links WHERE id = ?',
-    [link.id],
-  );
-  if (!after?.used_at) {
-    // Should not happen — but if we couldn't consume, don't create the appt.
-    void res;
-    return { ok: false, reason: 'consumed' };
-  }
+  if (!withinHours) return { ok: false, reason: 'conflict' };
 
+  // Atomic consume + insert inside one transaction. rowsAffected tells us
+  // whether we won the race — no SELECT re-check (which both racers pass).
   const apptId = uid();
-  await query(
-    `INSERT INTO appointments
-       (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at)
-     VALUES (?, ?, ?, ?, ?, 'scheduled', ?, NULL, ?, 'shared', ?)`,
-    [
-      apptId,
-      link.patient_id,
-      link.dentist_id,
-      start.toISOString(),
-      end.toISOString(),
-      'self-booked',
-      link.created_by,
-      nowIso(),
-    ],
-  );
-  await query(
-    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
-     VALUES (?, ?, 'book_via_picker', 'appointment', ?, ?)`,
-    [
-      uid(),
-      link.created_by,
-      apptId,
-      JSON.stringify({ token_prefix: link.token.slice(0, 8), patient_id: link.patient_id }),
-    ],
-  );
+  let wonRace = false;
+  await transaction(async (tx) => {
+    const res = await tx.execute(
+      `UPDATE turn_picker_links SET used_at = datetime('now')
+       WHERE id = ? AND used_at IS NULL`,
+      [link.id],
+    );
+    if (res.rowsAffected !== 1) return; // lost the race
+    wonRace = true;
+    await tx.execute(
+      `INSERT INTO appointments
+         (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at)
+       VALUES (?, ?, ?, ?, ?, 'scheduled', ?, NULL, ?, 'shared', ?)`,
+      [
+        apptId,
+        link.patient_id,
+        link.dentist_id,
+        start.toISOString(),
+        end.toISOString(),
+        'self-booked',
+        link.created_by,
+        nowIso(),
+      ],
+    );
+    await tx.execute(
+      `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+       VALUES (?, ?, 'book_via_picker', 'appointment', ?, ?)`,
+      [
+        uid(),
+        link.created_by,
+        apptId,
+        JSON.stringify({ token_prefix: link.token.slice(0, 8), patient_id: link.patient_id }),
+      ],
+    );
+  });
+  if (!wonRace) return { ok: false, reason: 'consumed' };
   return { ok: true, startsAt: start.toISOString(), endsAt: end.toISOString() };
 }
 

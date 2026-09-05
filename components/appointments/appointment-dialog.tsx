@@ -267,7 +267,8 @@ export function AppointmentDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-md sm:max-h-[90vh]">
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">
               {editing ? t('edit') : t('new')}
@@ -368,7 +369,7 @@ export function AppointmentDialog({
                 </Select>
               </div>
             ) : null}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2">
               <div className="space-y-2">
                 <Label htmlFor="appt_date">{tCommon('date')}</Label>
                 <Input
@@ -540,9 +541,10 @@ function PatientPicker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className={cn(
-          'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm',
-          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+          'flex min-h-[48px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-base',
+          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:text-sm',
         )}
       >
         <span className={cn(!selected && 'text-muted-foreground')}>
@@ -551,16 +553,13 @@ function PatientPicker({
         <ChevronDown className="h-4 w-4 opacity-50" />
       </button>
       {open ? (
-        <div
-          className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md p-1"
-          onMouseLeave={() => setOpen(false)}
-        >
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md p-1">
           <input
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={tCommon('search') + '…'}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm mb-1"
+            inputMode="search"
+            className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1 sm:text-sm"
           />
           <div className="max-h-48 overflow-y-auto">
             {filtered.length === 0 ? (
@@ -578,7 +577,7 @@ function PatientPicker({
                     setQuery('');
                   }}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                    'flex min-h-[44px] w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm',
                     'hover:bg-accent hover:text-accent-foreground',
                     value === p.id && 'bg-accent',
                   )}
@@ -596,7 +595,7 @@ function PatientPicker({
                 setOpen(false);
                 onCreateNew();
               }}
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-primary hover:bg-accent"
+              className="flex min-h-[44px] w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm text-primary hover:bg-accent"
             >
               <UserPlus className="h-3.5 w-3.5" />
               {t('new')}
@@ -624,7 +623,8 @@ function NewPatientFullDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/50" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-3xl max-h-[95vh] overflow-y-auto">
+        <Dialog.Content className="fixed inset-x-0 bottom-0 z-[60] w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-3xl sm:max-h-[95vh]">
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
           <div className="flex items-center justify-between mb-4">
             <div>
               <Dialog.Title className="text-lg font-semibold">{t('title')}</Dialog.Title>

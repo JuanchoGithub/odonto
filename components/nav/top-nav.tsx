@@ -63,7 +63,7 @@ export function TopNav({
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="border-b bg-background sticky top-0 z-30">
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30 pt-safe">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
@@ -76,7 +76,7 @@ export function TopNav({
             ) : null}
           </Link>
         </div>
-        <nav className="hidden lg:flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-1" aria-label="Primary">
           {links
             .filter((l) => l.roles.includes(user.role))
             .map((l) => {
@@ -86,6 +86,7 @@ export function TopNav({
                 <Link
                   key={l.href}
                   href={l.href}
+                  aria-current={active ? 'page' : undefined}
                   className={cn(
                     'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground',
                     active && 'bg-accent text-accent-foreground',
@@ -114,6 +115,9 @@ export function TopNav({
             variant="ghost"
             size="icon"
             className="lg:hidden"
+            aria-label="Menu"
+            aria-expanded={open}
+            aria-controls="mobile-nav"
             onClick={() => setOpen((o) => !o)}
           >
             {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -121,8 +125,9 @@ export function TopNav({
         </div>
       </div>
       {open ? (
-        <div className="lg:hidden border-t">
-          <div className="container py-2 flex flex-col gap-1">
+        <div className="lg:hidden border-t" id="mobile-nav">
+          <nav aria-label="Mobile" className="container py-2 flex flex-col gap-1">
+
             {links
               .filter((l) => l.roles.includes(user.role))
               .map((l) => {
@@ -133,8 +138,9 @@ export function TopNav({
                     key={l.href}
                     href={l.href}
                     onClick={() => setOpen(false)}
+                    aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent',
+                      'flex min-h-[48px] items-center gap-2 rounded-md px-3 py-2 text-base font-medium hover:bg-accent',
                       active && 'bg-accent',
                     )}
                   >
@@ -143,7 +149,7 @@ export function TopNav({
                   </Link>
                 );
               })}
-          </div>
+          </nav>
         </div>
       ) : null}
     </header>

@@ -27,8 +27,8 @@ export default async function TreatmentsPage({
   const l = (clinic?.locale ?? locale) as AppLocale;
 
   return (
-    <div className="container py-8 space-y-6">
-      <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
+      <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{rows.length}</CardTitle>

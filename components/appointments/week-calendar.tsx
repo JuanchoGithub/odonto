@@ -15,6 +15,7 @@ import {
   AppointmentDialog,
   type CreatedVia,
 } from './appointment-dialog';
+import { AttendSheet } from './attend-sheet';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import { TimeGrid, type WorkingWindow } from './time-grid';
 import { AppointmentList } from './appointment-list';
@@ -73,8 +74,16 @@ export function WeekCalendar({
   const [dialogEnd, setDialogEnd] = useState<string | null>(null);
   const [dialogMethod, setDialogMethod] = useState<CreatedVia>('manual');
   const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
+  const [attendAppt, setAttendAppt] = useState<ApptRow | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  // Mobile-first: day agenda (list) is the default on small screens, where the
+  // 7-day grid (~962px min-width) is unusable. Desktop keeps the calendar.
+  const [view, setView] = useState<'calendar' | 'list'>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches) {
+      return 'list';
+    }
+    return 'calendar';
+  });
   // Dentists always see their own calendar; no doctor filter for them.
   const isDentistViewer = viewer?.role === 'dentist';
   const [dentistFilter, setDentistFilter] = useState<string>(
@@ -169,10 +178,10 @@ export function WeekCalendar({
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent className="p-3 sm:p-6">
         <Tabs value={view} onValueChange={(v) => setView(v as 'calendar' | 'list')}>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <Button
               variant="outline"
               size="icon"
@@ -181,7 +190,7 @@ export function WeekCalendar({
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="text-sm font-medium min-w-[14rem] text-center">
+            <div className="flex-1 min-w-0 text-center text-xs font-medium sm:flex-none sm:text-sm sm:min-w-[14rem]">
               {format(days[0], 'PP', { locale: dateFnsLocale })} –{' '}
               {format(days[6], 'PP', { locale: dateFnsLocale })}
             </div>
@@ -204,7 +213,7 @@ export function WeekCalendar({
             {isDentistViewer ? null : (
               <Select value={dentistFilter} onValueChange={setDentistFilter}>
                 <SelectTrigger
-                  className="w-[200px]"
+                  className="w-full sm:w-[200px]"
                   data-testid="dentist-filter"
                 >
                   <SelectValue />
@@ -275,7 +284,9 @@ export function WeekCalendar({
               pending: t('status.pending'),
             }}
             statusLabel={(s) => t(`status.${s}`)}
+            attendLabel={t('attend')}
             onOpenAppt={openEdit}
+            onAttend={(a) => setAttendAppt(a)}
             onCopyLink={(token) => {
               const url = `${window.location.origin}/pick-turn/${token}`;
               navigator.clipboard.writeText(url).catch(() => undefined);
@@ -301,6 +312,14 @@ export function WeekCalendar({
           open={shareOpen}
           onOpenChange={setShareOpen}
           dentists={dentists}
+        />
+        <AttendSheet
+          appointment={attendAppt}
+          open={attendAppt !== null}
+          onOpenChange={(o) => {
+            if (!o) setAttendAppt(null);
+          }}
+          onAdvanced={refresh}
         />
       </CardContent>
     </Card>

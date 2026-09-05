@@ -16,6 +16,24 @@ export async function requireRole(allowed: Role[]) {
   return user;
 }
 
+/** API/action-safe authorization: returns null + error instead of redirecting. */
+export async function requireCan(action: string) {
+  const session = await auth();
+  const user = session?.user;
+  if (!user) return { user: null, error: 'unauthorized' as const };
+  if (!can(user.role, action)) return { user: null, error: 'forbidden' as const };
+  return { user, error: null };
+}
+
+/** Page-safe authorization: redirects to /dashboard when the role lacks `action`. */
+export async function requireAction(action: string) {
+  const user = await requireUser();
+  if (!can(user.role, action)) {
+    redirect('/dashboard');
+  }
+  return user;
+}
+
 export function can(role: Role, action: string): boolean {
   const matrix: Record<Role, string[]> = {
     admin: ['*'],

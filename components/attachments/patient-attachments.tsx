@@ -70,11 +70,11 @@ export function PatientAttachments({
         <CardTitle className="text-base">{t('title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-end gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
           <div>
             <label className="text-sm font-medium block mb-1">{t('kind')}</label>
             <Select value={kind} onValueChange={setKind}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -86,8 +86,25 @@ export function PatientAttachments({
               </SelectContent>
             </Select>
           </div>
-          <input ref={fileRef} type="file" className="text-sm" />
-          <Button onClick={onUpload} disabled={uploading}>
+          <label className="flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-md border border-input bg-background px-3 text-sm text-muted-foreground sm:w-auto sm:flex-1">
+            {fileRef.current?.files?.[0]?.name ?? t('upload')}
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const lbl = e.currentTarget.parentElement;
+                if (lbl && e.target.files?.[0]) {
+                  lbl.textContent = e.target.files[0].name;
+                }
+              }}
+            />
+          </label>
+          <Button
+            onClick={onUpload}
+            disabled={uploading}
+            className="min-h-[44px] w-full sm:w-auto"
+          >
             <Upload className="h-4 w-4" />
             {uploading ? tCommon('loading') : t('upload')}
           </Button>
@@ -101,34 +118,36 @@ export function PatientAttachments({
             rows.map((a) => (
               <div
                 key={a.id}
-                className="flex items-center justify-between border rounded-md p-2 text-sm"
+                className="flex min-h-[64px] items-center gap-2 rounded-xl border p-3 text-sm"
               >
-                <div className="flex items-center gap-2 truncate">
-                  <span className="text-xs px-2 py-0.5 rounded bg-muted">
-                    {t(`kinds.${a.kind}` as any)}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-semibold">
+                    {a.filename ?? a.blob_url}
                   </span>
-                  <span className="truncate">{a.filename ?? a.blob_url}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateTime(a.uploaded_at, (locale ?? 'es') as AppLocale)}
+                  <span className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs">
+                      {t(`kinds.${a.kind}` as any)}
+                    </span>
+                    <span>{formatDateTime(a.uploaded_at, (locale ?? 'es') as AppLocale)}</span>
                   </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <a
-                    href={a.blob_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-1 hover:bg-accent rounded"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(a.id)}
-                    className="p-1 hover:bg-accent rounded text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                </span>
+                <a
+                  href={a.blob_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={t('upload')}
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md hover:bg-accent"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => onDelete(a.id)}
+                  aria-label={tCommon('delete')}
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-destructive hover:bg-accent"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             ))
           )}

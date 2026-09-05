@@ -54,8 +54,8 @@ export default async function ReportsPage({
   const noShowPct = total > 0 ? Math.round((noShows / total) * 100) : 0;
 
   return (
-    <div className="container py-8 space-y-6">
-      <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
+      <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader>
@@ -75,7 +75,7 @@ export default async function ReportsPage({
         <CardHeader>
           <CardTitle className="text-base">{t('revenue')}</CardTitle>
         </CardHeader>
-        <CardContent style={{ height: 300 }}>
+        <CardContent className="h-56 sm:h-72 md:h-[300px]">
           <RevenueChart data={revenueRows} currency={c} locale={l} />
         </CardContent>
       </Card>
@@ -84,7 +84,7 @@ export default async function ReportsPage({
           <CardHeader>
             <CardTitle className="text-base">{t('topTreatments')}</CardTitle>
           </CardHeader>
-          <CardContent style={{ height: 300 }}>
+          <CardContent className="h-56 sm:h-72 md:h-[300px]">
             <TopTreatmentsChart data={topRows} />
           </CardContent>
         </Card>

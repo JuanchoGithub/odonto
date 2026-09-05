@@ -2,8 +2,10 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
-import { requireUser } from '@/lib/rbac';
+import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso, amountToCents } from '@/lib/utils';
+
+const TreatmentStatusSchema = z.enum(['planned', 'in_progress', 'done', 'cancelled']);
 
 const TreatmentSchema = z.object({
   patient_id: z.string().min(1),
@@ -13,13 +15,12 @@ const TreatmentSchema = z.object({
   code: z.string().optional().nullable(),
   cost: z.coerce.number().min(0).default(0),
   tax_kind: z.enum(['standard', 'reduced', 'none']).default('standard'),
-  status: z
-    .enum(['planned', 'in_progress', 'done', 'cancelled'])
-    .default('planned'),
+  status: TreatmentStatusSchema.default('planned'),
 });
 
 export async function createTreatment(fd: FormData) {
   const user = await requireUser();
+  if (!can(user.role, 'treatments:write')) return { error: 'Forbidden' };
   const parsed = TreatmentSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
   const d = parsed.data;
@@ -53,17 +54,21 @@ export async function createTreatment(fd: FormData) {
 
 export async function updateTreatmentStatus(id: string, status: string) {
   const user = await requireUser();
-  const performed_at = status === 'done' ? nowIso() : null;
-  const performed_by = status === 'done' ? user.id : null;
+  if (!can(user.role, 'treatments:write')) return { error: 'Forbidden' };
+  const parsed = TreatmentStatusSchema.safeParse(status);
+  if (!parsed.success) return { error: 'Invalid' };
+  const performed_at = parsed.data === 'done' ? nowIso() : null;
+  const performed_by = parsed.data === 'done' ? user.id : null;
   await query(
     'UPDATE treatments SET status = ?, performed_at = ?, performed_by = ? WHERE id = ?',
-    [status, performed_at, performed_by, id],
+    [parsed.data, performed_at, performed_by, id],
   );
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'treatment', ?, ?)`,
-    [uid(), user.id, id, JSON.stringify({ status })],
+    [uid(), user.id, id, JSON.stringify({ status: parsed.data })],
   );
   revalidatePath('/treatments');
+  return { ok: true as const };
 }
 
 export type TreatmentRow = {

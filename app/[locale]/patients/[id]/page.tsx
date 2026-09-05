@@ -19,15 +19,23 @@ import { RestorePatientButton } from '@/components/patients/restore-patient-butt
 
 type Clinic = { currency: string; locale: AppLocale };
 
+const TABS = ['general', 'medical', 'odontogram', 'treatments', 'invoices', 'attachments'] as const;
+
 export default async function PatientDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>;
+  searchParams?: Promise<{ tab?: string }>;
 }) {
   const { locale, id } = await params;
   setRequestLocale(locale);
   const user = await requireUser();
   const t = await getTranslations('patients');
+  const sp = searchParams ? await searchParams : {};
+  const initialTab = (TABS as readonly string[]).includes(sp?.tab ?? '')
+    ? (sp!.tab as (typeof TABS)[number])
+    : 'general';
   const [patient, clinic, dentists] = await Promise.all([
     getPatient(id),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
@@ -47,24 +55,24 @@ export default async function PatientDetailPage({
   const isDeleted = patient.deleted_at != null;
 
   return (
-    <div className="container py-8 space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-48">
           <div className="text-sm text-muted-foreground">
             <Link href="/patients" className="hover:underline">
               {t('title')}
             </Link>{' '}
             /
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight break-words">
             {patient.last_name}, {patient.first_name}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground break-words">
             {patient.document_id ?? '—'} ·{' '}
             {patient.birth_date
               ? `${formatDate(patient.birth_date, (clinic?.locale ?? locale) as AppLocale)} (${age})`
               : '—'}{' '}
-            · {patient.phone ?? '—'} · {patient.email ?? '—'}
+            · {patient.phone ?? '—'}{patient.email ? ` · ${patient.email}` : ''}
           </p>
         </div>
         {isDeleted ? (
@@ -91,8 +99,8 @@ export default async function PatientDetailPage({
         </div>
       )}
 
-      <Tabs defaultValue="general">
-        <TabsList className="w-full">
+      <Tabs key={initialTab} defaultValue={initialTab}>
+        <TabsList className="w-full justify-start">
           <TabsTrigger value="general">{t('tabs.general')}</TabsTrigger>
           <TabsTrigger value="medical">{t('tabs.medical')}</TabsTrigger>
           <TabsTrigger value="odontogram">{t('tabs.odontogram')}</TabsTrigger>

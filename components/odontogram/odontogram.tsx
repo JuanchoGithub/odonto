@@ -675,7 +675,7 @@ export function Odontogram({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="hidden md:block">
         <CardContent className="pt-6 space-y-4">
           <div className="font-medium flex items-center justify-between">
             <span>

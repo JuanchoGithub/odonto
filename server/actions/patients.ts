@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db';
-import { requireUser } from '@/lib/rbac';
+import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 
 const PatientSchema = z.object({
@@ -29,45 +29,65 @@ export type PatientFormState = { error?: string; ok?: boolean };
 const PATIENT_COLS =
   'first_name, last_name, document_id, birth_date, gender, phone, email, address, insurance_provider, insurance_number, insurer_id, insurance_plan, medical_history, allergies, notes';
 
+/** Escape LIKE wildcards so search input can't act as a pattern. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+function clampLimit(limit: number): number {
+  if (!Number.isFinite(limit)) return 200;
+  return Math.min(200, Math.max(1, Math.floor(limit)));
+}
+
+async function insertPatientWithAudit(
+  data: z.infer<typeof PatientSchema>,
+  userId: string,
+): Promise<string> {
+  const id = uid();
+  await transaction(async (tx) => {
+    await tx.execute(
+      `INSERT INTO patients (id, ${PATIENT_COLS}, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        data.first_name,
+        data.last_name,
+        data.document_id || null,
+        data.birth_date || null,
+        data.gender || null,
+        data.phone || null,
+        data.email || null,
+        data.address || null,
+        data.insurance_provider || null,
+        data.insurance_number || null,
+        data.insurer_id || null,
+        data.insurance_plan || null,
+        data.medical_history || null,
+        data.allergies || null,
+        data.notes || null,
+        userId,
+        nowIso(),
+        nowIso(),
+      ],
+    );
+    await tx.execute(
+      `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'patient', ?)`,
+      [uid(), userId, id],
+    );
+  });
+  return id;
+}
+
 export async function createPatient(
   _prev: PatientFormState,
   formData: FormData,
 ): Promise<PatientFormState> {
   const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
   const raw = Object.fromEntries(formData);
   const parsed = PatientSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
-  const data = parsed.data;
-  const id = uid();
-  await query(
-    `INSERT INTO patients (id, ${PATIENT_COLS}, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      data.first_name,
-      data.last_name,
-      data.document_id || null,
-      data.birth_date || null,
-      data.gender || null,
-      data.phone || null,
-      data.email || null,
-      data.address || null,
-      data.insurance_provider || null,
-      data.insurance_number || null,
-      data.insurer_id || null,
-      data.insurance_plan || null,
-      data.medical_history || null,
-      data.allergies || null,
-      data.notes || null,
-      user.id,
-      nowIso(),
-      nowIso(),
-    ],
-  );
-  await query(
-    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'patient', ?)`,
-    [uid(), user.id, id],
-  );
+  const id = await insertPatientWithAudit(parsed.data, user.id);
   revalidatePath('/patients');
   redirect(`/patients/${id}`);
 }
@@ -78,6 +98,7 @@ export async function updatePatient(
   formData: FormData,
 ): Promise<PatientFormState> {
   const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
   const raw = Object.fromEntries(formData);
   const parsed = PatientSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
@@ -114,6 +135,7 @@ export async function updatePatient(
 
 export async function deletePatient(id: string) {
   const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
   await query(
     `UPDATE patients SET deleted_at = ?, updated_at = ? WHERE id = ?`,
     [nowIso(), nowIso(), id],
@@ -129,6 +151,7 @@ export async function deletePatient(id: string) {
 
 export async function restorePatient(id: string) {
   const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
   await query(
     `UPDATE patients SET deleted_at = NULL, updated_at = ? WHERE id = ?`,
     [nowIso(), id],
@@ -146,42 +169,13 @@ export async function createPatientInline(
   formData: FormData,
 ): Promise<CreatePatientResult> {
   const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { ok: false, error: 'Forbidden' };
   const raw = Object.fromEntries(formData);
   const parsed = PatientSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? 'Invalid' };
   }
-  const data = parsed.data;
-  const id = uid();
-  await query(
-    `INSERT INTO patients (id, ${PATIENT_COLS}, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      data.first_name,
-      data.last_name,
-      data.document_id || null,
-      data.birth_date || null,
-      data.gender || null,
-      data.phone || null,
-      data.email || null,
-      data.address || null,
-      data.insurance_provider || null,
-      data.insurance_number || null,
-      data.insurer_id || null,
-      data.insurance_plan || null,
-      data.medical_history || null,
-      data.allergies || null,
-      data.notes || null,
-      user.id,
-      nowIso(),
-      nowIso(),
-    ],
-  );
-  await query(
-    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'patient', ?)`,
-    [uid(), user.id, id],
-  );
+  const id = await insertPatientWithAudit(parsed.data, user.id);
   const created = await queryOne<PatientRow>('SELECT * FROM patients WHERE id = ?', [id]);
   revalidatePath('/patients');
   return { ok: true, patient: created! };
@@ -210,19 +204,20 @@ export type PatientRow = {
 };
 
 export async function listPatients(q?: string, limit = 200) {
+  const safeLimit = clampLimit(limit);
   if (q && q.trim()) {
-    const like = `%${q.trim()}%`;
+    const like = `%${escapeLike(q.trim())}%`;
     return query<PatientRow>(
       `SELECT * FROM patients
        WHERE deleted_at IS NULL
-         AND (first_name LIKE ? OR last_name LIKE ? OR document_id LIKE ? OR phone LIKE ? OR email LIKE ?)
+         AND (first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' OR document_id LIKE ? ESCAPE '\\' OR phone LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\')
        ORDER BY last_name, first_name LIMIT ?`,
-      [like, like, like, like, like, limit],
+      [like, like, like, like, like, safeLimit],
     );
   }
   return query<PatientRow>(
     'SELECT * FROM patients WHERE deleted_at IS NULL ORDER BY last_name, first_name LIMIT ?',
-    [limit],
+    [safeLimit],
   );
 }
 
@@ -234,38 +229,9 @@ export async function createPatientJson(body: unknown): Promise<CreatePatientRes
   const Schema = PatientSchema;
   const parsed = Schema.safeParse(body);
   if (!parsed.success) return { ok: false, error: parsed.error.errors[0]?.message ?? 'invalid' };
-  const data = parsed.data;
   const user = await requireUser();
-  const id = uid();
-  await query(
-    `INSERT INTO patients (id, ${PATIENT_COLS}, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      data.first_name,
-      data.last_name,
-      data.document_id || null,
-      data.birth_date || null,
-      data.gender || null,
-      data.phone || null,
-      data.email || null,
-      data.address || null,
-      data.insurance_provider || null,
-      data.insurance_number || null,
-      data.insurer_id || null,
-      data.insurance_plan || null,
-      data.medical_history || null,
-      data.allergies || null,
-      data.notes || null,
-      user.id,
-      nowIso(),
-      nowIso(),
-    ],
-  );
-  await query(
-    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'patient', ?)`,
-    [uid(), user.id, id],
-  );
+  if (!can(user.role, 'patients:write')) return { ok: false, error: 'forbidden' };
+  const id = await insertPatientWithAudit(parsed.data, user.id);
   const created = await queryOne<PatientRow>('SELECT * FROM patients WHERE id = ?', [id]);
   revalidatePath('/patients');
   return { ok: true, patient: created! };

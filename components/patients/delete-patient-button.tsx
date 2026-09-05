@@ -53,17 +53,20 @@ export function DeletePatientButton({
   return (
     <>
       <Button
-        variant="destructive"
+        variant="ghost"
+        size="icon"
         onClick={() => setOpen(true)}
         data-testid="delete-patient"
+        className="text-destructive"
+        aria-label={tCommon('delete')}
       >
         <Trash2 className="h-4 w-4" />
-        {tCommon('delete')}
       </Button>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-sm">
+          <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-sm sm:max-h-[90vh]">
+            <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
             <div className="flex items-start justify-between mb-3">
               <Dialog.Title className="text-lg font-semibold">
                 {t('deleteTitle')}

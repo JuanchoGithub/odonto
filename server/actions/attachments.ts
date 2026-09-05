@@ -2,9 +2,16 @@
 import { revalidatePath } from 'next/cache';
 import { put, del } from '@vercel/blob';
 import { query, queryOne } from '@/lib/db';
-import { requireUser } from '@/lib/rbac';
+import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 import { z } from 'zod';
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const ALLOWED_MIME_PREFIXES = ['image/', 'application/pdf']; // xrays/photos/docs
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[\\/]/g, '_').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'file';
+}
 
 const MetaSchema = z.object({
   patient_id: z.string().min(1),
@@ -14,8 +21,14 @@ const MetaSchema = z.object({
 
 export async function uploadAttachment(formData: FormData) {
   const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
   const file = formData.get('file') as File | null;
   if (!file) return { error: 'No file' };
+  if (file.size <= 0) return { error: 'Empty file' };
+  if (file.size > MAX_UPLOAD_BYTES) return { error: 'File too large (max 10MB)' };
+  if (file.type && !ALLOWED_MIME_PREFIXES.some((p) => file.type.startsWith(p))) {
+    return { error: 'Unsupported file type' };
+  }
   const meta = MetaSchema.safeParse({
     patient_id: formData.get('patient_id'),
     kind: formData.get('kind'),
@@ -24,7 +37,7 @@ export async function uploadAttachment(formData: FormData) {
   if (!meta.success) return { error: 'Invalid' };
 
   const blob = await put(
-    `patients/${meta.data.patient_id}/${meta.data.kind}/${Date.now()}-${file.name}`,
+    `patients/${meta.data.patient_id}/${meta.data.kind}/${Date.now()}-${sanitizeFilename(file.name)}`,
     file,
     { access: 'public' },
   );
@@ -39,7 +52,7 @@ export async function uploadAttachment(formData: FormData) {
       blob.url,
       blob.pathname,
       meta.data.kind,
-      file.name,
+      sanitizeFilename(file.name),
       user.id,
       nowIso(),
     ],
@@ -50,6 +63,7 @@ export async function uploadAttachment(formData: FormData) {
 
 export async function deleteAttachment(id: string) {
   const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
   const a = await queryOne<{ patient_id: string; blob_pathname: string }>(
     'SELECT patient_id, blob_pathname FROM attachments WHERE id = ?',
     [id],

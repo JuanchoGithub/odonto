@@ -33,9 +33,9 @@ export default async function InsurersPage({
   ]);
 
   return (
-    <div className="container py-8 space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
         <form action="/insurers" method="get" className="flex items-center gap-2 flex-1 max-w-md justify-end">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -75,39 +75,68 @@ export default async function InsurersPage({
               }
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-muted-foreground border-b">
-                  <tr>
-                    <th className="py-2 pr-4">{t('name')}</th>
-                    <th className="py-2 pr-4">{t('plan')}</th>
-                    <th className="py-2 pr-4">{t('phone')}</th>
-                    <th className="py-2 pr-4">{t('email')}</th>
-                    <th className="py-2 pr-4 text-right">{t('patientCount')}</th>
-                    <th className="py-2 pr-4">{tCommon('date')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {insurers.map((i) => (
-                    <tr key={i.id} className="border-b hover:bg-muted/50">
-                      <td className="py-2 pr-4">
-                        <Link className="hover:underline flex items-center gap-2" href={`/insurers/${i.id}`}>
-                          <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+            <>
+              <ul className="space-y-2 md:hidden">
+                {insurers.map((i) => (
+                  <li key={i.id}>
+                    <Link
+                      href={`/insurers/${i.id}`}
+                      className="flex min-h-[64px] items-start gap-3 rounded-xl border bg-card p-3 active:bg-accent"
+                      data-testid="insurer-list-row"
+                    >
+                      <Shield className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-base font-semibold">
                           {i.name}
-                        </Link>
-                      </td>
-                      <td className="py-2 pr-4">{i.plan ?? '—'}</td>
-                      <td className="py-2 pr-4">{i.phone ?? '—'}</td>
-                      <td className="py-2 pr-4">{i.email ?? '—'}</td>
-                      <td className="py-2 pr-4 text-right">{i.patient_count ?? 0}</td>
-                      <td className="py-2 pr-4">
-                        {formatDate(i.created_at, (clinic?.locale ?? locale) as AppLocale)}
-                      </td>
+                        </span>
+                        <span className="block truncate text-sm text-muted-foreground">
+                          {i.plan ?? '—'}
+                        </span>
+                        <span className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          {i.phone ? <span>{i.phone}</span> : null}
+                          {i.patient_count ? (
+                            <span>· {i.patient_count} {t('patientCount')}</span>
+                          ) : null}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <div className="overflow-x-auto hidden md:block">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-muted-foreground border-b">
+                    <tr>
+                      <th className="py-2 pr-4">{t('name')}</th>
+                      <th className="py-2 pr-4">{t('plan')}</th>
+                      <th className="py-2 pr-4">{t('phone')}</th>
+                      <th className="py-2 pr-4">{t('email')}</th>
+                      <th className="py-2 pr-4 text-right">{t('patientCount')}</th>
+                      <th className="py-2 pr-4">{tCommon('date')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {insurers.map((i) => (
+                      <tr key={i.id} className="border-b hover:bg-muted/50">
+                        <td className="py-2 pr-4">
+                          <Link className="hover:underline flex items-center gap-2" href={`/insurers/${i.id}`}>
+                            <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+                            {i.name}
+                          </Link>
+                        </td>
+                        <td className="py-2 pr-4">{i.plan ?? '—'}</td>
+                        <td className="py-2 pr-4">{i.phone ?? '—'}</td>
+                        <td className="py-2 pr-4">{i.email ?? '—'}</td>
+                        <td className="py-2 pr-4 text-right">{i.patient_count ?? 0}</td>
+                        <td className="py-2 pr-4">
+                          {formatDate(i.created_at, (clinic?.locale ?? locale) as AppLocale)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

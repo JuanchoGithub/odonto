@@ -114,26 +114,26 @@ function TreatmentsTable({
     return <p className="text-sm text-muted-foreground py-6 text-center">—</p>;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-left text-muted-foreground border-b">
-          <tr>
-            <th className="py-2 pr-4">{t('description')}</th>
-            <th className="py-2 pr-4">{t('tooth')}</th>
-            <th className="py-2 pr-4">{t('cost')}</th>
-            <th className="py-2 pr-4">{t('code')}</th>
-            <th className="py-2 pr-4">{tCommon('status')}</th>
-            <th className="py-2 pr-4">{tCommon('date')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-b">
-              <td className="py-2 pr-4">{r.description}</td>
-              <td className="py-2 pr-4">{r.tooth_number ?? '—'}</td>
-              <td className="py-2 pr-4">{formatMoney(r.cost_cents, currency, locale)}</td>
-              <td className="py-2 pr-4">{r.code ?? '—'}</td>
-              <td className="py-2 pr-4">
+    <>
+      <ul className="space-y-2 md:hidden">
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            className="flex min-h-[64px] items-start gap-3 rounded-xl border bg-card p-3"
+            data-testid="treatment-list-row"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-base font-semibold">
+                {r.description}
+              </span>
+              <span className="block text-sm text-muted-foreground">
+                {r.tooth_number != null ? `${t('tooth')} ${r.tooth_number}` : t('description')}
+                {r.code ? ` · ${r.code}` : ''}
+              </span>
+              <span className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium">
+                  {formatMoney(r.cost_cents, currency, locale)}
+                </span>
                 <Badge
                   variant={
                     r.status === 'done'
@@ -144,18 +144,61 @@ function TreatmentsTable({
                           ? 'warning'
                           : 'secondary'
                   }
+                  className="shrink-0"
                 >
                   {t(`status.${r.status}` as any)}
                 </Badge>
-              </td>
-              <td className="py-2 pr-4">
-                {r.performed_at ? formatDateTime(r.performed_at, locale) : '—'}
-              </td>
+                <span className="text-muted-foreground">
+                  {r.performed_at ? formatDateTime(r.performed_at, locale) : '—'}
+                </span>
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="overflow-x-auto hidden md:block">
+        <table className="w-full text-sm">
+          <thead className="text-left text-muted-foreground border-b">
+            <tr>
+              <th className="py-2 pr-4">{t('description')}</th>
+              <th className="py-2 pr-4">{t('tooth')}</th>
+              <th className="py-2 pr-4">{t('cost')}</th>
+              <th className="py-2 pr-4">{t('code')}</th>
+              <th className="py-2 pr-4">{tCommon('status')}</th>
+              <th className="py-2 pr-4">{tCommon('date')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b">
+                <td className="py-2 pr-4">{r.description}</td>
+                <td className="py-2 pr-4">{r.tooth_number ?? '—'}</td>
+                <td className="py-2 pr-4">{formatMoney(r.cost_cents, currency, locale)}</td>
+                <td className="py-2 pr-4">{r.code ?? '—'}</td>
+                <td className="py-2 pr-4">
+                  <Badge
+                    variant={
+                      r.status === 'done'
+                        ? 'success'
+                        : r.status === 'cancelled'
+                          ? 'destructive'
+                          : r.status === 'in_progress'
+                            ? 'warning'
+                            : 'secondary'
+                    }
+                  >
+                    {t(`status.${r.status}` as any)}
+                  </Badge>
+                </td>
+                <td className="py-2 pr-4">
+                  {r.performed_at ? formatDateTime(r.performed_at, locale) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -186,7 +229,8 @@ function TreatmentDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md">
+        <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-md sm:max-h-[90vh]">
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">{t('new')}</Dialog.Title>
             <Dialog.Close asChild>
@@ -200,7 +244,7 @@ function TreatmentDialog({
               <Label htmlFor="description">{t('description')}</Label>
               <Textarea id="description" name="description" required rows={2} />
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2">
               <div className="space-y-2">
                 <Label htmlFor="tooth_number">{t('tooth')}</Label>
                 <Input

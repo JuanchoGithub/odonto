@@ -166,7 +166,7 @@ export function TurnPickerClient({
   if (state === 'booked') {
     return (
       <Card>
-        <CardContent className="pt-6 text-center space-y-3">
+        <CardContent className="p-6 text-center space-y-3">
           <CalendarCheck className="h-12 w-12 mx-auto text-primary" />
           <p className="text-lg font-semibold">{t.booked(bookedLabel)}</p>
         </CardContent>
@@ -175,7 +175,7 @@ export function TurnPickerClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-28 sm:pb-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
         <p className="text-muted-foreground mt-1">
@@ -204,7 +204,7 @@ export function TurnPickerClient({
               <CardHeader>
                 <CardTitle className="text-base">{t.pickDay}</CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
+              <CardContent className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
                 {days.map((d) => (
                   <Button
                     key={d}
@@ -213,6 +213,7 @@ export function TurnPickerClient({
                       setSelectedDate(d);
                       setSelectedSlot(null);
                     }}
+                    className="min-h-[52px] shrink-0 px-4 text-base"
                   >
                     {dayLabel(d, locale)}
                   </Button>
@@ -222,42 +223,36 @@ export function TurnPickerClient({
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-base flex flex-wrap items-center gap-2">
                   {t.pickTime}
                   <Badge variant="secondary">{dayLabel(selectedDate, locale)}</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {daySlots.map((s) => (
                     <Button
                       key={s.start}
                       variant={selectedSlot === s.start ? 'default' : 'outline'}
-                      size="sm"
-                      className="gap-1"
+                      className="min-h-[52px] gap-1 text-base"
+                      aria-pressed={selectedSlot === s.start}
                       onClick={() => setSelectedSlot(s.start)}
                     >
-                      <Clock className="h-3.5 w-3.5" />
+                      <Clock className="h-4 w-4" />
                       {timeLabel(s.start)}
                     </Button>
                   ))}
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex min-h-[48px] items-center">
                   <Button
                     variant="ghost"
-                    size="sm"
                     onClick={() => {
                       setSelectedDate(null);
                       setSelectedSlot(null);
                     }}
+                    className="min-h-[48px]"
                   >
                     {t.backToDays}
-                  </Button>
-                  <Button
-                    disabled={!selectedSlot || state === 'booking'}
-                    onClick={confirm}
-                  >
-                    {state === 'booking' ? t.confirming : t.confirm}
                   </Button>
                 </div>
                 {state === 'conflict' ? (
@@ -271,6 +266,29 @@ export function TurnPickerClient({
           )}
         </div>
       )}
+      {/* Sticky confirm bar: thumb-reachable, safe-area padded. */}
+      {selectedDate && selectedSlot ? (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="mx-auto flex max-w-2xl items-center gap-3 p-3 pb-safe">
+            <div className="min-w-0 flex-1 text-sm">
+              <div className="truncate font-semibold">
+                {dayLabel(selectedDate, locale)}
+              </div>
+              <div className="text-muted-foreground">
+                {timeLabel(selectedSlot)} · {slotMinutes} min
+              </div>
+            </div>
+            <Button
+              size="lg"
+              disabled={state === 'booking'}
+              onClick={confirm}
+              className="min-h-[52px] flex-1 text-base"
+            >
+              {state === 'booking' ? t.confirming : t.confirm}
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

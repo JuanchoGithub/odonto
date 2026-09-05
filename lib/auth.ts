@@ -20,8 +20,8 @@ declare module 'next-auth' {
 }
 
 const CredsSchema = z.object({
-  email: z.string().min(3),
-  password: z.string().min(6),
+  email: z.string().email().max(255),
+  password: z.string().min(6).max(255),
 });
 
 type UserRow = {
@@ -33,8 +33,10 @@ type UserRow = {
   locale: AppLocale;
 };
 
+const VALID_ROLES: Role[] = ['admin', 'dentist', 'receptionist'];
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: 12 * 60 * 60, updateAge: 60 * 60 },
   pages: { signIn: '/login' },
   trustHost: true,
   providers: [
@@ -77,8 +79,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = (token.userId as string) ?? (token.sub as string);
-        session.user.role = token.role as Role;
-        session.user.locale = token.locale as AppLocale;
+        const role = token.role as Role;
+        // Allowlist: never trust a forged/legacy JWT role value.
+        session.user.role = VALID_ROLES.includes(role) ? role : 'receptionist';
+        session.user.locale = (token.locale as AppLocale) ?? 'es';
       }
       return session;
     },

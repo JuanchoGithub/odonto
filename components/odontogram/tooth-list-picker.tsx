@@ -60,8 +60,8 @@ function ToothButton({
       data-testid={dataTestId}
       className={cn(
         'relative flex items-center justify-center',
-        'h-12 w-12 rounded-full border-2 text-sm font-semibold',
-        'transition-colors',
+        'h-14 w-14 min-h-[56px] min-w-[56px] rounded-full border-2 text-base font-semibold',
+        'transition-colors active:scale-95',
         hasAny
           ? `${CONDITION_BG[wc] ?? 'bg-muted'} border-transparent text-white`
           : 'bg-background border-border text-foreground hover:border-primary/50',
@@ -70,7 +70,7 @@ function ToothButton({
       {n}
       {hasAny ? (
         <span
-          className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-background text-[10px] font-bold flex items-center justify-center border"
+          className="absolute -top-1 -right-1 h-5 min-h-[20px] w-5 min-w-[20px] rounded-full bg-background text-[11px] font-bold flex items-center justify-center border"
           aria-label={`${tooth?.conditions.length} conditions`}
         >
           {tooth?.conditions.length}
@@ -114,7 +114,7 @@ export function ToothListPicker({
     testId: string,
   ) => (
     <div className="space-y-1" data-testid={testId}>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground px-1">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground px-1 font-medium">
         {label}
       </div>
       <div className="flex flex-wrap gap-2">

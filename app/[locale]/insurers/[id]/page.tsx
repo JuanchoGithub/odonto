@@ -36,8 +36,8 @@ export default async function InsurerDetailPage({
   ]);
 
   return (
-    <div className="container py-8 space-y-6 max-w-4xl">
-      <div className="flex items-start justify-between gap-4">
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6 max-w-4xl">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm text-muted-foreground">
             <Link href="/insurers" className="hover:underline">
@@ -45,7 +45,7 @@ export default async function InsurerDetailPage({
             </Link>{' '}
             /
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight break-words">
             {insurer.name}
             {insurer.plan ? <span className="text-muted-foreground text-xl"> — {insurer.plan}</span> : null}
           </h1>

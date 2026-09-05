@@ -14,7 +14,7 @@ export default async function NewPatientPage({
   const t = await getTranslations('patients');
 
   return (
-    <div className="container py-8 max-w-3xl">
+    <div className="container py-4 md:py-8 max-w-3xl">
       <Card>
         <CardHeader>
           <CardTitle>{t('new')}</CardTitle>

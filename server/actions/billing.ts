@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db';
-import { requireUser } from '@/lib/rbac';
+import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso, amountToCents } from '@/lib/utils';
 
 const LineSchema = z.object({
@@ -28,6 +28,7 @@ export async function createInvoice(
   fd: FormData,
 ): Promise<InvoiceFormState> {
   const user = await requireUser();
+  if (!can(user.role, 'billing:write')) return { error: 'Forbidden' };
   // Parse FormData into InvoiceSchema
   const linesRaw = fd.getAll('lines') as string[];
   const lines: unknown[] = [];
@@ -48,7 +49,7 @@ export async function createInvoice(
   if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
   const d = parsed.data;
   const id = uid();
-  const number = `F-${Date.now().toString().slice(-7)}`;
+  const number = `F-${Date.now().toString(36).toUpperCase()}-${id.slice(0, 4).toUpperCase()}`;
 
   await transaction(async (tx) => {
     await tx.execute(
@@ -59,7 +60,9 @@ export async function createInvoice(
     let subtotal = 0;
     let taxTotal = 0;
     for (const line of d.lines) {
-      const lineSubtotal = Math.round(line.unit_price * line.quantity * 100);
+      // Integer-cents math only: convert unit price once, then scale by qty.
+      const unitCents = amountToCents(line.unit_price);
+      const lineSubtotal = Math.round(unitCents * line.quantity);
       const bps =
         line.tax_kind === 'standard'
           ? d.tax_rate_standard_bps
@@ -79,7 +82,7 @@ export async function createInvoice(
           line.treatment_id || null,
           line.description,
           line.quantity,
-          amountToCents(line.unit_price),
+          unitCents,
           line.tax_kind,
           bps,
           total,
@@ -110,31 +113,52 @@ const PaymentSchema = z.object({
 
 export async function recordPayment(fd: FormData) {
   const user = await requireUser();
+  if (!can(user.role, 'billing:write')) return { error: 'Forbidden' };
   const parsed = PaymentSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: 'Invalid' };
   const d = parsed.data;
   const paymentId = uid();
-  await query(
-    `INSERT INTO payments (id, invoice_id, paid_at, method, amount_cents, reference)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [paymentId, d.invoice_id, nowIso(), d.method, amountToCents(d.amount), d.reference || null],
-  );
-  // Update invoice status
-  const total = await queryOne<{ s: number }>(
-    'SELECT COALESCE(SUM(amount_cents),0) as s FROM payments WHERE invoice_id = ?',
-    [d.invoice_id],
-  );
-  const inv = await queryOne<{ total_cents: number }>(
-    'SELECT total_cents FROM invoices WHERE id = ?',
-    [d.invoice_id],
-  );
-  if (inv && total && total.s >= inv.total_cents) {
-    await query("UPDATE invoices SET status = 'paid' WHERE id = ?", [d.invoice_id]);
+  const amountCents = amountToCents(d.amount);
+  let paymentError: string | null = null;
+  try {
+    await transaction(async (tx) => {
+      const inv = await tx.queryOne<{ total_cents: number }>(
+        'SELECT total_cents FROM invoices WHERE id = ?',
+        [d.invoice_id],
+      );
+      if (!inv) {
+        paymentError = 'Invoice not found';
+        throw new Error('invoice_not_found');
+      }
+      const total = await tx.queryOne<{ s: number }>(
+        'SELECT COALESCE(SUM(amount_cents),0) as s FROM payments WHERE invoice_id = ?',
+        [d.invoice_id],
+      );
+      const paidSoFar = total?.s ?? 0;
+      if (paidSoFar + amountCents > inv.total_cents) {
+        paymentError = 'Overpayment';
+        throw new Error('overpayment');
+      }
+      await tx.execute(
+        `INSERT INTO payments (id, invoice_id, paid_at, method, amount_cents, reference)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [paymentId, d.invoice_id, nowIso(), d.method, amountCents, d.reference || null],
+      );
+      const newTotal = paidSoFar + amountCents;
+      await tx.execute('UPDATE invoices SET status = ? WHERE id = ?', [
+        newTotal >= inv.total_cents ? 'paid' : 'issued',
+        d.invoice_id,
+      ]);
+      await tx.execute(
+        `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'payment', ?)`,
+        [uid(), user.id, paymentId],
+      );
+    });
+  } catch (e) {
+    if (paymentError) return { error: paymentError };
+    throw e;
   }
-  await query(
-    `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'payment', ?)`,
-    [uid(), user.id, paymentId],
-  );
+  if (paymentError) return { error: paymentError };
   revalidatePath(`/billing`);
   revalidatePath(`/billing/${d.invoice_id}`);
   return { ok: true };

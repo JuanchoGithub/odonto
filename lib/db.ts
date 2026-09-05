@@ -18,10 +18,25 @@ export const db = getClient();
 
 export type Row = Record<string, unknown>;
 
+// PRAGMA foreign_keys is per-connection in SQLite/libsql. The migration file
+// sets it, but the runtime client never did — so FKs were silently unenforced.
+// Ensure it once per process (best-effort; logs and continues on failure).
+let fkEnsured = false;
+async function ensureForeignKeys() {
+  if (fkEnsured) return;
+  try {
+    await db.execute('PRAGMA foreign_keys = ON');
+    fkEnsured = true;
+  } catch {
+    // Leave fkEnsured false so a later call retries.
+  }
+}
+
 export async function query<T extends Row = Row>(
   sql: string,
   args: unknown[] = [],
 ): Promise<T[]> {
+  await ensureForeignKeys();
   const res = await db.execute({ sql, args: args as never });
   return res.rows as unknown as T[];
 }
@@ -38,6 +53,7 @@ export async function execute(
   sql: string,
   args: unknown[] = [],
 ): Promise<{ lastInsertRowid: bigint | number | null; rowsAffected: number }> {
+  await ensureForeignKeys();
   const res = await db.execute({ sql, args: args as never });
   return {
     lastInsertRowid: res.lastInsertRowid ?? null,
@@ -58,6 +74,7 @@ export async function transaction(
     ) => Promise<{ lastInsertRowid: bigint | number | null; rowsAffected: number }>;
   }) => Promise<void>,
 ): Promise<void> {
+  await ensureForeignKeys();
   const tx = await db.transaction('write');
   try {
     await fn({

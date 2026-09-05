@@ -48,8 +48,8 @@ export default async function SettingsPage({
   ]);
 
   return (
-    <div className="container py-8 space-y-6 max-w-4xl">
-      <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6 max-w-4xl">
+      <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
       {sp.firstRun && !clinic ? (
         <div className="rounded-md border border-amber-500 bg-amber-50 dark:bg-amber-500/10 p-4 text-sm">
           {tCommon('noClinicConfigured')}
@@ -68,7 +68,35 @@ export default async function SettingsPage({
           <CardTitle className="text-base">{t('users')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="overflow-x-auto">
+          <ul className="space-y-2 md:hidden">
+            {users.map((u) => (
+              <li
+                key={u.id}
+                className="flex min-h-[64px] items-center gap-3 rounded-xl border bg-card p-3"
+                data-testid="user-list-row"
+              >
+                <span
+                  aria-hidden
+                  className="h-10 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: u.color ?? undefined }}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-semibold">{u.name}</span>
+                  <span className="block truncate text-sm text-muted-foreground">
+                    {u.email}
+                  </span>
+                  <span className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    <Badge variant="secondary">{u.role}</Badge>
+                    <span>· {u.locale}</span>
+                  </span>
+                </span>
+                {u.role === 'dentist' ? (
+                  <UserColorCell userId={u.id} color={u.color} />
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full text-sm">
               <thead className="text-left text-muted-foreground border-b">
                 <tr>

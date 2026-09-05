@@ -5,6 +5,7 @@ import { routing } from '@/lib/i18n';
 import { auth } from '@/lib/auth';
 import { queryOne } from '@/lib/db';
 import { TopNav } from '@/components/nav/top-nav';
+import { BottomNav } from '@/components/nav/bottom-nav';
 import { AuthProvider } from '@/components/auth/session-provider';
 import { Toaster } from '@/components/ui/toaster';
 
@@ -47,7 +48,7 @@ export default async function LocaleLayout({
     <AuthProvider>
       <NextIntlClientProvider messages={messages} locale={locale}>
         <Toaster>
-          <div className="min-h-screen flex flex-col">
+          <div className="min-h-dvh flex flex-col">
             {session?.user ? (
               <TopNav
                 user={{
@@ -59,7 +60,8 @@ export default async function LocaleLayout({
                 currency={clinic?.currency ?? null}
               />
             ) : null}
-            <main className="flex-1">{children}</main>
+            <main className="flex-1 pb-20 md:pb-0">{children}</main>
+            {session?.user ? <BottomNav role={session.user.role} /> : null}
           </div>
         </Toaster>
       </NextIntlClientProvider>

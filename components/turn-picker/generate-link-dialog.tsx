@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
-import { X, Copy, Check, Link2, ChevronDown } from 'lucide-react';
+import { X, Copy, Check, Link2, ChevronDown, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -90,7 +90,7 @@ export function GenerateTurnLinkDialog({
     }
   }
 
-  async function copy() {
+  async function copy(fallbackSelect = false) {
     if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
@@ -98,8 +98,27 @@ export function GenerateTurnLinkDialog({
       push({ title: t('copied'), variant: 'success' });
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // clipboard API unavailable (non-secure context)
+      // clipboard API unavailable (non-secure context) — select the input
+      // so the user can long-press → copy manually.
+      if (fallbackSelect) document.getElementById('tp-url')?.focus();
+      push({ title: t('copyFailed'), variant: 'destructive' });
     }
+  }
+
+  async function share() {
+    if (!url) return;
+    const nav = navigator as Navigator & {
+      share?: (d: { title?: string; text?: string; url?: string }) => Promise<void>;
+    };
+    if (typeof nav.share === 'function') {
+      try {
+        await nav.share({ title: 'Odonto', url });
+        return;
+      } catch {
+        return; // user dismissed — not an error
+      }
+    }
+    copy(true);
   }
 
   const activeLinks = links.filter((l) => l.status === 'active');
@@ -109,10 +128,11 @@ export function GenerateTurnLinkDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/50" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+          className="fixed inset-x-0 bottom-0 z-[60] w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-md sm:max-h-[90vh]"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
         >
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">
               {t('shareButton')}
@@ -159,6 +179,8 @@ export function GenerateTurnLinkDialog({
                   <SelectContent>
                     <SelectItem value="15">{t('duration15')}</SelectItem>
                     <SelectItem value="30">{t('duration30')}</SelectItem>
+                    <SelectItem value="45">{t('duration45')}</SelectItem>
+                    <SelectItem value="60">{t('duration60')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -184,12 +206,15 @@ export function GenerateTurnLinkDialog({
                 <Label htmlFor="tp-url">{t('link')}</Label>
                 <div className="flex gap-2">
                   <Input id="tp-url" readOnly value={url} onFocus={(e) => e.target.select()} />
-                  <Button variant="outline" size="icon" onClick={copy}>
+                  <Button variant="outline" size="icon" onClick={() => copy()} aria-label={t('copyUrl')}>
                     {copied ? (
                       <Check className="h-4 w-4" />
                     ) : (
                       <Copy className="h-4 w-4" />
                     )}
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={share} aria-label={t('shareVia')}>
+                    <Share className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">{t('idleNotice')}</p>
@@ -275,9 +300,10 @@ function PatientPickerInline({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className={cn(
-          'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm',
-          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+          'flex min-h-[48px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-base',
+          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:text-sm',
         )}
       >
         <span className={cn(!selected && 'text-muted-foreground')}>
@@ -288,11 +314,11 @@ function PatientPickerInline({
       {open ? (
         <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md p-1">
           <input
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={tCommon('search') + '…'}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm mb-1"
+            inputMode="search"
+            className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1 sm:text-sm"
           />
           <div className="max-h-48 overflow-y-auto">
             {filtered.map((p) => (
@@ -305,7 +331,7 @@ function PatientPickerInline({
                   setQuery('');
                 }}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                  'flex min-h-[44px] w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm',
                   'hover:bg-accent hover:text-accent-foreground',
                   value === p.id && 'bg-accent',
                 )}

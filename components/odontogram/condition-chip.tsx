@@ -58,7 +58,7 @@ export function ConditionChip({
       onDragEnd={onDragEnd}
       title={paintModeActive && active ? 'Click to exit paint mode' : `Paint or drag: ${label}`}
       className={cn(
-        'px-2 py-1 rounded text-xs border transition-all select-none',
+        'min-h-[44px] px-3 py-2 rounded-md text-sm border transition-all select-none touch-manipulation',
         'cursor-grab active:cursor-grabbing',
         'inline-flex items-center gap-1.5',
         glyph

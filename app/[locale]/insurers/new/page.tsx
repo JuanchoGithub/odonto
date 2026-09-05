@@ -14,7 +14,7 @@ export default async function NewInsurerPage({
   const t = await getTranslations('insurers');
 
   return (
-    <div className="container py-8 max-w-2xl">
+    <div className="container py-4 md:py-8 max-w-2xl">
       <Card>
         <CardHeader>
           <CardTitle>{t('new')}</CardTitle>

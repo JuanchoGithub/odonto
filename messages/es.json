@@ -46,7 +46,8 @@
     "reports": "Reportes",
     "settings": "Configuración",
     "insurers": "Obras sociales",
-    "schedules": "Horarios"
+    "schedules": "Horarios",
+    "more": "Más"
   },
   "dashboard": {
     "title": "Panel",
@@ -127,7 +128,12 @@
     "pendingLinks": "Turnos pendientes (enlaces compartidos)",
     "linkCopied": "Enlace copiado al portapapeles",
     "contact": "Contacto",
-    "methodTitle": "Método"
+    "methodTitle": "Método",
+    "attend": "Atender",
+    "attendTitle": "Atender turno",
+    "advanceTo": "Avanzar a",
+    "openChart": "Abrir ficha",
+    "call": "Llamar"
   },
   "odontogram": {
     "title": "Odontograma",
@@ -279,6 +285,10 @@
     "duration": "Duración",
     "duration15": "15 minutos",
     "duration30": "30 minutos",
+    "duration45": "45 minutos",
+    "duration60": "60 minutos",
+    "shareVia": "Compartir por…",
+    "copyFailed": "No se pudo copiar. Copiá el enlace manualmente.",
     "expires": "Vence",
     "link": "Enlace para el paciente",
     "copyUrl": "Copiar enlace",

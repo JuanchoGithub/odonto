@@ -87,46 +87,83 @@ function InvoicesList({
   if (rows.length === 0)
     return <p className="text-sm text-muted-foreground py-6 text-center">—</p>;
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-left text-muted-foreground border-b">
-          <tr>
-            <th className="py-2 pr-4">{t('number')}</th>
-            <th className="py-2 pr-4">{t('issuedAt')}</th>
-            <th className="py-2 pr-4">{tCommon('total')}</th>
-            <th className="py-2 pr-4">{tCommon('status')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-b">
-              <td className="py-2 pr-4">
-                <Link href={`/billing/${r.id}`} className="hover:underline">
-                  {r.number}
-                </Link>
-              </td>
-              <td className="py-2 pr-4">{formatDate(r.issued_at, locale)}</td>
-              <td className="py-2 pr-4">{formatMoney(r.total_cents, currency, locale)}</td>
-              <td className="py-2 pr-4">
-                <Badge
-                  variant={
-                    r.status === 'paid'
-                      ? 'success'
-                      : r.status === 'void'
-                        ? 'destructive'
-                        : r.status === 'issued'
-                          ? 'warning'
-                          : 'secondary'
-                  }
-                >
-                  {t(`status.${r.status}` as any)}
-                </Badge>
-              </td>
+    <>
+      <ul className="space-y-2 md:hidden">
+        {rows.map((r) => (
+          <li key={r.id}>
+            <Link
+              href={`/billing/${r.id}`}
+              className="flex min-h-[64px] items-start gap-3 rounded-xl border bg-card p-3 active:bg-accent"
+              data-testid="invoice-list-row"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-base font-semibold">{r.number}</span>
+                <span className="block text-sm text-muted-foreground">
+                  {formatDate(r.issued_at, locale)}
+                </span>
+                <span className="mt-1 text-sm font-medium">
+                  {formatMoney(r.total_cents, currency, locale)}
+                </span>
+              </span>
+              <Badge
+                variant={
+                  r.status === 'paid'
+                    ? 'success'
+                    : r.status === 'void'
+                      ? 'destructive'
+                      : r.status === 'issued'
+                        ? 'warning'
+                        : 'secondary'
+                }
+                className="shrink-0"
+              >
+                {t(`status.${r.status}` as any)}
+              </Badge>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <div className="overflow-x-auto hidden md:block">
+        <table className="w-full text-sm">
+          <thead className="text-left text-muted-foreground border-b">
+            <tr>
+              <th className="py-2 pr-4">{t('number')}</th>
+              <th className="py-2 pr-4">{t('issuedAt')}</th>
+              <th className="py-2 pr-4">{tCommon('total')}</th>
+              <th className="py-2 pr-4">{tCommon('status')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b">
+                <td className="py-2 pr-4">
+                  <Link href={`/billing/${r.id}`} className="hover:underline">
+                    {r.number}
+                  </Link>
+                </td>
+                <td className="py-2 pr-4">{formatDate(r.issued_at, locale)}</td>
+                <td className="py-2 pr-4">{formatMoney(r.total_cents, currency, locale)}</td>
+                <td className="py-2 pr-4">
+                  <Badge
+                    variant={
+                      r.status === 'paid'
+                        ? 'success'
+                        : r.status === 'void'
+                          ? 'destructive'
+                          : r.status === 'issued'
+                            ? 'warning'
+                            : 'secondary'
+                    }
+                  >
+                    {t(`status.${r.status}` as any)}
+                  </Badge>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -196,8 +233,9 @@ function NewInvoiceDialog({
             fd.set('lines', JSON.stringify(lines));
             return action(fd);
           }}
-          className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="fixed inset-x-0 bottom-0 z-50 w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-2xl sm:max-h-[90vh]"
         >
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">{t('newInvoice')}</h2>
             <Button variant="ghost" size="icon" type="button" onClick={() => onOpenChange(false)}>
@@ -208,10 +246,13 @@ function NewInvoiceDialog({
             <Label>{tCommon('notes')}</Label>
             <Textarea name="notes" rows={2} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {lines.map((l, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-6 space-y-1">
+              <div
+                key={i}
+                className="grid grid-cols-1 gap-2 rounded-lg border p-2 sm:grid-cols-12 sm:gap-2 sm:border-0 sm:p-0"
+              >
+                <div className="space-y-1 sm:col-span-6">
                   <Label className="text-xs">{t('lines')}</Label>
                   <Input
                     value={l.description}
@@ -219,48 +260,52 @@ function NewInvoiceDialog({
                     required
                   />
                 </div>
-                <div className="col-span-2 space-y-1">
-                  <Label className="text-xs">Qty</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={l.quantity}
-                    onChange={(e) => setLine(i, 'quantity', Number(e.target.value))}
-                  />
+                <div className="grid grid-cols-3 gap-2 sm:contents">
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-xs">Qty</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={l.quantity}
+                      onChange={(e) => setLine(i, 'quantity', Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-xs">Price</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={l.unit_price}
+                      onChange={(e) => setLine(i, 'unit_price', Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-1 sm:col-span-1">
+                    <Label className="text-xs">{tBilling('taxKind.standard')}</Label>
+                    <Select
+                      value={l.tax_kind}
+                      onValueChange={(v) => setLine(i, 'tax_kind', v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">S</SelectItem>
+                        <SelectItem value="reduced">R</SelectItem>
+                        <SelectItem value="none">—</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="col-span-2 space-y-1">
-                  <Label className="text-xs">Price</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={l.unit_price}
-                    onChange={(e) => setLine(i, 'unit_price', Number(e.target.value))}
-                  />
-                </div>
-                <div className="col-span-1 space-y-1">
-                  <Label className="text-xs">{tBilling('taxKind.standard')}</Label>
-                  <Select
-                    value={l.tax_kind}
-                    onValueChange={(v) => setLine(i, 'tax_kind', v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="standard">S</SelectItem>
-                      <SelectItem value="reduced">R</SelectItem>
-                      <SelectItem value="none">—</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-1">
+                <div className="flex justify-end sm:col-span-1 sm:items-end">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     onClick={() => removeLine(i)}
+                    className="min-h-[44px] min-w-[44px]"
+                    aria-label={tCommon('delete')}
                   >
                     <X className="h-4 w-4" />
                   </Button>

@@ -140,7 +140,7 @@ export function ToothEditSheet({
                       <span className="text-base leading-none">
                         {SURFACE_GLYPH[s]}
                       </span>
-                      <span className="text-[10px] leading-none opacity-80">
+                      <span className="text-[11px] leading-none opacity-80">
                         {t(`surfaces.${s}`)}
                       </span>
                     </button>
@@ -190,30 +190,32 @@ export function ToothEditSheet({
               />
             </div>
 
-            <div className="flex justify-between gap-2">
-              <Button
-                variant="outline"
-                onClick={onClearTooth}
-                disabled={saving}
-                data-testid="sheet-clear"
-              >
-                {t('clearTooth')}
-              </Button>
-              <div className="flex gap-2">
-                <Dialog.Close asChild>
-                  <Button variant="outline" data-testid="sheet-cancel">
-                    {tCommon('cancel')}
-                  </Button>
-                </Dialog.Close>
-                <Button
-                  onClick={() => onSave({ surface, condition, note })}
-                  disabled={saving}
-                  data-testid="sheet-save"
-                >
-                  {saving ? tCommon('loading') : tCommon('save')}
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              onClick={onClearTooth}
+              disabled={saving}
+              data-testid="sheet-clear"
+              className="min-h-[48px]"
+            >
+              {t('clearTooth')}
+            </Button>
+            <div className="flex gap-2">
+              <Dialog.Close asChild>
+                <Button variant="outline" data-testid="sheet-cancel" className="min-h-[48px] flex-1">
+                  {tCommon('cancel')}
                 </Button>
-              </div>
+              </Dialog.Close>
+              <Button
+                onClick={() => onSave({ surface, condition, note })}
+                disabled={saving}
+                data-testid="sheet-save"
+                className="min-h-[48px] flex-1"
+              >
+                {saving ? tCommon('loading') : tCommon('save')}
+              </Button>
             </div>
+          </div>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

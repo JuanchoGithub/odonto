@@ -46,7 +46,8 @@
     "reports": "Reports",
     "settings": "Settings",
     "insurers": "Insurers",
-    "schedules": "Schedules"
+    "schedules": "Schedules",
+    "more": "More"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -127,7 +128,12 @@
     "pendingLinks": "Pending bookings (shared links)",
     "linkCopied": "Link copied to clipboard",
     "contact": "Contact",
-    "methodTitle": "Method"
+    "methodTitle": "Method",
+    "attend": "Attend",
+    "attendTitle": "Attend appointment",
+    "advanceTo": "Advance to",
+    "openChart": "Open chart",
+    "call": "Call"
   },
   "odontogram": {
     "title": "Odontogram",
@@ -279,6 +285,10 @@
     "duration": "Duration",
     "duration15": "15 minutes",
     "duration30": "30 minutes",
+    "duration45": "45 minutes",
+    "duration60": "60 minutes",
+    "shareVia": "Share via…",
+    "copyFailed": "Could not copy. Copy the link manually.",
     "expires": "Expires",
     "link": "Patient link",
     "copyUrl": "Copy link",

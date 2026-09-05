@@ -41,13 +41,13 @@ export default async function InvoiceDetailPage({
   const balance = invoice.total_cents - invoice.paid_cents;
 
   return (
-    <div className="container py-8 space-y-6 max-w-4xl">
-      <div className="flex items-start justify-between">
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6 max-w-4xl">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link href="/billing" className="text-sm text-muted-foreground hover:underline">
             ← {t('title')}
           </Link>
-          <h1 className="text-3xl font-semibold tracking-tight mt-1">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mt-1 break-words">
             {invoice.number}
           </h1>
           <p className="text-sm text-muted-foreground">

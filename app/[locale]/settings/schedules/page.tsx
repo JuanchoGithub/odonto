@@ -28,8 +28,8 @@ export default async function SchedulesPage({
   );
 
   return (
-    <div className="container py-8 space-y-6 max-w-4xl">
-      <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6 max-w-4xl">
+      <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
       <SchedulesClient
         targetDentistId={data.targetId}
         isAdmin={user.role === 'admin'}
