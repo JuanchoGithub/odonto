@@ -103,6 +103,111 @@ test('odontogram: click caries then a surface paints it blue (per Argentine conv
   await expect(page.getByTestId('picker-surface-label')).toBeVisible();
 });
 
+test('odontogram: arming Sano then clicking a painted tooth clears it', async ({
+  page,
+}) => {
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // Paint occlusal blue first
+  await page.getByTestId('condition-chip-caries').click();
+  const tooth = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="16"]');
+  const paintResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await tooth.locator('[data-surface="occlusal"]').click();
+  await paintResp;
+  await page.keyboard.press('Escape');
+  await expect(tooth.locator('[data-surface="occlusal"]')).toHaveClass(
+    /fill-blue-500/,
+  );
+
+  // Arm Sano (clean) and click the tooth: whole tooth is erased
+  await expect(page.getByTestId('condition-chip-clean')).toBeVisible();
+  await page.getByTestId('condition-chip-clean').click();
+  const clearResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await tooth.locator('[data-surface="buccal"]').click();
+  await clearResp;
+  await expect(tooth.locator('[data-surface="occlusal"]')).not.toHaveClass(
+    /fill-blue-500/,
+  );
+
+  // Reload to confirm the clear persisted
+  await expectAfterReload(page, async () => {
+    const reloaded = page
+      .getByTestId('upper-row-adult')
+      .locator('[data-tooth-svg="16"]');
+    await expect(reloaded.locator('[data-surface="occlusal"]')).not.toHaveClass(
+      /fill-blue-500/,
+    );
+  });
+});
+
+test('odontogram: changing the picker condition paints the tooth live (no Save needed)', async ({
+  page,
+}) => {
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // Select tooth 16 occlusal (no armed condition -> select only)
+  const tooth = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="16"]');
+  await tooth.locator('[data-surface="occlusal"]').click();
+  await expect(page.getByTestId('picker-surface-label')).toBeVisible();
+
+  // Change the condition dropdown to Restoration: the tooth repaints
+  // red immediately, without clicking Save
+  const liveResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await page
+    .getByTestId('picker-condition')
+    .locator('..')
+    .getByRole('combobox')
+    .click();
+  await page.getByRole('option', { name: /restoration|restauraci/i }).click();
+  await liveResp;
+  await expect(tooth.locator('[data-surface="occlusal"]')).toHaveClass(
+    /fill-red-500/,
+  );
+
+  // Switching to Sano clears the tooth live as well
+  const clearResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await page
+    .getByTestId('picker-condition')
+    .locator('..')
+    .getByRole('combobox')
+    .click();
+  await page.getByRole('option', { name: /sano|healthy/i }).click();
+  await clearResp;
+  await expect(tooth.locator('[data-surface="occlusal"]')).not.toHaveClass(
+    /fill-blue-500/,
+  );
+});
+
 test('odontogram: clicking a surface with no armed condition only selects it', async ({
   page,
 }) => {

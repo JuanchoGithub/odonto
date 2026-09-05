@@ -142,7 +142,8 @@
       "perno": "Perno",
       "sealant": "Sellador",
       "conduct_todo": "Conducto a tratar",
-      "conduct_done": "Conducto tratado"
+      "conduct_done": "Conducto tratado",
+      "clean": "Sano"
     },
     "surfaces": {
       "occlusal": "Oclusal",

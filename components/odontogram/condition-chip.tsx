@@ -13,6 +13,7 @@ const SYMBOL_GLYPH: Record<string, string> = {
   sealant: '–',
   conduct_todo: 'TC',
   conduct_done: 'TC',
+  clean: '✓',
 };
 
 const SYMBOL_COLOR: Record<string, string> = {
@@ -23,6 +24,7 @@ const SYMBOL_COLOR: Record<string, string> = {
   sealant: 'text-red-600',
   conduct_todo: 'text-blue-600',
   conduct_done: 'text-red-600',
+  clean: 'text-emerald-600',
 };
 
 type Props = {

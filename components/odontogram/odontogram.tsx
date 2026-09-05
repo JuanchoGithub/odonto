@@ -185,6 +185,37 @@ export function Odontogram({
     [toothMap],
   );
 
+  const clearWholeTooth = useCallback(
+    async (tooth: number) => {
+      const previous = teeth;
+      setTeeth((curr) => curr.filter((t) => t.tooth_number !== tooth));
+      try {
+        const fd = new FormData();
+        fd.set('tooth_number', String(tooth));
+        const res = await clearTooth(patientId, fd);
+        if (res && 'error' in res && res.error) {
+          setTeeth(previous);
+          toast({
+            title: 'Error',
+            description: String(res.error),
+            variant: 'destructive',
+          });
+        } else {
+          const refreshed = await getOdontogram(patientId);
+          setTeeth(refreshed);
+        }
+      } catch (e) {
+        setTeeth(previous);
+        toast({
+          title: 'Error',
+          description: String(e),
+          variant: 'destructive',
+        });
+      }
+    },
+    [teeth, patientId, toast],
+  );
+
   const applyCondition = useCallback(
     async (
       tooth: number,
@@ -192,6 +223,11 @@ export function Odontogram({
       condition: string,
       note = '',
     ) => {
+      // 'clean' (Sano) erases the whole tooth instead of painting.
+      if (condition === 'clean') {
+        await clearWholeTooth(tooth);
+        return;
+      }
       // Whole-tooth conditions (missing, crown, to_extract, perno, sealant,
       // conduct_todo, conduct_done) are always stored on the 'whole' surface
       // so the tooth renders its symbol — no matter which part was clicked.
@@ -224,7 +260,7 @@ export function Odontogram({
         });
       }
     },
-    [teeth, patientId, toast],
+    [teeth, patientId, toast, clearWholeTooth],
   );
 
   const clearSurface = useCallback(
@@ -365,6 +401,16 @@ export function Odontogram({
   const handlePickerSave = useCallback(async () => {
     if (pickerTooth == null) return;
     setSaving(true);
+    // 'clean' (Sano) erases the whole tooth instead of saving.
+    if (pickerCondition === 'clean') {
+      try {
+        await clearWholeTooth(pickerTooth);
+        setPickerNote('');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     // Whole-tooth conditions always land on the 'whole' surface so the
     // tooth renders its symbol, even if another surface was picked.
     const routedSurface = WHOLE_CONDITIONS.has(pickerCondition)
@@ -410,40 +456,18 @@ export function Odontogram({
     } finally {
       setSaving(false);
     }
-  }, [pickerTooth, pickerSurface, pickerCondition, pickerNote, patientId, teeth, toast]);
+  }, [pickerTooth, pickerSurface, pickerCondition, pickerNote, patientId, teeth, toast, clearWholeTooth]);
 
   const handlePickerClear = useCallback(async () => {
     if (pickerTooth == null) return;
     setSaving(true);
-    const previous = teeth;
-    setTeeth((curr) => curr.filter((t) => t.tooth_number !== pickerTooth));
     try {
-      const fd = new FormData();
-      fd.set('tooth_number', String(pickerTooth));
-      const res = await clearTooth(patientId, fd);
-      if (res && 'error' in res && res.error) {
-        setTeeth(previous);
-        toast({
-          title: 'Error',
-          description: String(res.error),
-          variant: 'destructive',
-        });
-      } else {
-        const refreshed = await getOdontogram(patientId);
-        setTeeth(refreshed);
-        setPickerNote('');
-      }
-    } catch (e) {
-      setTeeth(previous);
-      toast({
-        title: 'Error',
-        description: String(e),
-        variant: 'destructive',
-      });
+      await clearWholeTooth(pickerTooth);
+      setPickerNote('');
     } finally {
       setSaving(false);
     }
-  }, [pickerTooth, patientId, teeth, toast]);
+  }, [pickerTooth, clearWholeTooth]);
 
   function renderTooth(n: number) {
     const tooth = toothMap[n];
@@ -616,6 +640,19 @@ export function Odontogram({
                 }}
               />
             ))}
+            <ConditionChip
+              key="clean"
+              condition="clean"
+              label={t('conditions.clean')}
+              active={paintMode === 'clean'}
+              paintModeActive={paintMode != null}
+              onClick={() => handleConditionChipClick('clean')}
+              onDragStart={handleChipDragStart('clean')}
+              onDragEnd={() => {
+                setDraggingCondition(null);
+                setDragOverSurface(null);
+              }}
+            />
           </div>
         </CardContent>
       </Card>
@@ -661,7 +698,19 @@ export function Odontogram({
               <label className="text-sm font-medium">{t('condition')}</label>
               <Select
                 value={pickerCondition}
-                onValueChange={(v) => setPickerCondition(v)}
+                onValueChange={(v) => {
+                  setPickerCondition(v);
+                  // Live-apply: changing the condition paints the selected
+                  // tooth immediately (or clears it for 'clean').
+                  if (pickerTooth != null) {
+                    void applyCondition(
+                      pickerTooth,
+                      pickerSurface as SurfaceKey,
+                      v,
+                      pickerNote,
+                    );
+                  }
+                }}
               >
                 <SelectTrigger data-testid="picker-condition">
                   <SelectValue />
@@ -672,6 +721,9 @@ export function Odontogram({
                       {t(`conditions.${c}` as any)}
                     </SelectItem>
                   ))}
+                  <SelectItem key="clean" value="clean">
+                    {t('conditions.clean')}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -733,6 +785,16 @@ export function Odontogram({
         onSave={async ({ surface, condition, note }) => {
           if (sheetTooth == null) return;
           setSaving(true);
+          // 'clean' (Sano) erases the whole tooth instead of saving.
+          if (condition === 'clean') {
+            try {
+              await clearWholeTooth(sheetTooth);
+              setSheetOpen(false);
+            } finally {
+              setSaving(false);
+            }
+            return;
+          }
           const routed: SurfaceKey = WHOLE_CONDITIONS.has(condition)
             ? 'whole'
             : surface;
@@ -787,24 +849,9 @@ export function Odontogram({
         onClearTooth={async () => {
           if (sheetTooth == null) return;
           setSaving(true);
-          const previous = teeth;
-          const n = sheetTooth;
-          setTeeth((curr) => curr.filter((t) => t.tooth_number !== n));
           try {
-            const fd = new FormData();
-            fd.set('tooth_number', String(n));
-            const res = await clearTooth(patientId, fd);
-            if (res && 'error' in res && res.error) {
-              setTeeth(previous);
-              toast({ title: 'Error', description: String(res.error), variant: 'destructive' });
-            } else {
-              const refreshed = await getOdontogram(patientId);
-              setTeeth(refreshed);
-              setSheetOpen(false);
-            }
-          } catch (e) {
-            setTeeth(previous);
-            toast({ title: 'Error', description: String(e), variant: 'destructive' });
+            await clearWholeTooth(sheetTooth);
+            setSheetOpen(false);
           } finally {
             setSaving(false);
           }

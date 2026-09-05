@@ -167,6 +167,16 @@ export function ToothEditSheet({
                     onDragEnd={() => {}}
                   />
                 ))}
+                <ConditionChip
+                  key="clean"
+                  condition="clean"
+                  label={t('conditions.clean')}
+                  active={condition === 'clean'}
+                  paintModeActive={false}
+                  onClick={() => setCondition('clean')}
+                  onDragStart={() => {}}
+                  onDragEnd={() => {}}
+                />
               </div>
             </div>
 

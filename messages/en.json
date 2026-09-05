@@ -142,7 +142,8 @@
       "perno": "Post (perno)",
       "sealant": "Sealant",
       "conduct_todo": "Root canal pending",
-      "conduct_done": "Root canal done"
+      "conduct_done": "Root canal done",
+      "clean": "Healthy"
     },
     "surfaces": {
       "occlusal": "Occlusal",
