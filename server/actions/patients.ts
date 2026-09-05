@@ -22,12 +22,24 @@ const PatientSchema = z.object({
   medical_history: z.string().optional().nullable(),
   allergies: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  // Clinical summary fields (Médico / Medical tab)
+  chronic_conditions: z.string().optional().nullable(),
+  contagious_diseases: z.string().optional().nullable(),
+  current_medications: z.string().optional().nullable(),
+  allergies_medication: z.string().optional().nullable(),
+  blood_pressure: z.string().optional().nullable(),
+  blood_type: z.string().optional().nullable(),
+  diabetes: z.string().optional().nullable(),
+  pregnant: z.enum(['yes', 'no', 'unknown', '']).optional().nullable(),
+  last_medical_update: z.string().optional().nullable(),
 });
 
 export type PatientFormState = { error?: string; ok?: boolean };
 
+// Lives in sync with `patients` table columns (minus id / created_* / updated_* / deleted_at).
+// Order matters: the INSERT placeholders must align 1:1 with this list.
 const PATIENT_COLS =
-  'first_name, last_name, document_id, birth_date, gender, phone, email, address, insurance_provider, insurance_number, insurer_id, insurance_plan, medical_history, allergies, notes';
+  'first_name, last_name, document_id, birth_date, gender, phone, email, address, insurance_provider, insurance_number, insurer_id, insurance_plan, medical_history, allergies, notes, chronic_conditions, contagious_diseases, current_medications, allergies_medication, blood_pressure, blood_type, diabetes, pregnant, last_medical_update';
 
 /** Escape LIKE wildcards so search input can't act as a pattern. */
 function escapeLike(s: string): string {
@@ -44,10 +56,12 @@ async function insertPatientWithAudit(
   userId: string,
 ): Promise<string> {
   const id = uid();
+  const cols = PATIENT_COLS.split(',').map((c) => c.trim());
+  const placeholders = cols.map(() => '?').join(', ');
   await transaction(async (tx) => {
     await tx.execute(
       `INSERT INTO patients (id, ${PATIENT_COLS}, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ${placeholders}, ?, ?, ?)`,
       [
         id,
         data.first_name,
@@ -65,6 +79,15 @@ async function insertPatientWithAudit(
         data.medical_history || null,
         data.allergies || null,
         data.notes || null,
+        data.chronic_conditions || null,
+        data.contagious_diseases || null,
+        data.current_medications || null,
+        data.allergies_medication || null,
+        data.blood_pressure || null,
+        data.blood_type || null,
+        data.diabetes || null,
+        data.pregnant || null,
+        data.last_medical_update || null,
         userId,
         nowIso(),
         nowIso(),
@@ -103,8 +126,10 @@ export async function updatePatient(
   const parsed = PatientSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
   const data = parsed.data;
+  const cols = PATIENT_COLS.split(',').map((c) => c.trim());
+  const setClauses = cols.map((c) => `${c}=?`).join(', ');
   await query(
-    `UPDATE patients SET first_name=?, last_name=?, document_id=?, birth_date=?, gender=?, phone=?, email=?, address=?, insurance_provider=?, insurance_number=?, insurer_id=?, insurance_plan=?, medical_history=?, allergies=?, notes=?, updated_at=? WHERE id=?`,
+    `UPDATE patients SET ${setClauses}, updated_at=? WHERE id=?`,
     [
       data.first_name,
       data.last_name,
@@ -121,6 +146,15 @@ export async function updatePatient(
       data.medical_history || null,
       data.allergies || null,
       data.notes || null,
+      data.chronic_conditions || null,
+      data.contagious_diseases || null,
+      data.current_medications || null,
+      data.allergies_medication || null,
+      data.blood_pressure || null,
+      data.blood_type || null,
+      data.diabetes || null,
+      data.pregnant || null,
+      data.last_medical_update || null,
       nowIso(),
       id,
     ],
@@ -199,6 +233,16 @@ export type PatientRow = {
   allergies: string | null;
   notes: string | null;
   deleted_at: string | null;
+  // Clinical (medical tab) fields
+  chronic_conditions: string | null;
+  contagious_diseases: string | null;
+  current_medications: string | null;
+  allergies_medication: string | null;
+  blood_pressure: string | null;
+  blood_type: string | null;
+  diabetes: string | null;
+  pregnant: string | null;
+  last_medical_update: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -637,6 +637,10 @@ function NewPatientFullDialog({
             </Dialog.Close>
           </div>
           <PatientForm
+            // mode="full": the inline flow shows ALL sections (general +
+            // medical) as one stacked form. The patient gets a complete
+            // intake without having to switch tabs.
+            mode="full"
             action={async (_prev, fd) => {
               const res = await createPatientInline({}, fd);
               if (res.ok) {

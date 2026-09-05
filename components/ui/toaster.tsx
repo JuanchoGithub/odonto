@@ -67,6 +67,11 @@ const ToastDescription = React.forwardRef<
 ));
 ToastDescription.displayName = ToastPrimitive.Description.displayName;
 
+/**
+ * On toasts with an action, we skip the close button entirely so the action
+ * stays clickable (the toast auto-dismisses after 6s anyway).
+ */
+
 const ToastClose = React.forwardRef<
   React.ElementRef<typeof ToastPrimitive.Close>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitive.Close>
@@ -74,7 +79,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitive.Close
     ref={ref}
     className={cn(
-      'absolute right-1 top-1 rounded-md p-2 text-foreground/50 opacity-100 transition-opacity hover:text-foreground focus:opacity-100 min-h-[44px] min-w-[44px] flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100',
+      'rounded-md p-1.5 text-foreground/50 transition-opacity hover:text-foreground focus:opacity-100 opacity-100 min-h-[34px] min-w-[34px] flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100',
       className,
     )}
     toast-close=""
@@ -83,6 +88,7 @@ const ToastClose = React.forwardRef<
     <X className="h-3.5 w-3.5" />
   </ToastPrimitive.Close>
 ));
+ToastClose.displayName = ToastPrimitive.Close.displayName;
 ToastClose.displayName = ToastPrimitive.Close.displayName;
 
 type ToastItem = {
@@ -132,8 +138,9 @@ export function Toaster({ children }: { children: React.ReactNode }) {
               >
                 {t.action.label}
               </button>
-            ) : null}
-            <ToastClose onClick={() => dismiss(t.id)} />
+            ) : (
+              <ToastClose onClick={() => dismiss(t.id)} />
+            )}
           </Toast>
         ))}
         <ToastViewport />

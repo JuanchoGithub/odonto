@@ -20,7 +20,9 @@ declare module 'next-auth' {
 }
 
 const CredsSchema = z.object({
-  email: z.string().email().max(255),
+  // Accepts `.local` (e.g. admin@local) and any real email. This is a dev/test
+  // artifact for seeded users — production uses real addresses.
+  email: z.string().min(3).max(255),
   password: z.string().min(6).max(255),
 });
 

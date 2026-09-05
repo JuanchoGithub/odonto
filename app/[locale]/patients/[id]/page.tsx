@@ -16,6 +16,7 @@ import type { AppLocale, Currency } from '@/lib/schemas/common';
 import { ShareTurnButton } from '@/components/turn-picker/share-turn-button';
 import { DeletePatientButton } from '@/components/patients/delete-patient-button';
 import { RestorePatientButton } from '@/components/patients/restore-patient-button';
+import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 
 type Clinic = { currency: string; locale: AppLocale };
 
@@ -114,7 +115,8 @@ export default async function PatientDetailPage({
               <CardTitle className="text-base">{t('tabs.general')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <PatientForm patient={patient} />
+              <ClinicalAlertBanner patient={patient} className="mb-4" />
+              <PatientForm patient={patient} mode="general" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -124,7 +126,8 @@ export default async function PatientDetailPage({
               <CardTitle className="text-base">{t('tabs.medical')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <PatientForm patient={patient} />
+              <ClinicalAlertBanner patient={patient} className="mb-4" />
+              <PatientForm patient={patient} mode="medical" />
             </CardContent>
           </Card>
         </TabsContent>

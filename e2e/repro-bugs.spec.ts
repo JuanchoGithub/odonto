@@ -13,10 +13,12 @@ test('repro: gender picker must work in the inline new-patient form', async ({
 
   // Path A: /patients/new (working baseline)
   await page.goto('/patients/new');
-  const baselineGender = page.getByRole('combobox');
-  await baselineGender.click();
+  // The gender field is rendered by Radix Select; trigger click via the labelled element.
+  // The hidden input puts name in <input name="gender">; the visible button references it via aria-labelledby.
+  const genderTrigger = page.locator('button[aria-labelledby="gender"]').first();
+  await genderTrigger.click();
   await page.getByRole('option', { name: /^masculino$|^male$/i }).click();
-  await expect(baselineGender).toContainText(/masculino|male/i);
+  await expect(genderTrigger).toContainText(/masculino|male/i);
 
   // Path B: inline new-patient from appointment dialog
   await page.goto('/appointments');
@@ -30,7 +32,9 @@ test('repro: gender picker must work in the inline new-patient form', async ({
   const newPatientDialog = page.getByRole('dialog').last();
   await expect(newPatientDialog).toBeVisible();
 
-  const inlineGender = newPatientDialog.getByRole('combobox');
+  // Same pattern: capture the gender trigger by its accessible name (the
+  // hidden input id='gender' is what aria-labelledby points to).
+  const inlineGender = newPatientDialog.locator('button[aria-labelledby="gender"]').first();
   await inlineGender.click();
   await page.getByRole('option', { name: /^masculino$|^male$/i }).click();
   await expect(inlineGender).toContainText(/masculino|male/i);

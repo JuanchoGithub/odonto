@@ -25,9 +25,10 @@ test('admin can create, view, edit, delete an insurer', async ({ page }) => {
   await page.getByRole('button', { name: /guardar|save/i }).click();
   await expect(page.getByText('Saved')).toBeVisible();
 
-  // 3. Verify via list
+  // 3. Verify via list — target the desktop table (the mobile card list is hidden at desktop sizes)
   await page.goto('/insurers');
-  await expect(page.getByText(`${name} v2`).first()).toBeVisible();
+  const desktopTable = page.locator('.md\\:block');
+  await expect(desktopTable.getByText(`${name} v2`)).toBeVisible();
 
   // 4. Delete via detail (navigate directly to avoid link-click flakiness)
   await page.goto(detailUrl);

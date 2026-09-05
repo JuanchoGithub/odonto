@@ -43,7 +43,10 @@ test('full smoke: login → dashboard → create patient → view detail', async
 
   // Back to list — newly created patient should be searchable
   await page.goto(`/patients?q=${lastName}`);
-  await expect(page.getByText(lastName).first()).toBeVisible();
+  // The desktop table is visible on md+; the mobile card list is hidden there.
+  // Target the desktop table specifically.
+  const desktopRow = page.locator('.md\\:block');
+  await expect(desktopRow.getByText(lastName).first()).toBeVisible();
 });
 
 test('guards: unauthed user redirected from /dashboard to /login', async ({

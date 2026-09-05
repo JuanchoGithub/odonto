@@ -33,7 +33,7 @@ test('soft delete patient with confirmation and undo', async ({ page }) => {
   await undoBtn.click();
   await page.waitForTimeout(500);
   await page.goto(`/patients?q=SoftDel${stamp}`);
-  await expect(page.getByText(`SoftDel${stamp}`)).toBeVisible();
+  await expect(page.getByRole('link', { name: new RegExp(`SoftDel${stamp}`) }).getByText(`SoftDel${stamp}`)).toBeVisible();
 });
 
 test('share button on appointments page', async ({ page }) => {
