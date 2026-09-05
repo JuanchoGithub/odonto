@@ -382,6 +382,8 @@ Vercel dashboard → midentista → Deployments → click a previous successful 
 
 9. **Datetimes are tz-aware ISO, never naive local strings.** Browser-side code (appointment dialog, drag/resize) must send `.toISOString()` values; the server interprets them against `clinics.timezone` via `lib/availability.ts`. Naive `YYYY-MM-DDTHH:mm` strings are parsed in the server TZ (UTC on Vercel), which corrupts wall-clock math for clinics in other zones.
 
+10. **Mass "outside working hours" rejections → check `clinics.timezone` first.** If staff report that every create/move fails, verify the clinic timezone in Settings (it applies to every availability check). A common trap: saving the clinic form while the wrong timezone is shown silently persists it. Also verify the dentist's own weekly schedule (Settings → Schedules) — a narrow dentist schedule overrides clinic business hours and legitimately blocks writes outside it.
+
 9. **Vercel CLI + `vcp_` tokens**: `vcp_` personal access tokens work for the REST API but the Vercel CLI rejects them with "token is not valid" when used via `--token`. Use them only for REST API calls (which is what `scripts/vercel-setup.mjs` does). The Deploy workflow is auto-triggered by Vercel's GitHub App integration, not by the CLI.
 
 10. **The build step on Vercel runs `postinstall`** which is `node scripts/migrate.mjs || true`. So fresh deploys auto-apply migrations as long as `TURSO_URL` + `TURSO_TOKEN` are set in the build env. If they're missing, the build still succeeds (because of `|| true`) and you must apply migrations manually.
