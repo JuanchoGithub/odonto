@@ -163,6 +163,7 @@ test('drag-select on empty grid pre-fills a range and records the method', async
   await expect(row).toBeVisible();
   await expect(row).toContainText(/arrastre|drag/i);
   await expect(row).toContainText('Dr. Demo'); // added by + dentist
+  await expect(row).toContainText(/\+54/); // patient contact (phone)
 });
 
 test('pending (shared, unbooked) links appear in the list view', async ({
@@ -200,6 +201,7 @@ test('pending (shared, unbooked) links appear in the list view', async ({
   await expect(pending).toBeVisible({ timeout: 10_000 });
   await expect(pending).toContainText(/pendiente|pending/i);
   await expect(pending).toContainText(/compartido|shared/i);
+  await expect(pending).toContainText(/\+54/); // patient contact (phone)
 });
 
 test('non-working hours are shaded (weekend fully, outside business hours on weekdays)', async ({
