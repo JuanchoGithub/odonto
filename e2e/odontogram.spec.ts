@@ -297,6 +297,100 @@ test('odontogram: dragging a whole-tooth chip marks the whole tooth', async ({
   await expect(target).not.toHaveClass(/fill-cyan-500/);
 });
 
+test('odontogram: clicking the same armed condition again toggles it off', async ({
+  page,
+}) => {
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // Arm missing, click tooth 17 -> X appears (2 cross + 2 X lines)
+  await page.getByTestId('condition-chip-missing').click();
+  const tooth = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="17"]');
+  const saveResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await tooth.locator('[data-surface="mesial"]').click();
+  await saveResp;
+  await expect(tooth.locator('line')).toHaveCount(4);
+
+  // Click the same tooth again with missing still armed -> X removed
+  const toggleResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await tooth.locator('[data-surface="occlusal"]').click();
+  await toggleResp;
+  await expect(tooth.locator('line')).toHaveCount(2);
+
+  // Reload to confirm the toggle-off persisted
+  await expectAfterReload(page, async () => {
+    const reloaded = page
+      .getByTestId('upper-row-adult')
+      .locator('[data-tooth-svg="17"]');
+    await expect(reloaded.locator('line')).toHaveCount(2);
+  });
+});
+
+test('odontogram: toggle is per-surface for caries/restoration', async ({
+  page,
+}) => {
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  await page.getByTestId('condition-chip-caries').click();
+  const tooth = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="16"]');
+  const occlusal = tooth.locator('[data-surface="occlusal"]');
+  const buccal = tooth.locator('[data-surface="buccal"]');
+
+  const saveResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await occlusal.click();
+  await saveResp;
+  await expect(occlusal).toHaveClass(/fill-blue-500/);
+
+  // Click occlusal again -> only occlusal is cleared
+  const toggleResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await occlusal.click();
+  await toggleResp;
+  await expect(occlusal).not.toHaveClass(/fill-blue-500/);
+
+  // Buccal was never painted and stays clean; painting it still works
+  // while caries is armed
+  const paintResp = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await buccal.click();
+  await paintResp;
+  await expect(buccal).toHaveClass(/fill-blue-500/);
+  await expect(occlusal).not.toHaveClass(/fill-blue-500/);
+});
+
 test('odontogram: receptionist cannot write to odontogram (server action returns Forbidden)', async ({
   page,
 }) => {

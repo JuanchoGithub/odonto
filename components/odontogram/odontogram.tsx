@@ -216,54 +216,7 @@ export function Odontogram({
     [teeth, patientId, toast],
   );
 
-  const applyCondition = useCallback(
-    async (
-      tooth: number,
-      surface: SurfaceKey,
-      condition: string,
-      note = '',
-    ) => {
-      // 'clean' (Sano) erases the whole tooth instead of painting.
-      if (condition === 'clean') {
-        await clearWholeTooth(tooth);
-        return;
-      }
-      // Whole-tooth conditions (missing, crown, to_extract, perno, sealant,
-      // conduct_todo, conduct_done) are always stored on the 'whole' surface
-      // so the tooth renders its symbol — no matter which part was clicked.
-      const routed: SurfaceKey = WHOLE_CONDITIONS.has(condition)
-        ? 'whole'
-        : surface;
-      const previous = teeth;
-      setTeeth((curr) => upsertSurfaceLocal(curr, tooth, routed, condition));
-      try {
-        const fd = new FormData();
-        fd.set('tooth_number', String(tooth));
-        fd.set('surface', routed);
-        fd.set('condition', condition);
-        fd.set('note', note);
-        const res = await setToothCondition(patientId, fd);
-        if (res && 'error' in res && res.error) {
-          setTeeth(previous);
-          toast({
-            title: 'Error',
-            description: String(res.error),
-            variant: 'destructive',
-          });
-        }
-      } catch (e) {
-        setTeeth(previous);
-        toast({
-          title: 'Error',
-          description: String(e),
-          variant: 'destructive',
-        });
-      }
-    },
-    [teeth, patientId, toast, clearWholeTooth],
-  );
-
-  const clearSurface = useCallback(
+  const clearOneSurface = useCallback(
     async (tooth: number, surface: SurfaceKey) => {
       const previous = teeth;
       setTeeth((curr) => removeSurfaceLocal(curr, tooth, surface));
@@ -290,6 +243,71 @@ export function Odontogram({
       }
     },
     [teeth, patientId, toast],
+  );
+
+  const applyCondition = useCallback(
+    async (
+      tooth: number,
+      surface: SurfaceKey,
+      condition: string,
+      note = '',
+    ) => {
+      // 'clean' (Sano) erases the whole tooth instead of painting.
+      if (condition === 'clean') {
+        await clearWholeTooth(tooth);
+        return;
+      }
+      // Whole-tooth conditions (missing, crown, to_extract, perno, sealant,
+      // conduct_todo, conduct_done) are always stored on the 'whole' surface
+      // so the tooth renders its symbol — no matter which part was clicked.
+      const routed: SurfaceKey = WHOLE_CONDITIONS.has(condition)
+        ? 'whole'
+        : surface;
+      // Toggle: clicking the same condition again on the same spot removes
+      // it — the fastest way to mend a misclick.
+      const alreadyThere = teeth
+        .find((t) => t.tooth_number === tooth)
+        ?.conditions.some(
+          (c) => c.surface === routed && c.condition === condition,
+        );
+      if (alreadyThere) {
+        await clearOneSurface(tooth, routed);
+        return;
+      }
+      const previous = teeth;
+      setTeeth((curr) => upsertSurfaceLocal(curr, tooth, routed, condition));
+      try {
+        const fd = new FormData();
+        fd.set('tooth_number', String(tooth));
+        fd.set('surface', routed);
+        fd.set('condition', condition);
+        fd.set('note', note);
+        const res = await setToothCondition(patientId, fd);
+        if (res && 'error' in res && res.error) {
+          setTeeth(previous);
+          toast({
+            title: 'Error',
+            description: String(res.error),
+            variant: 'destructive',
+          });
+        }
+      } catch (e) {
+        setTeeth(previous);
+        toast({
+          title: 'Error',
+          description: String(e),
+          variant: 'destructive',
+        });
+      }
+    },
+    [teeth, patientId, toast, clearWholeTooth, clearOneSurface],
+  );
+
+  const clearSurface = useCallback(
+    async (tooth: number, surface: SurfaceKey) => {
+      await clearOneSurface(tooth, surface);
+    },
+    [clearOneSurface],
   );
 
   useEffect(() => {
