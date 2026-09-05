@@ -436,7 +436,120 @@ The current `VERCEL_TOKEN` GitHub secret is a `vcp_` personal access token, whic
 
 ---
 
-## 13. Quick reference: "how do I…?"
+## 13. Mobile design guidelines (iPhone-first)
+
+The app is built **iPhone-first** (390×844 default), then progressively enhanced for larger screens. Mobile is not "the desktop site scaled down" — it has its own components, its own layout, and its own gestures. These rules are mandatory; do not regress them.
+
+### 13.1 The contract
+
+- **Default is mobile.** Build the layout for 390px first. Use `md:` (≥768px) and `lg:` (≥1024px) prefixes to enhance, never the other way around. If a feature only works on desktop, it is a bug.
+- **iPhone viewport is set in `app/layout.tsx`.** `width=device-width, initialScale=1, viewportFit=cover`, `themeColor: '#ffffff'`. Do not remove `viewportFit=cover`; the notch will clip content.
+- **All money lives in cents** (integer) via `amountToCents` in `lib/utils.ts`. Never use floats. See §12.8.
+- **All datetimes are tz-aware ISO.** Browser builds `.toISOString()`; the server interprets against `clinics.timezone` via `lib/availability.ts`. Naive `YYYY-MM-DDTHH:mm` strings parsed in server TZ corrupt wall-clock math. See §12.9.
+
+### 13.2 Tokens (already configured)
+
+- `tailwind.config.ts` — `container.padding` is responsive: `1rem` base, `1.5rem sm:`, `2rem lg:`. Use the `container` class. Do not reintroduce `padding: 2rem` (it cost us 64px of horizontal on iPhone).
+- `app/globals.css` — `min-h: 100dvh` (not `100vh`; iOS Safari's URL bar inflates `vh`), `overscroll-behavior-y: none`, `touch-action: manipulation` on buttons, `-webkit-tap-highlight-color: transparent`, plus `pt-safe / pb-safe / pl-safe / pr-safe` utilities backed by `env(safe-area-inset-*)`.
+- `components/ui/button.tsx` — every size variant includes `min-h-[44px]` and `touch-manipulation`. The iOS HIG minimum touch target is 44×44.
+- `components/ui/input.tsx` and `select.tsx` — base text size is `text-base` (16px) so iOS does not auto-zoom on focus. Inputs become `text-sm` only at `sm:` and up.
+- `components/ui/table.tsx` — `TableHead` / `TableCell` use mobile-lean cells (`px-3 py-3`) and bump to `sm:p-4` on desktop. List pages still set a `min-w-[...]` on the inner table so it scrolls horizontally on the few desktop pages that ship a table (preserves the existing UX).
+
+### 13.3 Shell
+
+- `app/[locale]/layout.tsx` mounts both navs: `<TopNav>` (`hidden lg:flex`, `pt-safe`) and `<BottomNav>` (`md:hidden`, 5 tabs, safe-area padded). The `<main>` has `pb-20 md:pb-0` to clear the bottom nav. Do not remove either.
+- `components/nav/bottom-nav.tsx` — Dashboard / Appointments / (+Create) / Patients / More. The center button is `/patients/new`. The More sheet is role-gated (see `PRIMARY` / `MORE` arrays). When adding a new top-level section, update both `PRIMARY` (if it's a primary destination) and `MORE` (if it's secondary). Use the existing i18n keys under `nav.*`.
+- `components/nav/top-nav.tsx` — desktop only (`hidden lg:flex`). Has a hamburger that opens a mobile accordion with all role-allowed links. Preserve `aria-label="Primary"`, `aria-current="page"`, and `aria-expanded` on the toggle.
+
+### 13.4 Lists, tables, cards
+
+- **Every list page must have a mobile-card view AND a desktop-table view** in the same component, switched by `md:hidden` / `hidden md:block`. The list pages that follow this pattern: `app/[locale]/patients/page.tsx`, `app/[locale]/billing/page.tsx`, `app/[locale]/insurers/page.tsx`, `app/[locale]/settings/page.tsx`, `components/appointments/appointment-list.tsx`, `components/treatments/patient-treatments.tsx`, `components/billing/patient-invoices.tsx`, `components/attachments/patient-attachments.tsx`.
+- Mobile cards are `min-h-[64px]`, `rounded-xl`, `border`, `active:bg-accent`. Whole row is a `<Link>` or `<button>` (one tap target). Phone numbers are `tel:` links inside the card with `onClick={(e) => e.stopPropagation()}` so tapping the phone does not open the card.
+- Each card carries a `data-testid` (`patient-list-row`, `invoice-list-row`, `insurer-list-row`, `user-list-row`, `treatment-list-row`, `pending-link-row`, `appt-list-row`) for e2e stability.
+
+### 13.5 Dialogs → bottom sheets
+
+- Every Radix `Dialog` is rendered as a **bottom sheet on mobile** and a **centered modal on `sm:` and up**. The class is:
+  ```
+  inset-x-0 bottom-0 w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe
+  max-h-[92dvh] overflow-y-auto
+  sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2
+  sm:-translate-x-1/2 sm:-translate-y-1/2
+  sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-md sm:max-h-[90vh]
+  ```
+  Plus a 40×4px drag-handle dot at the top on mobile (`<div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />`).
+- Files that already follow this pattern: `components/appointments/appointment-dialog.tsx`, `components/appointments/attend-sheet.tsx`, `components/appointments/appointment-list.tsx` (the share dialog), `components/turn-picker/generate-link-dialog.tsx`, `components/odontogram/tooth-edit-sheet.tsx`, `components/schedules/schedules-client.tsx` (orphan decision), `components/patients/delete-patient-button.tsx`, `components/insurers/insurer-picker.tsx` (NewInsurerDialog), `components/billing/patient-invoices.tsx` (new-invoice), `components/treatments/patient-treatments.tsx` (new-treatment).
+- **Do not center a Radix Dialog on mobile.** Centered dialogs are the #1 cause of "my screen is unreadable" reports.
+
+### 13.6 Appointments specifically
+
+- `components/appointments/time-grid.tsx` — the 7-day grid is `minmax(130px, 1fr) × 7 + 52px = 962px min-width`, so it forces horizontal scroll on phones. **Drag / resize / select is gated by `useCoarsePointer()`** (`window.matchMedia('(pointer: coarse)')`). On touch: no `setPointerCapture`, no drag-select, no resize — `pointerdown` on a block or column is a tap. Resize handle is 24px tall (was 6px) with a 40px-wide grab indicator.
+- `components/appointments/week-calendar.tsx` — `view` defaults to `'list'` when `(max-width: 767px).matches`, `'calendar'` otherwise. The tabs preserve `view-calendar` / `view-list` testids.
+- `components/appointments/appointment-list.tsx` — mobile = `<ul>` of cards (`min-h-[64px]`, dentist color bar, name, time, status, `tel:`). For `scheduled | arrived | in_chair` rows, the card has an **Attend** button (`data-testid="appt-attend"`, `min-h-[48px]`) that opens `AttendSheet`.
+- `components/appointments/attend-sheet.tsx` — the new "Attend" mode. Patient header, `tel:` call link, status stepper (`scheduled → arrived → in_chair → completed`) one-tap advance, plus quick links to `/patients/[id]?tab=odontogram` and `?tab=treatments`. New entries: `appointments.attend`, `appointments.attendTitle`, `appointments.advanceTo`, `appointments.openChart`, `appointments.call`.
+- The patient page must accept `?tab=` and **default to that tab** when present (`app/[locale]/patients/[id]/page.tsx`). The full whitelist is `TABS` in that file — extend it when adding a new tab.
+
+### 13.7 Odontogram — the symbol rule (non-negotiable)
+
+The dental-charting standard is enforced in code. **Every** surface that shows a condition symbol (desktop chart, mobile list, legend chip, edit sheet) must use the **same SVG**. Do not re-implement with unicode glyphs, emojis, or different colors — clinical findings are encoded by the symbol, and a ✕ on mobile and a ring on desktop are two different clinical findings.
+
+- **Single source of truth**: `components/odontogram/tooth-svg.tsx` exports `WholeSymbol` (the in-chart overlay) and `WholeConditionSymbol` (a standalone SVG for use outside the chart). Use these.
+- **Standard mappings** (must not change without a clinical sign-off):
+  - `missing` — red X across the whole tooth (`#dc2626`)
+  - `crown` — red ring around the tooth (`#dc2626`)
+  - `to_extract` — two blue parallel slashes (`#2563eb`)
+  - `perno` — red filled disc with white "P"
+  - `sealant` — red bar across the top of the tooth (`#dc2626`)
+  - `conduct_todo` — blue "TC" badge at the top (`#2563eb`)
+  - `conduct_done` — red "TC" badge at the top (`#dc2626`)
+  - `clean` — green check inside the tooth outline (`#059669`)
+- `WHOLE_CONDITIONS` (in `tooth-svg.tsx`, `tooth-list-picker.tsx`, and `condition-chip.tsx`) is the set of `missing | crown | to_extract | perno | sealant | conduct_todo | conduct_done | clean`. All three files must agree — if you add a new whole-tooth condition, update all three.
+- The mobile `<ToothListPicker>` (in `tooth-list-picker.tsx`) renders a real `<ToothSvg>` at 48×48px, **not** a colored circle with a glyph. This is what shows per-surface conditions (caries / restoration) on phones; without the SVG, those were invisible.
+- `components/odontogram/odontogram.tsx` — the "advancedPicker" card is **`hidden md:block`** to avoid duplicating the edit path on mobile. Do not unhide it on mobile.
+- Touch targets: tooth buttons ≥ `min-h-[56px] min-w-[56px]`, condition chips `min-h-[44px]`, surface buttons in the edit sheet `min-h-[44px]`, condition badges in the legend follow the same rule.
+
+### 13.8 Forms
+
+- Inputs are 16px on mobile (no iOS auto-zoom) → `text-base sm:text-sm`. The base `Input` and `Select` components already do this — use them.
+- `grid-cols-3` collapses to `grid-cols-1` on mobile when stacking matters (see `appointment-dialog.tsx` `appt_date` / `appt_start_time` / `appt_duration`).
+- Native `<input type="file">` is unsightly and overflows on mobile. Wrap it in a `<label>` with `cursor-pointer` and a `text-muted-foreground` placeholder, like `components/attachments/patient-attachments.tsx` does.
+
+### 13.9 Toasts
+
+- `components/ui/toaster.tsx` positions the viewport **above the bottom nav** on mobile (`bottom-20`) and at the top-right on `sm:` and up. The close button is always visible on touch (`sm:opacity-0 sm:group-hover:opacity-100`).
+
+### 13.10 What NOT to do
+
+- Do not call `vercel deploy` from CI or locally — the Vercel CLI rejects `vcp_` tokens. Use the deploy hook (§3, §11). The Vercel GitHub App integration is not configured for this project.
+- Do not add `w-full` to a centered dialog — on phones it produces 0px gutter.
+- Do not use `autoFocus` on an input inside a dialog. iOS pops the keyboard, pushes the layout, and obscures the form. `appointment-dialog.tsx`'s `PatientPicker` removed `autoFocus` for exactly this reason.
+- Do not put `overflow-x-auto` on the page-level container. It hides that the inner content is wider than the viewport. Wrap tables, not pages.
+- Do not introduce new dialogs without the bottom-sheet class in §13.5. Copy from an existing dialog.
+- Do not change `viewport` in `app/layout.tsx` to remove `viewportFit=cover`. The iPhone notch will clip the sticky top nav.
+- Do not use `vh` (use `dvh` in `globals.css`). Safari's URL bar inflates `vh` and your fixed-position elements jump.
+- Do not re-implement the dental symbols with unicode, emojis, or different colors. Use `WholeConditionSymbol`.
+
+### 13.11 When adding a new top-level page
+
+1. Use the responsive container (`container py-4 md:py-8`) and the responsive heading (`text-2xl md:text-3xl`).
+2. If it's a list, add a mobile-card view + a desktop-table view (see §13.4) and a matching `data-testid` on each card row.
+3. If it has forms, all dialogs must use the bottom-sheet class (§13.5).
+4. If it should appear in the bottom nav, add a `Link` entry to `PRIMARY` in `components/nav/bottom-nav.tsx`. If it's secondary, add to `MORE` instead.
+5. Add i18n keys to both `messages/es.json` and `messages/en.json` in the `nav.*` namespace.
+6. Run `npm run typecheck && npm run lint && npm run build` and verify in DevTools with an iPhone profile before committing.
+
+### 13.12 When adding a new medical / clinical symbol
+
+If the feature is clinical (ICD-10, dental, dermatology, etc.) and uses standardized glyphs:
+
+1. The glyph definition lives in **one** file (the component that owns the domain — e.g. `tooth-svg.tsx`).
+2. Re-export a standalone variant (like `WholeConditionSymbol`) so other surfaces (lists, chips, dialogs, exports) can render at any size.
+3. Add the new condition to every `WHOLE_CONDITIONS`-like set across files that consume it.
+4. Never invent a unicode / emoji / different color for the same clinical meaning.
+
+---
+
+## 14. Quick reference: "how do I…?"
 
 - **Add a new patient field** → §10
 - **Add a new module** → §10
