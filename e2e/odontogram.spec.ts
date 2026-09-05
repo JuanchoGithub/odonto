@@ -55,7 +55,32 @@ test('odontogram: adult tooth order is 18-11 | 21-28 on top and 48-41 | 31-38 on
   ]);
 });
 
-test('odontogram: click a surface then caries paints it blue (per Argentine convention)', async ({
+test('odontogram: click caries then a surface paints it blue (per Argentine convention)', async ({
+  page,
+}) => {
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // Condition first, then tooth part
+  await expect(page.getByTestId('condition-chip-caries')).toBeVisible();
+  await page.getByTestId('condition-chip-caries').click();
+  await expect(page.getByTestId('paint-mode-banner')).toBeVisible();
+
+  const tooth = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="16"]');
+  await expect(tooth).toBeVisible();
+  await tooth.locator('[data-surface="occlusal"]').click();
+
+  await expect(
+    tooth.locator('[data-surface="occlusal"]'),
+  ).toHaveClass(/fill-blue-500/);
+
+  // Picker stays in sync with the armed condition
+  await expect(page.getByTestId('picker-surface-label')).toBeVisible();
+});
+
+test('odontogram: clicking a surface with no armed condition only selects it', async ({
   page,
 }) => {
   await login(page, DENTIST);
@@ -64,16 +89,15 @@ test('odontogram: click a surface then caries paints it blue (per Argentine conv
   const tooth = page
     .getByTestId('upper-row-adult')
     .locator('[data-tooth-svg="16"]');
-  await expect(tooth).toBeVisible();
   await tooth.locator('[data-surface="occlusal"]').click();
 
-  await expect(page.getByTestId('picker-surface-label')).toBeVisible();
-  await expect(page.getByTestId('condition-chip-caries')).toBeVisible();
-  await page.getByTestId('condition-chip-caries').click();
-
+  // Nothing painted, no paint banner
   await expect(
     tooth.locator('[data-surface="occlusal"]'),
-  ).toHaveClass(/fill-blue-500/);
+  ).not.toHaveClass(/fill-blue-500/);
+  await expect(page.getByTestId('paint-mode-banner')).toHaveCount(0);
+  // But the picker synced to the selection
+  await expect(page.getByTestId('picker-surface-label')).toBeVisible();
 });
 
 test('odontogram: paint mode applies restoration (red) to every clicked surface until Esc', async ({
@@ -113,7 +137,8 @@ test('odontogram: drag a condition chip onto a surface applies it', async ({
   await login(page, DENTIST);
   await createPatientAndOpenOdontogram(page);
 
-  const chip = page.getByTestId('condition-chip-sealant');
+  // Per-surface condition (caries/blue) paints the wedge it lands on
+  const chip = page.getByTestId('condition-chip-caries');
   const target = page
     .getByTestId('lower-row-adult')
     .locator('[data-tooth-svg="36"]')
@@ -121,7 +146,27 @@ test('odontogram: drag a condition chip onto a surface applies it', async ({
 
   await chip.dragTo(target);
 
-  await expect(target).toHaveClass(/fill-cyan-500/);
+  await expect(target).toHaveClass(/fill-blue-500/);
+});
+
+test('odontogram: dragging a whole-tooth chip marks the whole tooth', async ({
+  page,
+}) => {
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // Sealant is whole-tooth: dropping it on any surface routes to 'whole'
+  // and renders the dash overlay (an extra line) instead of a cyan wedge.
+  const chip = page.getByTestId('condition-chip-sealant');
+  const tooth = page
+    .getByTestId('lower-row-adult')
+    .locator('[data-tooth-svg="36"]');
+  const target = tooth.locator('[data-surface="mesial"]');
+
+  await chip.dragTo(target);
+
+  await expect(tooth.locator('line')).toHaveCount(3);
+  await expect(target).not.toHaveClass(/fill-cyan-500/);
 });
 
 test('odontogram: receptionist cannot write to odontogram (server action returns Forbidden)', async ({
@@ -144,11 +189,13 @@ test('odontogram: receptionist cannot write to odontogram (server action returns
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
   await expect(page.getByTestId('odontogram-root')).toBeVisible();
 
+  // Condition-first flow as receptionist: arm caries, then click surface.
+  // Server should reject the write.
+  await page.getByTestId('condition-chip-caries').click();
   const tooth = page
     .getByTestId('upper-row-adult')
     .locator('[data-tooth-svg="11"]');
   await tooth.locator('[data-surface="occlusal"]').click();
-  await page.getByTestId('condition-chip-caries').click();
 
   await expect(
     tooth.locator('[data-surface="occlusal"]'),
@@ -180,8 +227,8 @@ test('odontogram: setting "missing" on whole surface renders the X symbol', asyn
   await page.getByRole('option', { name: /missing|ausente/i }).click();
   await page.getByTestId('picker-save').click();
 
-  // After reload, the missing X should be present (an X is two crossing
-  // lines; we just check the tooth row now has a "missing" condition).
+  // After reload, the missing X should be present. A plain tooth has
+  // exactly 2 lines (the cross); the X adds 2 more.
   await page.reload();
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
   const adult = page.getByTestId('chart-adult');
@@ -189,8 +236,38 @@ test('odontogram: setting "missing" on whole surface renders the X symbol', asyn
   const reloadedTooth = page
     .getByTestId('upper-row-adult')
     .locator('[data-tooth-svg="16"]');
-  // The whole condition's circle (gray) should be present
-  await expect(reloadedTooth.locator('circle').first()).toBeVisible();
+  await expect(reloadedTooth.locator('line')).toHaveCount(4);
+});
+
+test('odontogram: arming "missing" then clicking any surface marks the whole tooth', async ({
+  page,
+}) => {
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // Condition first: arm "missing", then click a surface of tooth 17.
+  // Whole-tooth conditions route to the 'whole' surface, so the tooth
+  // renders the X symbol instead of a gray wedge.
+  await page.getByTestId('condition-chip-missing').click();
+  const tooth = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="17"]');
+  await tooth.locator('[data-surface="mesial"]').click();
+
+  // The X lines are rendered (whole symbol: 2 cross + 2 X lines), and
+  // the mesial wedge itself stays unpainted (no gray fill).
+  await expect(tooth.locator('line')).toHaveCount(4);
+  await expect(tooth.locator('[data-surface="mesial"]')).not.toHaveClass(
+    /fill-gray/,
+  );
+
+  // Reload to confirm the whole-tooth state persisted
+  await page.reload();
+  await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
+  const reloaded = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="17"]');
+  await expect(reloaded.locator('line')).toHaveCount(4);
 });
 
 test('odontogram: under-10 patient shows only the kid chart', async ({ page }) => {

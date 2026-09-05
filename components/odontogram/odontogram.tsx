@@ -191,12 +191,18 @@ export function Odontogram({
       condition: string,
       note = '',
     ) => {
+      // Whole-tooth conditions (missing, crown, to_extract, perno, sealant,
+      // conduct_todo, conduct_done) are always stored on the 'whole' surface
+      // so the tooth renders its symbol — no matter which part was clicked.
+      const routed: SurfaceKey = WHOLE_CONDITIONS.has(condition)
+        ? 'whole'
+        : surface;
       const previous = teeth;
-      setTeeth((curr) => upsertSurfaceLocal(curr, tooth, surface, condition));
+      setTeeth((curr) => upsertSurfaceLocal(curr, tooth, routed, condition));
       try {
         const fd = new FormData();
         fd.set('tooth_number', String(tooth));
-        fd.set('surface', surface);
+        fd.set('surface', routed);
         fd.set('condition', condition);
         fd.set('note', note);
         const res = await setToothCondition(patientId, fd);
@@ -284,17 +290,15 @@ export function Odontogram({
 
   const handleConditionChipClick = useCallback(
     (condition: string) => {
+      // Condition-first flow: clicking a chip only arms it.
+      // Click a tooth surface afterwards to apply. Click again or Esc to disarm.
       if (paintMode === condition) {
         setPaintMode(null);
         return;
       }
       setPaintMode(condition);
-      if (selectedTooth != null && selectedSurface != null) {
-        setPickerCondition(condition);
-        void applyCondition(selectedTooth, selectedSurface, condition);
-      }
     },
-    [paintMode, selectedTooth, selectedSurface, applyCondition],
+    [paintMode],
   );
 
   const handleChipDragStart = useCallback(
@@ -323,10 +327,13 @@ export function Odontogram({
       setDraggingCondition(null);
       setDragOverSurface(null);
       if (!condition) return;
+      const routed: SurfaceKey = WHOLE_CONDITIONS.has(condition)
+        ? 'whole'
+        : surface;
       setSelectedTooth(tooth);
       setSelectedSurface(surface);
       setPickerTooth(tooth);
-      setPickerSurface(surface);
+      setPickerSurface(routed);
       setPickerCondition(condition);
       void applyCondition(tooth, surface, condition);
     },
@@ -340,6 +347,15 @@ export function Odontogram({
       );
       if (existing) {
         void clearSurface(tooth, surface);
+        return;
+      }
+      // No per-surface condition here but the tooth has a whole-tooth
+      // symbol (missing, crown, ...) — clear that instead.
+      const whole = toothMap[tooth]?.conditions.find(
+        (c) => c.surface === 'whole',
+      );
+      if (whole) {
+        void clearSurface(tooth, 'whole');
       }
     },
     [clearSurface, toothMap],
@@ -348,18 +364,23 @@ export function Odontogram({
   const handlePickerSave = useCallback(async () => {
     if (pickerTooth == null) return;
     setSaving(true);
+    // Whole-tooth conditions always land on the 'whole' surface so the
+    // tooth renders its symbol, even if another surface was picked.
+    const routedSurface = WHOLE_CONDITIONS.has(pickerCondition)
+      ? 'whole'
+      : pickerSurface;
     const fd = new FormData();
     fd.set('tooth_number', String(pickerTooth));
-    fd.set('surface', pickerSurface);
+    fd.set('surface', routedSurface);
     fd.set('condition', pickerCondition);
     fd.set('note', pickerNote);
     const previous = teeth;
     setTeeth((curr) =>
-      (ALL_SURFACES as readonly string[]).includes(pickerSurface)
+      (ALL_SURFACES as readonly string[]).includes(routedSurface)
         ? upsertSurfaceLocal(
             curr,
             pickerTooth,
-            pickerSurface as SurfaceKey,
+            routedSurface as SurfaceKey,
             pickerCondition,
           )
         : curr,
@@ -670,14 +691,17 @@ export function Odontogram({
         onSave={async ({ surface, condition, note }) => {
           if (sheetTooth == null) return;
           setSaving(true);
+          const routed: SurfaceKey = WHOLE_CONDITIONS.has(condition)
+            ? 'whole'
+            : surface;
           const previous = teeth;
           setTeeth((curr) =>
-            upsertSurfaceLocal(curr, sheetTooth, surface, condition),
+            upsertSurfaceLocal(curr, sheetTooth, routed, condition),
           );
           try {
             const fd = new FormData();
             fd.set('tooth_number', String(sheetTooth));
-            fd.set('surface', surface);
+            fd.set('surface', routed);
             fd.set('condition', condition);
             fd.set('note', note);
             const res = await setToothCondition(patientId, fd);

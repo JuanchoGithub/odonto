@@ -197,23 +197,16 @@ function Wedge({
 function WholeSymbol({ condition }: { condition: string }) {
   switch (condition) {
     case 'missing':
-      // Gray translucent fill + two crossing lines (X)
+      // A plain X across the whole tooth — no fill, just the cross.
       return (
         <g pointerEvents="none">
-          <circle
-            cx={CX}
-            cy={CY}
-            r={R}
-            className="fill-gray-400"
-            fillOpacity={0.45}
-          />
           <line
             x1={CX - R * 0.7}
             y1={CY - R * 0.7}
             x2={CX + R * 0.7}
             y2={CY + R * 0.7}
             stroke="#0f172a"
-            strokeWidth={2.2}
+            strokeWidth={2.4}
             strokeLinecap="round"
           />
           <line
@@ -222,7 +215,7 @@ function WholeSymbol({ condition }: { condition: string }) {
             x2={CX + R * 0.7}
             y2={CY - R * 0.7}
             stroke="#0f172a"
-            strokeWidth={2.2}
+            strokeWidth={2.4}
             strokeLinecap="round"
           />
         </g>
@@ -418,7 +411,7 @@ export function ToothSvg({
     <svg
       viewBox="0 0 56 80"
       preserveAspectRatio="xMidYMid meet"
-      className={cn('bg-white dark:bg-background', className)}
+      className={cn('bg-white dark:bg-background overflow-visible', className)}
       role="img"
       aria-label={`Tooth ${toothNumber}`}
       data-tooth-svg={toothNumber}
