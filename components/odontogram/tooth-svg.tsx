@@ -194,7 +194,13 @@ function Wedge({
   );
 }
 
-function WholeSymbol({ condition }: { condition: string }) {
+// Single source of truth for whole-tooth condition symbols.
+// Exported so the mobile tooth-list picker, the legend chips, and the
+// desktop chart all render the same SVG markup — these are dental-charting
+// standards (red X = missing, red ring = crown, two blue parallel slashes
+// = to extract, red solid fill = perno, red bar = sealant, TC badge =
+// endo) and must not be re-implemented with different glyphs.
+export function WholeSymbol({ condition }: { condition: string }) {
   switch (condition) {
     case 'missing':
       // A plain RED X across the whole tooth — no fill, just the cross.
@@ -298,6 +304,20 @@ function WholeSymbol({ condition }: { condition: string }) {
       return <ConductMarker color="#2563eb" />;
     case 'conduct_done':
       return <ConductMarker color="#dc2626" />;
+    case 'clean':
+      // Healthy tooth — green check inside the tooth outline.
+      return (
+        <g pointerEvents="none">
+          <path
+            d={`M ${CX - 7} ${CY} L ${CX - 2} ${CY + 5} L ${CX + 7} ${CY - 4}`}
+            stroke="#059669"
+            strokeWidth={2.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </g>
+      );
     default:
       return null;
   }
@@ -325,6 +345,63 @@ function ConductMarker({ color }: { color: string }) {
         TC
       </text>
     </g>
+  );
+}
+
+/**
+ * Standalone SVG of a tooth-shape (circle + cross-hair divider) with a
+ * whole-tooth condition symbol drawn on top. Use this anywhere the dental
+ * standard needs to be shown off the main chart: the mobile quadrant
+ * list, the legend chips, etc. It is intentionally identical to the
+ * rendering used inside <ToothSvg> on the desktop chart.
+ */
+export function WholeConditionSymbol({
+  condition,
+  size = 32,
+  className,
+}: {
+  condition: string;
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 56 80"
+      width={size}
+      height={size}
+      preserveAspectRatio="xMidYMid meet"
+      className={cn('bg-white dark:bg-background', className)}
+      aria-hidden
+    >
+      {/* outer ring + cross-hair divider (same frame as the chart tooth) */}
+      <line
+        x1={CX}
+        y1={CY - R}
+        x2={CX}
+        y2={CY + R}
+        stroke={TOOTH_STROKE}
+        strokeWidth={1.4}
+        strokeLinecap="round"
+      />
+      <line
+        x1={CX - R}
+        y1={CY}
+        x2={CX + R}
+        y2={CY}
+        stroke={TOOTH_STROKE}
+        strokeWidth={1.4}
+        strokeLinecap="round"
+      />
+      <circle
+        cx={CX}
+        cy={CY}
+        r={R}
+        fill="none"
+        stroke={TOOTH_STROKE}
+        strokeWidth={1.6}
+      />
+      <WholeSymbol condition={condition} />
+    </svg>
   );
 }
 

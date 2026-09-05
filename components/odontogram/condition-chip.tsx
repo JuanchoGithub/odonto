@@ -1,31 +1,22 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { CONDITION_BG, CONDITION_LABEL } from './tooth-svg';
+import { CONDITION_BG, CONDITION_LABEL, WholeConditionSymbol } from './tooth-svg';
 
-// Whole-tooth conditions get a symbol glyph instead of a solid fill,
-// mirroring what the tooth itself renders.
-const SYMBOL_GLYPH: Record<string, string> = {
-  missing: '✕',
-  crown: '○',
-  to_extract: '//',
-  perno: '■',
-  sealant: '–',
-  conduct_todo: 'TC',
-  conduct_done: 'TC',
-  clean: '✓',
-};
-
-const SYMBOL_COLOR: Record<string, string> = {
-  missing: 'text-red-600',
-  crown: 'text-red-600',
-  to_extract: 'text-blue-600',
-  perno: 'text-red-600',
-  sealant: 'text-red-600',
-  conduct_todo: 'text-blue-600',
-  conduct_done: 'text-red-600',
-  clean: 'text-emerald-600',
-};
+// Whole-tooth conditions are rendered with their real dental-charting
+// symbol via <WholeConditionSymbol> (the same SVG that the chart and the
+// mobile list use). Per-surface conditions (caries / restoration) are
+// shown with a solid color swatch matching the wedge fill.
+const WHOLE_CONDITIONS = new Set([
+  'missing',
+  'crown',
+  'to_extract',
+  'perno',
+  'sealant',
+  'conduct_todo',
+  'conduct_done',
+  'clean',
+]);
 
 type Props = {
   condition: string;
@@ -46,7 +37,7 @@ export function ConditionChip({
   onDragStart,
   onDragEnd,
 }: Props) {
-  const glyph = SYMBOL_GLYPH[condition];
+  const isWhole = WHOLE_CONDITIONS.has(condition);
   return (
     <button
       type="button"
@@ -56,25 +47,23 @@ export function ConditionChip({
       onClick={onClick}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      title={paintModeActive && active ? 'Click to exit paint mode' : `Paint or drag: ${label}`}
+      title={
+        paintModeActive && active
+          ? 'Click to exit paint mode'
+          : `Paint or drag: ${label}`
+      }
       className={cn(
         'min-h-[44px] px-3 py-2 rounded-md text-sm border transition-all select-none touch-manipulation',
         'cursor-grab active:cursor-grabbing',
         'inline-flex items-center gap-1.5',
-        glyph
-          ? 'bg-background text-foreground'
-          : `${CONDITION_BG[condition] ?? ''} ${CONDITION_LABEL[condition] ?? ''}`,
+        !isWhole && `${CONDITION_BG[condition] ?? ''} ${CONDITION_LABEL[condition] ?? ''}`,
+        isWhole && 'bg-white dark:bg-background',
         active && 'ring-2 ring-primary ring-offset-1',
         !active && paintModeActive && 'opacity-40',
       )}
     >
-      {glyph ? (
-        <span
-          aria-hidden
-          className={cn('text-sm font-bold leading-none', SYMBOL_COLOR[condition])}
-        >
-          {glyph}
-        </span>
+      {isWhole ? (
+        <WholeConditionSymbol condition={condition} size={20} className="shrink-0" />
       ) : null}
       {label}
     </button>

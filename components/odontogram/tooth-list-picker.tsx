@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
-import { CONDITION_BG } from './tooth-svg';
+import { ToothSvg, type SurfaceKey } from './tooth-svg';
 
 type SurfaceRow = { surface: string; condition: string };
 type ToothRow = { tooth_number: number; conditions: SurfaceRow[] };
@@ -17,26 +17,32 @@ const UPPER_LEFT_KID = [61, 62, 63, 64, 65];
 const LOWER_RIGHT_KID = [85, 84, 83, 82, 81];
 const LOWER_LEFT_KID = [71, 72, 73, 74, 75];
 
-// "Whole-tooth" conditions render as overlays in the chart; in the list
-// picker we just use their color to tint the button.
-const CONDITION_PRIORITY = [
+// Whole-tooth conditions: if a tooth has one of these we render the SVG
+// overlay (red X, red ring, blue parallel slashes, red disc, red bar, TC
+// badge) — same dental-charting standard as the desktop chart.
+const WHOLE_CONDITIONS = new Set([
   'missing',
-  'perno',
   'crown',
   'to_extract',
+  'perno',
   'sealant',
   'conduct_todo',
   'conduct_done',
-  'caries',
-  'restoration',
-] as const;
+]);
 
-function worstCondition(tooth: ToothRow | undefined): string {
-  if (!tooth || tooth.conditions.length === 0) return '';
-  for (const c of CONDITION_PRIORITY) {
-    if (tooth.conditions.some((cc) => cc.condition === c)) return c;
-  }
-  return tooth.conditions[0].condition;
+function pickWhole(tooth: ToothRow | undefined): string | null {
+  if (!tooth) return null;
+  const found = tooth.conditions.find((c) => WHOLE_CONDITIONS.has(c.condition));
+  return found?.condition ?? null;
+}
+
+function pickSurfaceConditions(
+  tooth: ToothRow | undefined,
+): { surface: SurfaceKey; condition: string }[] {
+  if (!tooth) return [];
+  return tooth.conditions
+    .filter((c) => !WHOLE_CONDITIONS.has(c.condition))
+    .map((c) => ({ surface: c.surface as SurfaceKey, condition: c.condition }));
 }
 
 function ToothButton({
@@ -50,32 +56,47 @@ function ToothButton({
   onClick: () => void;
   dataTestId?: string;
 }) {
-  const wc = worstCondition(tooth);
+  const whole = pickWhole(tooth);
+  const surfaceStates = pickSurfaceConditions(tooth);
   const hasAny = (tooth?.conditions.length ?? 0) > 0;
+  // Slightly larger button area than the tooth itself so the touch target
+  // meets the 44×44 iOS HIG; the SVG is centered inside.
   return (
     <button
       type="button"
       onClick={onClick}
       data-tooth-list-item={n}
       data-testid={dataTestId}
+      aria-label={`Tooth ${n}${hasAny ? `, ${tooth?.conditions.length} conditions` : ''}`}
       className={cn(
         'relative flex items-center justify-center',
-        'h-14 w-14 min-h-[56px] min-w-[56px] rounded-full border-2 text-base font-semibold',
-        'transition-colors active:scale-95',
+        'h-14 w-14 min-h-[56px] min-w-[56px] rounded-lg border-2',
+        'transition-colors active:scale-95 bg-white dark:bg-background',
         hasAny
-          ? `${CONDITION_BG[wc] ?? 'bg-muted'} border-transparent text-white`
-          : 'bg-background border-border text-foreground hover:border-primary/50',
+          ? 'border-transparent'
+          : 'border-border hover:border-primary/50',
       )}
     >
-      {n}
-      {hasAny ? (
-        <span
-          className="absolute -top-1 -right-1 h-5 min-h-[20px] w-5 min-w-[20px] rounded-full bg-background text-[11px] font-bold flex items-center justify-center border"
-          aria-label={`${tooth?.conditions.length} conditions`}
-        >
-          {tooth?.conditions.length}
-        </span>
-      ) : null}
+      {/* Real tooth SVG — identical to the desktop chart at this size.
+          The SVG covers up to ~52px tall; the button is 56px to give
+          2px of touch padding. The SVG is non-interactive (pointer-events:none)
+          so the entire button is one tap target. */}
+      <ToothSvg
+        toothNumber={n}
+        conditions={surfaceStates}
+        whole={whole ? { condition: whole } : null}
+        selectedSurface={null}
+        hoverSurface={null}
+        paintMode={false}
+        onSurfaceClick={() => {}}
+        onSurfaceMouseEnter={() => {}}
+        onSurfaceMouseLeave={() => {}}
+        onSurfaceDragOver={() => {}}
+        onSurfaceDrop={() => {}}
+        onSurfaceDragLeave={() => {}}
+        draggingCondition={null}
+        className="pointer-events-none h-12 w-12"
+      />
     </button>
   );
 }
