@@ -248,7 +248,15 @@ test('odontogram: setting "missing" on whole surface renders the X symbol', asyn
     .getByRole('combobox')
     .click();
   await page.getByRole('option', { name: /missing|ausente/i }).click();
+  const pickerSaved = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
   await page.getByTestId('picker-save').click();
+  await pickerSaved;
 
   // After reload, the missing X should be present. A plain tooth has
   // exactly 2 lines (the cross); the X adds 2 more.
@@ -278,7 +286,10 @@ test('odontogram: arming "missing" then clicking any surface marks the whole too
   // Wait for the server-action round trip so the write has landed before
   // we reload (the click flow is fire-and-forget + optimistic).
   const saveResp = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && r.url().includes('/patients/'),
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
     { timeout: 15_000 },
   );
   await tooth.locator('[data-surface="mesial"]').click();
@@ -312,13 +323,19 @@ test('odontogram: Limpiar button clears every condition on the tooth', async ({
     .getByTestId('upper-row-adult')
     .locator('[data-tooth-svg="16"]');
   const save1 = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && r.url().includes('/patients/'),
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
     { timeout: 15_000 },
   );
   await tooth.locator('[data-surface="occlusal"]').click();
   await save1;
   const save2 = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && r.url().includes('/patients/'),
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
     { timeout: 15_000 },
   );
   await tooth.locator('[data-surface="buccal"]').click();
@@ -331,7 +348,10 @@ test('odontogram: Limpiar button clears every condition on the tooth', async ({
   // Select the tooth so the picker targets it, then Limpiar
   await tooth.locator('[data-surface="occlusal"]').click();
   const clearResp = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && r.url().includes('/patients/'),
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
     { timeout: 15_000 },
   );
   await page.getByTestId('picker-clear').click();
@@ -466,7 +486,15 @@ test('odontogram: >12yo patient with kid-tooth history shows adult first then ki
     .getByRole('combobox')
     .click();
   await page.getByRole('option', { name: /missing|ausente/i }).click();
+  const kidHistorySaved = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      r.url().includes('/patients/') &&
+      r.status() === 200,
+    { timeout: 15_000 },
+  );
   await page.getByTestId('picker-save').click();
+  await kidHistorySaved;
 
   // Now insert a kid tooth condition via the API directly so we can test
   // the "treated as a kid" detection. We'll use a fetch from the page.
