@@ -101,6 +101,38 @@ export async function clearToothSurface(patientId: string, fd: FormData) {
   return { ok: true };
 }
 
+const ClearToothSchema = z.object({
+  tooth_number: z.coerce.number().int().min(1).max(85),
+});
+
+export async function clearTooth(patientId: string, fd: FormData) {
+  const user = await requireUser();
+  if (!can(user.role, 'odontogram:write')) return forbid();
+  const parsed = ClearToothSchema.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return { error: 'Invalid' };
+  const data = parsed.data;
+
+  const chart = await queryOne<{ id: string }>(
+    'SELECT id FROM teeth_chart WHERE patient_id = ? AND tooth_number = ?',
+    [patientId, data.tooth_number],
+  );
+  if (!chart) return { ok: true };
+
+  await query('DELETE FROM tooth_conditions WHERE tooth_chart_id = ?', [
+    chart.id,
+  ]);
+  await query(`UPDATE teeth_chart SET updated_at = ? WHERE id = ?`, [
+    nowIso(),
+    chart.id,
+  ]);
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'delete', 'tooth_condition', ?, ?)`,
+    [uid(), user.id, chart.id, JSON.stringify({ cleared_tooth: data.tooth_number })],
+  );
+  revalidatePath(`/patients/${patientId}`);
+  return { ok: true };
+}
+
 export type ToothRow = {
   tooth_number: number;
   conditions: {

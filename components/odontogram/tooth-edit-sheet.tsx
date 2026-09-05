@@ -41,6 +41,7 @@ export function ToothEditSheet({
   paintedSurfaces,
   onSave,
   onClear,
+  onClearTooth,
   saving,
 }: {
   open: boolean;
@@ -56,6 +57,7 @@ export function ToothEditSheet({
     note: string;
   }) => void;
   onClear: (surface: SurfaceKey) => void;
+  onClearTooth: () => void;
   saving: boolean;
 }) {
   const t = useTranslations('odontogram');
@@ -178,19 +180,29 @@ export function ToothEditSheet({
               />
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
-                <Button variant="outline" data-testid="sheet-cancel">
-                  {tCommon('cancel')}
-                </Button>
-              </Dialog.Close>
+            <div className="flex justify-between gap-2">
               <Button
-                onClick={() => onSave({ surface, condition, note })}
+                variant="outline"
+                onClick={onClearTooth}
                 disabled={saving}
-                data-testid="sheet-save"
+                data-testid="sheet-clear"
               >
-                {saving ? tCommon('loading') : tCommon('save')}
+                {t('clearTooth')}
               </Button>
+              <div className="flex gap-2">
+                <Dialog.Close asChild>
+                  <Button variant="outline" data-testid="sheet-cancel">
+                    {tCommon('cancel')}
+                  </Button>
+                </Dialog.Close>
+                <Button
+                  onClick={() => onSave({ surface, condition, note })}
+                  disabled={saving}
+                  data-testid="sheet-save"
+                >
+                  {saving ? tCommon('loading') : tCommon('save')}
+                </Button>
+              </div>
             </div>
           </div>
         </Dialog.Content>

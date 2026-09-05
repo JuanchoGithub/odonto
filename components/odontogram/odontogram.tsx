@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import {
   setToothCondition,
   clearToothSurface,
+  clearTooth,
   getOdontogram,
   type ToothRow,
   type OdontogramMode,
@@ -411,6 +412,39 @@ export function Odontogram({
     }
   }, [pickerTooth, pickerSurface, pickerCondition, pickerNote, patientId, teeth, toast]);
 
+  const handlePickerClear = useCallback(async () => {
+    if (pickerTooth == null) return;
+    setSaving(true);
+    const previous = teeth;
+    setTeeth((curr) => curr.filter((t) => t.tooth_number !== pickerTooth));
+    try {
+      const fd = new FormData();
+      fd.set('tooth_number', String(pickerTooth));
+      const res = await clearTooth(patientId, fd);
+      if (res && 'error' in res && res.error) {
+        setTeeth(previous);
+        toast({
+          title: 'Error',
+          description: String(res.error),
+          variant: 'destructive',
+        });
+      } else {
+        const refreshed = await getOdontogram(patientId);
+        setTeeth(refreshed);
+        setPickerNote('');
+      }
+    } catch (e) {
+      setTeeth(previous);
+      toast({
+        title: 'Error',
+        description: String(e),
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [pickerTooth, patientId, teeth, toast]);
+
   function renderTooth(n: number) {
     const tooth = toothMap[n];
     const surfaces: SurfaceState[] = (tooth?.conditions ?? [])
@@ -651,7 +685,15 @@ export function Odontogram({
               />
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={handlePickerClear}
+              disabled={saving || pickerTooth == null}
+              data-testid="picker-clear"
+            >
+              {t('clearTooth')}
+            </Button>
             <Button
               onClick={handlePickerSave}
               disabled={saving || pickerTooth == null}
@@ -740,6 +782,31 @@ export function Odontogram({
           } catch (e) {
             setTeeth(previous);
             toast({ title: 'Error', description: String(e), variant: 'destructive' });
+          }
+        }}
+        onClearTooth={async () => {
+          if (sheetTooth == null) return;
+          setSaving(true);
+          const previous = teeth;
+          const n = sheetTooth;
+          setTeeth((curr) => curr.filter((t) => t.tooth_number !== n));
+          try {
+            const fd = new FormData();
+            fd.set('tooth_number', String(n));
+            const res = await clearTooth(patientId, fd);
+            if (res && 'error' in res && res.error) {
+              setTeeth(previous);
+              toast({ title: 'Error', description: String(res.error), variant: 'destructive' });
+            } else {
+              const refreshed = await getOdontogram(patientId);
+              setTeeth(refreshed);
+              setSheetOpen(false);
+            }
+          } catch (e) {
+            setTeeth(previous);
+            toast({ title: 'Error', description: String(e), variant: 'destructive' });
+          } finally {
+            setSaving(false);
           }
         }}
       />

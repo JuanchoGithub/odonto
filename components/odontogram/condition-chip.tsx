@@ -8,7 +8,7 @@ import { CONDITION_BG, CONDITION_LABEL } from './tooth-svg';
 const SYMBOL_GLYPH: Record<string, string> = {
   missing: '✕',
   crown: '○',
-  to_extract: '⫽',
+  to_extract: '//',
   perno: '■',
   sealant: '–',
   conduct_todo: 'TC',
@@ -16,11 +16,11 @@ const SYMBOL_GLYPH: Record<string, string> = {
 };
 
 const SYMBOL_COLOR: Record<string, string> = {
-  missing: 'text-slate-800',
+  missing: 'text-red-600',
   crown: 'text-red-600',
-  to_extract: 'text-red-600',
+  to_extract: 'text-blue-600',
   perno: 'text-red-600',
-  sealant: 'text-cyan-600',
+  sealant: 'text-red-600',
   conduct_todo: 'text-blue-600',
   conduct_done: 'text-red-600',
 };

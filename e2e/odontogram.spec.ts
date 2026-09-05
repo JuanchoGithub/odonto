@@ -277,6 +277,62 @@ test('odontogram: arming "missing" then clicking any surface marks the whole too
   await expect(reloaded.locator('line')).toHaveCount(4);
 });
 
+test('odontogram: Limpiar button clears every condition on the tooth', async ({
+  page,
+}) => {
+  await login(page, DENTIST);
+  await createPatientAndOpenOdontogram(page);
+
+  // Paint two surfaces with caries first (condition-first flow)
+  await page.getByTestId('condition-chip-caries').click();
+  const tooth = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="16"]');
+  const save1 = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/patients/'),
+    { timeout: 15_000 },
+  );
+  await tooth.locator('[data-surface="occlusal"]').click();
+  await save1;
+  const save2 = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/patients/'),
+    { timeout: 15_000 },
+  );
+  await tooth.locator('[data-surface="buccal"]').click();
+  await save2;
+  await page.keyboard.press('Escape');
+  await expect(tooth.locator('[data-surface="occlusal"]')).toHaveClass(
+    /fill-blue-500/,
+  );
+
+  // Select the tooth so the picker targets it, then Limpiar
+  await tooth.locator('[data-surface="occlusal"]').click();
+  const clearResp = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/patients/'),
+    { timeout: 15_000 },
+  );
+  await page.getByTestId('picker-clear').click();
+  await clearResp;
+
+  // Both wedges back to unpainted
+  await expect(tooth.locator('[data-surface="occlusal"]')).not.toHaveClass(
+    /fill-blue-500/,
+  );
+  await expect(tooth.locator('[data-surface="buccal"]')).not.toHaveClass(
+    /fill-blue-500/,
+  );
+
+  // Reload to confirm the clear persisted
+  await page.reload();
+  await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
+  const reloaded = page
+    .getByTestId('upper-row-adult')
+    .locator('[data-tooth-svg="16"]');
+  await expect(reloaded.locator('[data-surface="occlusal"]')).not.toHaveClass(
+    /fill-blue-500/,
+  );
+});
+
 test('odontogram: under-10 patient shows only the kid chart', async ({ page }) => {
   await login(page, DENTIST);
 

@@ -30,7 +30,7 @@ export const CONDITION_COLOR: Record<string, string> = {
   crown: 'fill-red-600',
   to_extract: 'fill-amber-500',
   perno: 'fill-red-600',
-  sealant: 'fill-cyan-500',
+  sealant: 'fill-red-500',
   conduct_todo: 'fill-blue-500',
   conduct_done: 'fill-red-500',
 };
@@ -43,7 +43,7 @@ export const CONDITION_BG: Record<string, string> = {
   crown: 'bg-red-600',
   to_extract: 'bg-amber-500',
   perno: 'bg-red-600',
-  sealant: 'bg-cyan-500',
+  sealant: 'bg-red-500',
   conduct_todo: 'bg-blue-500',
   conduct_done: 'bg-red-500',
 };
@@ -197,7 +197,7 @@ function Wedge({
 function WholeSymbol({ condition }: { condition: string }) {
   switch (condition) {
     case 'missing':
-      // A plain X across the whole tooth — no fill, just the cross.
+      // A plain RED X across the whole tooth — no fill, just the cross.
       return (
         <g pointerEvents="none">
           <line
@@ -205,7 +205,7 @@ function WholeSymbol({ condition }: { condition: string }) {
             y1={CY - R * 0.7}
             x2={CX + R * 0.7}
             y2={CY + R * 0.7}
-            stroke="#0f172a"
+            stroke="#dc2626"
             strokeWidth={2.4}
             strokeLinecap="round"
           />
@@ -214,7 +214,7 @@ function WholeSymbol({ condition }: { condition: string }) {
             y1={CY + R * 0.7}
             x2={CX + R * 0.7}
             y2={CY - R * 0.7}
-            stroke="#0f172a"
+            stroke="#dc2626"
             strokeWidth={2.4}
             strokeLinecap="round"
           />
@@ -235,24 +235,24 @@ function WholeSymbol({ condition }: { condition: string }) {
         </g>
       );
     case 'to_extract':
-      // Two diagonal slashes across the tooth
+      // Two PARALLEL diagonal slashes in blue across the tooth
       return (
         <g pointerEvents="none">
           <line
-            x1={CX - R * 0.75}
+            x1={CX - R * 0.75 - 5}
             y1={CY - R * 0.75}
-            x2={CX + R * 0.75}
+            x2={CX + R * 0.75 - 5}
             y2={CY + R * 0.75}
-            stroke="#0f172a"
+            stroke="#2563eb"
             strokeWidth={2.4}
             strokeLinecap="round"
           />
           <line
-            x1={CX - R * 0.75}
-            y1={CY + R * 0.75}
-            x2={CX + R * 0.75}
-            y2={CY - R * 0.75}
-            stroke="#dc2626"
+            x1={CX - R * 0.75 + 5}
+            y1={CY - R * 0.75}
+            x2={CX + R * 0.75 + 5}
+            y2={CY + R * 0.75}
+            stroke="#2563eb"
             strokeWidth={2.4}
             strokeLinecap="round"
           />
@@ -280,16 +280,16 @@ function WholeSymbol({ condition }: { condition: string }) {
         </g>
       );
     case 'sealant':
-      // Horizontal dash over the top of the tooth
+      // A long RED dash across the top of the tooth
       return (
         <g pointerEvents="none">
           <line
-            x1={CX - R * 0.6}
+            x1={CX - R * 0.85}
             y1={CY - R * 0.55}
-            x2={CX + R * 0.6}
+            x2={CX + R * 0.85}
             y2={CY - R * 0.55}
-            stroke="#0891b2"
-            strokeWidth={3.5}
+            stroke="#dc2626"
+            strokeWidth={4}
             strokeLinecap="round"
           />
         </g>
@@ -304,23 +304,23 @@ function WholeSymbol({ condition }: { condition: string }) {
 }
 
 function ConductMarker({ color }: { color: string }) {
-  // A small blue/red "TC" pill above the tooth
+  // A large blue/red "TC" badge overlapping the top of the tooth
   return (
     <g pointerEvents="none">
       <rect
-        x={CX - 7}
-        y={2}
-        width={14}
-        height={9}
-        rx={2}
+        x={CX - 17}
+        y={-6}
+        width={34}
+        height={19}
+        rx={4}
         fill={color}
       />
       <text
         x={CX}
-        y={9}
+        y={3.5}
         textAnchor="middle"
         dominantBaseline="middle"
-        className="fill-white text-[7px] font-bold select-none"
+        className="fill-white text-[12px] font-bold select-none"
       >
         TC
       </text>
