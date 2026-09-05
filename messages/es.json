@@ -126,7 +126,8 @@
     },
     "pendingLinks": "Turnos pendientes (enlaces compartidos)",
     "linkCopied": "Enlace copiado al portapapeles",
-    "contact": "Contacto"
+    "contact": "Contacto",
+    "methodTitle": "Método"
   },
   "odontogram": {
     "title": "Odontograma",

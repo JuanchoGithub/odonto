@@ -154,16 +154,24 @@ test('drag-select on empty grid pre-fills a range and records the method', async
     page.getByTestId('appt-badge').filter({ hasText: '11:30' }).first(),
   ).toBeVisible();
 
-  // …and the list view shows who added it and how (drag).
+  // …and the list view shows the appointment with contact info;
+  // who/how it was created lives in the edit dialog.
   await page.getByTestId('view-list').click();
   const row = page
     .getByTestId('appt-list-row')
     .filter({ hasText: '11:30' })
     .first();
   await expect(row).toBeVisible();
-  await expect(row).toContainText(/arrastre|drag/i);
-  await expect(row).toContainText('Dr. Demo'); // added by + dentist
+  await expect(row).toContainText('Dr. Demo'); // dentist column
   await expect(row).toContainText(/\+54/); // patient contact (phone)
+  await row.click();
+  const edit = page.getByRole('dialog');
+  const origin = edit.getByTestId('appt-origin');
+  await expect(origin).toBeVisible();
+  await expect(origin).toContainText(/arrastre|drag/i); // method: drag-select
+  await expect(origin).toContainText('Dr. Demo'); // added by
+  await expect(edit.getByTestId('patient-contact')).toContainText(/\+54/);
+  await page.keyboard.press('Escape');
 });
 
 test('pending (shared, unbooked) links appear in the list view', async ({
@@ -200,7 +208,6 @@ test('pending (shared, unbooked) links appear in the list view', async ({
     .first();
   await expect(pending).toBeVisible({ timeout: 10_000 });
   await expect(pending).toContainText(/pendiente|pending/i);
-  await expect(pending).toContainText(/compartido|shared/i);
   await expect(pending).toContainText(/\+54/); // patient contact (phone)
 });
 
@@ -245,4 +252,15 @@ test('dentist filter narrows the calendar and is available to receptionists', as
     .getByRole('option', { name: /dr\. demo/i })
     .click();
   await expect(filter).toContainText(/dr\. demo/i);
+});
+
+test('a logged-in dentist sees only their own calendar (no doctor filter)', async ({
+  page,
+}) => {
+  await login(page); // doc@local is a dentist
+  await page.goto('/appointments');
+  await settleCalendar(page);
+  await expect(page.getByTestId('dentist-filter')).toHaveCount(0);
+  // Calendar still renders
+  await expect(page.getByTestId('day-col-0').first()).toBeVisible();
 });

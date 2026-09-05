@@ -280,16 +280,18 @@ function DayColumn({
         }
       }}
     >
-      {/* shaded "not attending" regions */}
+      {/* shaded "not attending" regions — visibly gray with diagonal stripes */}
       {shades.map((s) => (
         <div
           key={s.startMin}
           aria-hidden
           data-testid="off-hours"
-          className="pointer-events-none absolute inset-x-0 bg-muted/50"
+          className="pointer-events-none absolute inset-x-0 bg-muted"
           style={{
             top: ((s.startMin - DAY_START_MIN) / SLOT_MINUTES) * SLOT_PX,
             height: ((s.endMin - s.startMin) / SLOT_MINUTES) * SLOT_PX,
+            backgroundImage:
+              'repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(0,0,0,0.09) 6px, rgba(0,0,0,0.09) 7px)',
           }}
         />
       ))}

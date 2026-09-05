@@ -19,10 +19,7 @@ type Labels = {
   contact: string;
   dentist: string;
   status: string;
-  reason: string;
   empty: string;
-  addedBy: string;
-  method: string;
   pendingTitle: string;
   pending: string;
 };
@@ -86,7 +83,6 @@ export function AppointmentList({
   onOpenAppt,
   onCopyLink,
   statusLabel,
-  methodLabel,
 }: {
   appts: ApptRow[];
   pending: PendingLinkRow[];
@@ -95,7 +91,6 @@ export function AppointmentList({
   onOpenAppt: (a: ApptRow) => void;
   onCopyLink: (token: string) => void;
   statusLabel: (s: string) => string;
-  methodLabel: (m: string | null) => string;
 }) {
   const sorted = [...appts].sort(
     (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
@@ -114,9 +109,6 @@ export function AppointmentList({
                 <TableHead>{labels.contact}</TableHead>
                 <TableHead>{labels.dentist}</TableHead>
                 <TableHead>{labels.status}</TableHead>
-                <TableHead>{labels.addedBy}</TableHead>
-                <TableHead>{labels.method}</TableHead>
-                <TableHead>{labels.reason}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -151,11 +143,6 @@ export function AppointmentList({
                         {statusLabel(a.status)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{a.creator_name ?? '—'}</TableCell>
-                    <TableCell>{methodLabel(a.created_via)}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">
-                      {a.reason}
-                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -181,8 +168,6 @@ export function AppointmentList({
                   <TableHead>{labels.contact}</TableHead>
                   <TableHead>{labels.dentist}</TableHead>
                   <TableHead>{labels.status}</TableHead>
-                  <TableHead>{labels.addedBy}</TableHead>
-                  <TableHead>{labels.method}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -213,8 +198,6 @@ export function AppointmentList({
                     <TableCell>
                       <Badge variant="warning">{labels.pending}</Badge>
                     </TableCell>
-                    <TableCell>{l.creator_name ?? '—'}</TableCell>
-                    <TableCell>{methodLabel('shared')}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

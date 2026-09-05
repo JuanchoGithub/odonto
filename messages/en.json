@@ -126,7 +126,8 @@
     },
     "pendingLinks": "Pending bookings (shared links)",
     "linkCopied": "Link copied to clipboard",
-    "contact": "Contact"
+    "contact": "Contact",
+    "methodTitle": "Method"
   },
   "odontogram": {
     "title": "Odontogram",

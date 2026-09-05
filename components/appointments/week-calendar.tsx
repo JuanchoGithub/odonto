@@ -37,11 +37,14 @@ export function WeekCalendar({
   dentists,
   pendingLinks,
   initialWeekStart,
+  viewer,
 }: {
   initial: ApptRow[];
   dentists: DentistRef[];
   pendingLinks: PendingLinkRow[];
   initialWeekStart?: string;
+  /** Current user — dentists see only their own calendar, no filter UI. */
+  viewer?: { id: string; role: string };
 }) {
   const t = useTranslations('appointments');
   const tTp = useTranslations('turnPicker');
@@ -72,7 +75,11 @@ export function WeekCalendar({
   const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
-  const [dentistFilter, setDentistFilter] = useState<string>('all');
+  // Dentists always see their own calendar; no doctor filter for them.
+  const isDentistViewer = viewer?.role === 'dentist';
+  const [dentistFilter, setDentistFilter] = useState<string>(
+    isDentistViewer && viewer ? viewer.id : 'all',
+  );
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const filtered =
@@ -194,22 +201,24 @@ export function WeekCalendar({
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={dentistFilter} onValueChange={setDentistFilter}>
-              <SelectTrigger
-                className="w-[200px]"
-                data-testid="dentist-filter"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('allDentists')}</SelectItem>
-                {dentists.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isDentistViewer ? null : (
+              <Select value={dentistFilter} onValueChange={setDentistFilter}>
+                <SelectTrigger
+                  className="w-[200px]"
+                  data-testid="dentist-filter"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('allDentists')}</SelectItem>
+                  {dentists.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <TabsList>
               <TabsTrigger value="calendar" data-testid="view-calendar">
                 {t('viewCalendar')}
@@ -260,17 +269,11 @@ export function WeekCalendar({
               patient: t('patient'),
               dentist: t('dentist'),
               status: tCommon('status'),
-              reason: t('reason'),
               empty: t('emptyList'),
-              addedBy: t('addedBy'),
               contact: t('contact'),
-              method: t('method'),
               pendingTitle: t('pendingLinks'),
               pending: t('status.pending'),
             }}
-            methodLabel={(m) =>
-              m ? ((t.has(`method.${m}`) ? t(`method.${m}`) : m) as string) : '—'
-            }
             statusLabel={(s) => t(`status.${s}`)}
             onOpenAppt={openEdit}
             onCopyLink={(token) => {

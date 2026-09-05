@@ -82,7 +82,9 @@ export function AppointmentDialog({
   const { push } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
+  const [patients, setPatients] = useState<
+    { id: string; name: string; phone: string | null; email: string | null }[]
+  >([]);
   const [patientId, setPatientId] = useState<string>('');
   const [newPatientOpen, setNewPatientOpen] = useState(false);
   const [dentistId, setDentistId] = useState<string>(dentists[0]?.id ?? '');
@@ -107,6 +109,8 @@ export function AppointmentDialog({
           data.map((p: PatientRow) => ({
             id: p.id,
             name: `${p.last_name}, ${p.first_name}`,
+            phone: p.phone,
+            email: p.email,
           })),
         ),
       )
@@ -224,7 +228,12 @@ export function AppointmentDialog({
       setPatientId(p.id);
       setPatients((list) => [
         ...list,
-        { id: p.id, name: `${p.last_name}, ${p.first_name}` },
+        {
+          id: p.id,
+          name: `${p.last_name}, ${p.first_name}`,
+          phone: p.phone,
+          email: p.email,
+        },
       ]);
       return;
     }
@@ -241,7 +250,12 @@ export function AppointmentDialog({
         setPatientId(match.id);
         setPatients((prev) => [
           ...prev,
-          { id: match.id, name: `${match.last_name}, ${match.first_name}` },
+          {
+            id: match.id,
+            name: `${match.last_name}, ${match.first_name}`,
+            phone: match.phone,
+            email: match.email,
+          },
         ]);
       }
     } catch {
@@ -283,6 +297,7 @@ export function AppointmentDialog({
                 onChange={setPatientId}
                 onCreateNew={() => setNewPatientOpen(true)}
               />
+              {patientId ? <PatientContact patients={patients} patientId={patientId} /> : null}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -316,6 +331,26 @@ export function AppointmentDialog({
                 </SelectContent>
               </Select>
             </div>
+            {editing ? (
+              <div
+                className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5"
+                data-testid="appt-origin"
+              >
+                <div>
+                  <span className="text-muted-foreground">{t('addedBy')}: </span>
+                  {editing.creator_name ?? '—'}
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · {t('methodTitle')}:{' '}
+                  </span>
+                  {editing.created_via
+                    ? (t.has(`method.${editing.created_via}`)
+                        ? t(`method.${editing.created_via}`)
+                        : editing.created_via)
+                    : '—'}
+                </div>
+              </div>
+            ) : null}
             {editing ? (
               <div className="space-y-2">
                 <Label>{tCommon('status')}</Label>
@@ -453,6 +488,26 @@ export function AppointmentDialog({
         />
       ) : null}
     </Dialog.Root>
+  );
+}
+
+function PatientContact({
+  patients,
+  patientId,
+}: {
+  patients: { id: string; name: string; phone: string | null; email: string | null }[];
+  patientId: string;
+}) {
+  const p = patients.find((x) => x.id === patientId);
+  if (!p || (!p.phone && !p.email)) return null;
+  return (
+    <div
+      data-testid="patient-contact"
+      className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5"
+    >
+      {p.phone ? <div>{p.phone}</div> : null}
+      {p.email ? <div className="text-muted-foreground">{p.email}</div> : null}
+    </div>
   );
 }
 

@@ -14,7 +14,7 @@ export default async function AppointmentsPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  await requireUser();
+  const user = await requireUser();
   const t = await getTranslations('appointments');
   const sp = await searchParams;
   const start = sp.start
@@ -35,6 +35,7 @@ export default async function AppointmentsPage({
         initial={appts}
         dentists={dentists.map((d) => ({ id: d.id, name: d.name, color: d.color }))}
         pendingLinks={pendingLinks}
+        viewer={{ id: user.id, role: user.role }}
         // Date-only string: parsing a full ISO in the browser would shift
         // the day when the clinic timezone differs from UTC.
         initialWeekStart={format(startOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
