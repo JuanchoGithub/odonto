@@ -23,6 +23,29 @@ async function createPatientAndOpenOdontogram(page: Page) {
   return stamp;
 }
 
+// Reload the odontogram tab and run the assertion, retrying the reload a
+// few times. Prod reads can hit a lagging replica right after a write,
+// so a single post-reload read may be stale.
+async function expectAfterReload(
+  page: Page,
+  fn: () => Promise<void>,
+  tries = 3,
+) {
+  let lastError: unknown;
+  for (let i = 0; i < tries; i++) {
+    await page.reload();
+    await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
+    await expect(page.getByTestId('odontogram-root')).toBeVisible();
+    try {
+      await fn();
+      return;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
+}
+
 test('odontogram: adult tooth order is 18-11 | 21-28 on top and 48-41 | 31-38 on bottom', async ({
   page,
 }) => {
@@ -229,14 +252,14 @@ test('odontogram: setting "missing" on whole surface renders the X symbol', asyn
 
   // After reload, the missing X should be present. A plain tooth has
   // exactly 2 lines (the cross); the X adds 2 more.
-  await page.reload();
-  await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
-  const adult = page.getByTestId('chart-adult');
-  await expect(adult).toBeVisible();
-  const reloadedTooth = page
-    .getByTestId('upper-row-adult')
-    .locator('[data-tooth-svg="16"]');
-  await expect(reloadedTooth.locator('line')).toHaveCount(4);
+  await expectAfterReload(page, async () => {
+    const adult = page.getByTestId('chart-adult');
+    await expect(adult).toBeVisible();
+    const reloadedTooth = page
+      .getByTestId('upper-row-adult')
+      .locator('[data-tooth-svg="16"]');
+    await expect(reloadedTooth.locator('line')).toHaveCount(4);
+  });
 });
 
 test('odontogram: arming "missing" then clicking any surface marks the whole tooth', async ({
@@ -269,12 +292,12 @@ test('odontogram: arming "missing" then clicking any surface marks the whole too
   );
 
   // Reload to confirm the whole-tooth state persisted
-  await page.reload();
-  await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
-  const reloaded = page
-    .getByTestId('upper-row-adult')
-    .locator('[data-tooth-svg="17"]');
-  await expect(reloaded.locator('line')).toHaveCount(4);
+  await expectAfterReload(page, async () => {
+    const reloaded = page
+      .getByTestId('upper-row-adult')
+      .locator('[data-tooth-svg="17"]');
+    await expect(reloaded.locator('line')).toHaveCount(4);
+  });
 });
 
 test('odontogram: Limpiar button clears every condition on the tooth', async ({
@@ -323,14 +346,14 @@ test('odontogram: Limpiar button clears every condition on the tooth', async ({
   );
 
   // Reload to confirm the clear persisted
-  await page.reload();
-  await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
-  const reloaded = page
-    .getByTestId('upper-row-adult')
-    .locator('[data-tooth-svg="16"]');
-  await expect(reloaded.locator('[data-surface="occlusal"]')).not.toHaveClass(
-    /fill-blue-500/,
-  );
+  await expectAfterReload(page, async () => {
+    const reloaded = page
+      .getByTestId('upper-row-adult')
+      .locator('[data-tooth-svg="16"]');
+    await expect(reloaded.locator('[data-surface="occlusal"]')).not.toHaveClass(
+      /fill-blue-500/,
+    );
+  });
 });
 
 test('odontogram: under-10 patient shows only the kid chart', async ({ page }) => {
@@ -465,10 +488,10 @@ test('odontogram: >12yo patient with kid-tooth history shows adult first then ki
   });
 
   // Reload and verify only the adult chart is shown (no kid history yet)
-  await page.reload();
-  await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
-  await expect(page.getByTestId('chart-adult')).toBeVisible();
-  await expect(page.getByTestId('chart-kid')).toHaveCount(0);
+  await expectAfterReload(page, async () => {
+    await expect(page.getByTestId('chart-adult')).toBeVisible();
+    await expect(page.getByTestId('chart-kid')).toHaveCount(0);
+  });
 });
 
 test('odontogram: mobile viewport shows the tooth-list picker and edit sheet', async ({
