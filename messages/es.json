@@ -200,7 +200,21 @@
     "clearSurface": "Borrar superficie",
     "clearTooth": "Limpiar pieza",
     "chartAdult": "Dentición permanente",
-    "chartKid": "Dentición temporaria (niños)"
+    "chartKid": "Dentición temporaria (niños)",
+    "history": "Historia",
+    "backToChart": "Volver al odontograma",
+    "historyTimeline": "Cambios registrados",
+    "asOf": "Ver la boca al",
+    "current": "Actual",
+    "clearAsOf": "Limpiar",
+    "readOnlyNotice": "Vista de solo lectura",
+    "noHistory": "Sin cambios registrados aún",
+    "unknownUser": "Usuario desconocido",
+    "action": {
+      "set": "pintó",
+      "clear_surface": "borró superficie en",
+      "clear_tooth": "limpió la pieza"
+    }
   },
   "treatments": {
     "title": "Tratamientos",

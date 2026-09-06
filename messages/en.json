@@ -200,7 +200,21 @@
     "clearSurface": "Clear surface",
     "clearTooth": "Clear tooth",
     "chartAdult": "Permanent dentition",
-    "chartKid": "Primary dentition (children)"
+    "chartKid": "Primary dentition (children)",
+    "history": "History",
+    "backToChart": "Back to odontogram",
+    "historyTimeline": "Recorded changes",
+    "asOf": "View mouth as of",
+    "current": "Current",
+    "clearAsOf": "Clear",
+    "readOnlyNotice": "Read-only view",
+    "noHistory": "No changes recorded yet",
+    "unknownUser": "Unknown user",
+    "action": {
+      "set": "painted",
+      "clear_surface": "cleared surface on",
+      "clear_tooth": "cleared the tooth"
+    }
   },
   "treatments": {
     "title": "Treatments",

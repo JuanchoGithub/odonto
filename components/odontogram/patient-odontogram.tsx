@@ -1,4 +1,4 @@
-import { getOdontogram, getOdontogramMode } from '@/server/actions/odontogram';
+import { getOdontogram, getOdontogramMode, getOdontogramHistory } from '@/server/actions/odontogram';
 import { Odontogram } from './odontogram';
 import type { AppLocale } from '@/lib/schemas/common';
 
@@ -9,9 +9,10 @@ export async function PatientOdontogram({
   patientId: string;
   locale: AppLocale;
 }) {
-  const [teeth, mode] = await Promise.all([
+  const [teeth, mode, history] = await Promise.all([
     getOdontogram(patientId),
     getOdontogramMode(patientId),
+    getOdontogramHistory(patientId),
   ]);
   return (
     <Odontogram
@@ -19,6 +20,7 @@ export async function PatientOdontogram({
       patientId={patientId}
       locale={locale}
       mode={mode}
+      history={history}
     />
   );
 }

@@ -19,6 +19,7 @@ import {
   getOdontogram,
   type ToothRow,
   type OdontogramMode,
+  type OdontogramHistoryRow,
 } from '@/server/actions/odontogram';
 import {
   ToothSvg,
@@ -28,6 +29,7 @@ import {
 import { ConditionChip } from './condition-chip';
 import { ToothListPicker } from './tooth-list-picker';
 import { ToothEditSheet } from './tooth-edit-sheet';
+import { OdontogramHistory } from './history';
 
 // Adult dentition (FDI): 18-11 on screen-left, 21-28 on screen-right
 const UPPER_RIGHT_ADULT = [18, 17, 16, 15, 14, 13, 12, 11];
@@ -113,17 +115,23 @@ export function Odontogram({
   initial,
   patientId,
   mode,
+  locale,
+  readOnly = false,
+  history = [],
 }: {
   initial: ToothRow[];
   patientId: string;
   locale: string;
   mode: OdontogramMode;
+  readOnly?: boolean;
+  history?: OdontogramHistoryRow[];
 }) {
   const t = useTranslations('odontogram');
   const tCommon = useTranslations('common');
   const { push: toast } = useToast();
 
   const [teeth, setTeeth] = useState<ToothRow[]>(initial);
+  const [viewHistory, setViewHistory] = useState(false);
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [selectedSurface, setSelectedSurface] = useState<SurfaceKey | null>(null);
   const [hoverSurface, setHoverSurface] = useState<SurfaceKey | null>(null);
@@ -187,6 +195,7 @@ export function Odontogram({
 
   const clearWholeTooth = useCallback(
     async (tooth: number) => {
+      if (readOnly) return;
       const previous = teeth;
       setTeeth((curr) => curr.filter((t) => t.tooth_number !== tooth));
       try {
@@ -213,11 +222,12 @@ export function Odontogram({
         });
       }
     },
-    [teeth, patientId, toast],
+    [teeth, patientId, toast, readOnly],
   );
 
   const clearOneSurface = useCallback(
     async (tooth: number, surface: SurfaceKey) => {
+      if (readOnly) return;
       const previous = teeth;
       setTeeth((curr) => removeSurfaceLocal(curr, tooth, surface));
       try {
@@ -242,7 +252,7 @@ export function Odontogram({
         });
       }
     },
-    [teeth, patientId, toast],
+    [teeth, patientId, toast, readOnly],
   );
 
   const applyCondition = useCallback(
@@ -252,6 +262,7 @@ export function Odontogram({
       condition: string,
       note = '',
     ) => {
+      if (readOnly) return;
       // 'clean' (Sano) erases the whole tooth instead of painting.
       if (condition === 'clean') {
         await clearWholeTooth(tooth);
@@ -300,7 +311,7 @@ export function Odontogram({
         });
       }
     },
-    [teeth, patientId, toast, clearWholeTooth, clearOneSurface],
+    [teeth, patientId, toast, clearWholeTooth, clearOneSurface, readOnly],
   );
 
   const clearSurface = useCallback(
@@ -576,7 +587,30 @@ export function Odontogram({
       data-testid="odontogram-root"
       onMouseLeave={() => setHoverSurface(null)}
     >
-      {charts.map((chart, idx) => (
+      {!readOnly ? (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="min-h-[44px]"
+            onClick={() => setViewHistory((v) => !v)}
+            data-testid="history-toggle"
+          >
+            {viewHistory ? t('backToChart') : t('history')}
+          </Button>
+        </div>
+      ) : null}
+
+      {viewHistory && !readOnly ? (
+        <OdontogramHistory
+          history={history}
+          patientId={patientId}
+          mode={mode}
+          locale={locale}
+        />
+      ) : (
+        <>
+          {charts.map((chart, idx) => (
         <Card key={chart.testId} data-testid={`chart-${chart.testId}`}>
           <CardContent className="pt-6 space-y-4">
             <div className="text-sm font-medium text-muted-foreground">
@@ -626,6 +660,8 @@ export function Odontogram({
         </Card>
       ))}
 
+      {!readOnly && (
+        <>
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div
@@ -875,6 +911,10 @@ export function Odontogram({
           }
         }}
       />
+        </>
+      )}
+      </>
+      )}
     </div>
   );
 }

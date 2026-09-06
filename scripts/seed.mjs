@@ -146,6 +146,85 @@ async function run() {
     });
   }
 
+  // --- Odontogram history (demo trail) ---
+  // A couple of patients get a staggered change trail so history is visible.
+  // The live teeth_chart/tooth_conditions are persisted to match the latest
+  // snapshot, keeping the chart consistent with the timeline.
+  const historySeed = [
+    {
+      patient: patientIds[0],
+      steps: [
+        { daysAgo: 40, tooth: 26, surface: 'occlusal', condition: 'caries', note: 'Caries inicial' },
+        { daysAgo: 20, tooth: 26, surface: 'occlusal', condition: 'restoration', note: 'Obturación composite' },
+        { daysAgo: 10, tooth: 14, surface: 'whole', condition: 'crown', note: 'Corona cerámica' },
+        { daysAgo: 3, tooth: 36, surface: 'occlusal', condition: 'caries', note: '' },
+      ],
+    },
+    {
+      patient: patientIds[1],
+      steps: [
+        { daysAgo: 60, tooth: 36, surface: 'whole', condition: 'missing', note: 'Exodoncia' },
+        { daysAgo: 30, tooth: 46, surface: 'mesial', condition: 'caries', note: '' },
+        { daysAgo: 5, tooth: 46, surface: 'mesial', condition: 'restoration', note: 'Composite' },
+      ],
+    },
+  ];
+
+  for (const seed of historySeed) {
+    const chartMap = new Map();
+    for (const step of seed.steps) {
+      if (!chartMap.has(step.tooth)) chartMap.set(step.tooth, new Map());
+      chartMap
+        .get(step.tooth)
+        .set(step.surface, { condition: step.condition, note: step.note || null });
+
+      const snapshotRows = [];
+      for (const [tooth, surfaces] of [...chartMap.entries()].sort(
+        (a, b) => a[0] - b[0],
+      )) {
+        snapshotRows.push({
+          tooth_number: tooth,
+          conditions: [...surfaces.entries()].map(([s, v]) => ({
+            surface: s,
+            condition: v.condition,
+            note: v.note,
+          })),
+        });
+      }
+      const created = new Date(Date.now() - step.daysAgo * 86400_000).toISOString();
+      await db.execute({
+        sql: `INSERT INTO odontogram_history (id, patient_id, user_id, action, tooth_number, surface, condition, note, snapshot, created_at)
+              VALUES (?, ?, ?, 'set', ?, ?, ?, ?, ?, ?)`,
+        args: [
+          randomUUID(),
+          seed.patient,
+          dentistId,
+          step.tooth,
+          step.surface,
+          step.condition,
+          step.note || null,
+          JSON.stringify(snapshotRows),
+          created,
+        ],
+      });
+    }
+
+    // Persist the final state so the live odontogram matches the latest snapshot.
+    for (const [tooth, surfaces] of chartMap.entries()) {
+      const chartId = randomUUID();
+      await db.execute({
+        sql: `INSERT INTO teeth_chart (id, patient_id, tooth_number, updated_at) VALUES (?, ?, ?, ?)`,
+        args: [chartId, seed.patient, tooth, now],
+      });
+      for (const [surface, v] of surfaces.entries()) {
+        await db.execute({
+          sql: `INSERT INTO tooth_conditions (id, tooth_chart_id, surface, condition, note, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+          args: [randomUUID(), chartId, surface, v.condition, v.note, now],
+        });
+      }
+    }
+  }
+
   console.log('--- Seed complete ---');
   console.log('Clinic:', { locale, currency: defaultCurrency, clinicId });
   console.log('Users:');
