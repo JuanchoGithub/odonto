@@ -215,6 +215,24 @@ export async function listAppointmentsForWeek(startIso: string) {
   );
 }
 
+/** Full appointment history for a single patient (all statuses, most recent first). */
+export async function listAppointmentsForPatient(patientId: string) {
+  await requireUser();
+  return query<ApptRow>(
+    `SELECT a.*, p.first_name || ' ' || p.last_name as patient_name,
+            p.phone as patient_phone, p.email as patient_email,
+            u.name as dentist_name, u.color as dentist_color,
+            cu.name as creator_name
+     FROM appointments a
+     JOIN patients p ON p.id = a.patient_id
+     JOIN users u ON u.id = a.dentist_id
+     LEFT JOIN users cu ON cu.id = a.created_by
+     WHERE a.patient_id = ?
+     ORDER BY a.starts_at DESC`,
+    [patientId],
+  );
+}
+
 /** Working windows per day for calendar shading (null dentistId = clinic-wide "all" view). */
 export async function getWeekWindowsAction(
   dentistId: string | null,

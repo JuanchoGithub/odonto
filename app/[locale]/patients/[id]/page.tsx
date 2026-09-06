@@ -10,6 +10,7 @@ import { PatientOdontogram } from '@/components/odontogram/patient-odontogram';
 import { PatientTreatments } from '@/components/treatments/patient-treatments';
 import { PatientInvoices } from '@/components/billing/patient-invoices';
 import { PatientAttachments } from '@/components/attachments/patient-attachments';
+import { PatientAppointments } from '@/components/appointments/patient-appointments';
 import { formatDate } from '@/lib/format';
 import { query, queryOne } from '@/lib/db';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
@@ -21,7 +22,7 @@ import { ClinicalRiskIcon } from '@/components/patients/clinical-risk-icon';
 
 type Clinic = { currency: string; locale: AppLocale };
 
-const TABS = ['general', 'medical', 'odontogram', 'treatments', 'invoices', 'attachments'] as const;
+const TABS = ['general', 'medical', 'odontogram', 'treatments', 'invoices', 'attachments', 'appointments'] as const;
 
 export default async function PatientDetailPage({
   params,
@@ -110,6 +111,7 @@ export default async function PatientDetailPage({
           <TabsTrigger value="treatments">{t('tabs.treatments')}</TabsTrigger>
           <TabsTrigger value="invoices">{t('tabs.invoices')}</TabsTrigger>
           <TabsTrigger value="attachments">{t('tabs.attachments')}</TabsTrigger>
+          <TabsTrigger value="appointments">{t('tabs.appointments')}</TabsTrigger>
         </TabsList>
         <TabsContent value="general">
           <Card>
@@ -155,6 +157,9 @@ export default async function PatientDetailPage({
             patientId={id}
             locale={(clinic?.locale ?? locale) as AppLocale}
           />
+        </TabsContent>
+        <TabsContent value="appointments">
+          <PatientAppointments patientId={id} dentists={dentists} />
         </TabsContent>
       </Tabs>
     </div>

@@ -134,7 +134,8 @@
       "odontogram": "Odontograma",
       "treatments": "Tratamientos",
       "attachments": "Adjuntos",
-      "invoices": "Facturas"
+      "invoices": "Facturas",
+      "appointments": "Turnos"
     }
   },
   "appointments": {
@@ -181,7 +182,8 @@
     "attendTitle": "Atender turno",
     "advanceTo": "Avanzar a",
     "openChart": "Abrir ficha",
-    "call": "Llamar"
+    "call": "Llamar",
+    "emptyPatient": "Este paciente todavía no tiene turnos registrados."
   },
   "odontogram": {
     "title": "Odontograma",

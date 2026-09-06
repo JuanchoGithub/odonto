@@ -134,7 +134,8 @@
       "odontogram": "Odontogram",
       "treatments": "Treatments",
       "attachments": "Attachments",
-      "invoices": "Invoices"
+      "invoices": "Invoices",
+      "appointments": "Appointments"
     }
   },
   "appointments": {
@@ -181,7 +182,8 @@
     "attendTitle": "Attend appointment",
     "advanceTo": "Advance to",
     "openChart": "Open chart",
-    "call": "Call"
+    "call": "Call",
+    "emptyPatient": "This patient has no appointments yet."
   },
   "odontogram": {
     "title": "Odontogram",
