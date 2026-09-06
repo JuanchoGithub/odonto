@@ -56,7 +56,8 @@ test('share button on appointments page', async ({ page }) => {
   const genBtn = dialog.getByRole('button', { name: /generate|generar/i });
   await expect(genBtn).toBeDisabled();
 
-  // Pick a patient (single inline search field)
+  // Pick a patient (toggle combobox + single search field, like other pickers)
+  await dialog.getByRole('button', { name: /search|buscar/i }).click();
   await dialog.getByPlaceholder(/search|buscar/i).fill('García');
   await dialog.getByText(/García/i).first().click();
 
