@@ -18,18 +18,70 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+// The pill is a plain *inline* span (NOT inline-flex/inline-block) so the caret
+// flows through it like normal text and it never expands the line box. It
+// inherits the surrounding font-size, so it is never taller than the text.
 const PILL_CLASS =
-  'mx-0.5 inline-flex items-center rounded bg-primary/10 px-1.5 py-px align-middle text-xs font-medium leading-tight text-primary';
+  'rounded bg-primary/10 px-1 font-medium text-primary whitespace-normal';
+
+// The literal marker delimiters (_word_, _"word word"_) stay as real characters
+// in the DOM, so reading via textContent round-trips the tag encoding and the
+// closing marker gives the caret a place to land past the pill.
+function tagHtml(value: string): string {
+  const multi = /\s/.test(value);
+  const open = multi ? '_"' : '_';
+  const close = multi ? '"_' : '_';
+  return `${escapeHtml(open)}<span class="${PILL_CLASS}">${escapeHtml(value)}</span>${escapeHtml(close)}`;
+}
 
 /** Render the editor's innerHTML: marker-wrapped segments become pills. */
 function renderHtml(text: string): string {
   return parseMarkers(text)
-    .map((s) =>
-      s.type === 'tag'
-        ? `<span class="${PILL_CLASS}">${escapeHtml(s.value)}</span>`
-        : escapeHtml(s.value),
-    )
+    .map((s) => (s.type === 'tag' ? tagHtml(s.value) : escapeHtml(s.value)))
     .join('');
+}
+
+/** Current caret offset (char index into the editor's text) or -1 if none. */
+function getCaretOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return -1;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.startContainer)) return -1;
+  if (range.startContainer.nodeType === Node.TEXT_NODE) {
+    const pre = range.cloneRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(range.startContainer, range.startOffset);
+    return pre.toString().length;
+  }
+  return 0;
+}
+
+/** Place the caret at the given text offset, or the end if out of range. */
+function setCaretOffset(el: HTMLElement, offset: number) {
+  el.focus();
+  const sel = window.getSelection();
+  if (!sel) return;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let node = walker.nextNode();
+  while (node) {
+    const len = (node.textContent ?? '').length;
+    if (remaining <= len) {
+      const range = document.createRange();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    remaining -= len;
+    node = walker.nextNode();
+  }
+  const end = document.createRange();
+  end.selectNodeContents(el);
+  end.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(end);
 }
 
 function escapeRegexChar(c: string): string {
@@ -88,8 +140,25 @@ export function TagTextarea({
   function handleInput() {
     const el = editorRef.current;
     if (!el) return;
-    setPlainText(el.innerText ?? el.textContent ?? '');
+    // textContent keeps the literal marker characters (_hiv_) so tags survive.
+    setPlainText(el.textContent ?? '');
     setError(null);
+  }
+
+  function handleFocus() {
+    const el = editorRef.current;
+    if (!el) return;
+    // Switch from pretty pills to raw marker text so the caret behaves exactly
+    // like a plain textarea (type past a tag without polluting it). The raw view
+    // is the same characters, so the caret offset is preserved.
+    const offset = getCaretOffset(el);
+    setEditing(true);
+    el.innerHTML = escapeHtml(plainText);
+    setCaretOffset(el, offset);
+  }
+
+  function handleBlur() {
+    setEditing(false);
   }
 
   /** Toggle a dictionary term as tagged across all its occurrences. */
@@ -125,9 +194,9 @@ export function TagTextarea({
         aria-label={name}
         data-field={name}
         onInput={handleInput}
-        onFocus={() => setEditing(true)}
-        onBlur={() => setEditing(false)}
-        className="flex min-h-[80px] w-full cursor-text rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        className="block min-h-[80px] w-full cursor-text rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         suppressContentEditableWarning
         data-placeholder={placeholder}
       />
