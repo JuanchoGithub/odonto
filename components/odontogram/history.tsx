@@ -111,6 +111,7 @@ export function OdontogramHistory({
                 </Button>
               </div>
               <Odontogram
+                key={asOf.id}
                 initial={snapshot}
                 patientId={patientId}
                 locale={locale}
