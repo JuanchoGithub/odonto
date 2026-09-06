@@ -17,6 +17,7 @@ import { ShareTurnButton } from '@/components/turn-picker/share-turn-button';
 import { DeletePatientButton } from '@/components/patients/delete-patient-button';
 import { RestorePatientButton } from '@/components/patients/restore-patient-button';
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
+import { ClinicalRiskIcon } from '@/components/patients/clinical-risk-icon';
 
 type Clinic = { currency: string; locale: AppLocale };
 
@@ -65,8 +66,9 @@ export default async function PatientDetailPage({
             </Link>{' '}
             /
           </div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight break-words">
+          <h1 className="flex items-center gap-2 text-2xl md:text-3xl font-semibold tracking-tight break-words">
             {patient.last_name}, {patient.first_name}
+            <ClinicalRiskIcon patient={patient} />
           </h1>
           <p className="text-sm text-muted-foreground break-words">
             {patient.document_id ?? '—'} ·{' '}
