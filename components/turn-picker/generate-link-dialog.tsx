@@ -307,20 +307,26 @@ function PatientPickerInline({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/patients?limit=200')
-      .then((r) => r.json())
-      .then((data) =>
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
         setPatients(
-          data.map((p: PatientRow) => ({
+          list.map((p: PatientRow) => ({
             id: p.id,
             name: `${p.last_name}, ${p.first_name}`,
           })),
-        ),
-      )
-      .catch(() => setPatients([]));
+        );
+        setLoaded(true);
+      })
+      .catch(() => {
+        setPatients([]);
+        setLoaded(true);
+      });
   }, []);
 
   const filtered = query
@@ -360,7 +366,12 @@ function PatientPickerInline({
         <ChevronDown className="h-4 w-4 opacity-50" />
       </button>
       {open ? (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md p-1">
+        // In-flow (not absolute): the parent dialog scrolls (overflow-y-auto),
+        // which would clip an absolutely-positioned dropdown.
+        <div
+          data-testid="tp-patient-list"
+          className="mt-1 w-full rounded-md border bg-popover shadow-md p-1"
+        >
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -369,29 +380,40 @@ function PatientPickerInline({
             className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1 sm:text-sm"
           />
           <div className="max-h-48 overflow-y-auto">
-            {filtered.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  onChange(p.id);
-                  setOpen(false);
-                  setQuery('');
-                }}
-                className={cn(
-                  'flex min-h-[44px] w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm',
-                  'hover:bg-accent hover:text-accent-foreground',
-                  value === p.id && 'bg-accent',
-                )}
-              >
-                {value === p.id ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <span className="w-3.5" />
-                )}
-                <span className="truncate">{p.name}</span>
-              </button>
-            ))}
+            {!loaded ? (
+              <div className="p-2 text-center text-xs text-muted-foreground">
+                {tCommon('loading')}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="p-2 text-center text-xs text-muted-foreground">
+                —
+              </div>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  data-testid="tp-patient-option"
+                  onClick={() => {
+                    onChange(p.id);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={cn(
+                    'flex min-h-[44px] w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm',
+                    'hover:bg-accent hover:text-accent-foreground',
+                    value === p.id && 'bg-accent',
+                  )}
+                >
+                  {value === p.id ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <span className="w-3.5" />
+                  )}
+                  <span className="truncate">{p.name}</span>
+                </button>
+              ))
+            )}
           </div>
           <div className="border-t mt-1 pt-1">
             <button

@@ -56,10 +56,17 @@ test('share button on appointments page', async ({ page }) => {
   const genBtn = dialog.getByRole('button', { name: /generate|generar/i });
   await expect(genBtn).toBeDisabled();
 
-  // Pick a patient (toggle combobox + single search field, like other pickers)
+  // Pick a patient (toggle combobox + single search field, like other pickers).
+  // Clicking opens the full patient list; typing narrows it.
   await dialog.getByRole('button', { name: /search|buscar/i }).click();
+  const list = dialog.getByTestId('tp-patient-list');
+  await expect(list).toBeVisible();
+  const options = dialog.getByTestId('tp-patient-option');
+  const fullCount = await options.count();
+  expect(fullCount).toBeGreaterThan(1);
   await dialog.getByPlaceholder(/search|buscar/i).fill('García');
-  await dialog.getByText(/García/i).first().click();
+  await expect(options).toHaveCount(1);
+  await options.first().click();
 
   // Generate link
   await expect(genBtn).toBeEnabled();

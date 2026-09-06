@@ -49,19 +49,24 @@ test('patient detail shows full appointment history in the appointments tab', as
   await createAppt(0, 0);
   await createAppt(0, 15);
 
-  // Open the patient's detail page directly via the patients search.
+  // Open the patient's detail page directly via the patients search
+  // (visible link only — the mobile card is hidden on desktop viewports).
   await page.goto(`/patients?q=${encodeURIComponent(PATIENT)}`);
-  await page
-    .locator('[data-testid="patient-list-row"]')
+  const href = await page
+    .locator('a:visible')
     .filter({ hasText: PATIENT })
     .first()
-    .click();
+    .getAttribute('href');
+  await page.goto(href!);
   await page.waitForURL(/\/patients\/[a-f0-9-]{36}$/, { timeout: 15_000 });
 
   // Switch to the new appointments tab.
+  // Visible rows only: mobile cards and the desktop table both render the
+  // same testid, and earlier runs may have added more appointments.
   await page.getByRole('tab', { name: /^turnos$|^appointments$/i }).click();
-  const rows = page.getByTestId('patient-appt-row');
-  await expect(rows).toHaveCount(2, { timeout: 10_000 });
+  const rows = page.locator('[data-testid="patient-appt-row"]:visible');
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+  expect(await rows.count()).toBeGreaterThanOrEqual(2);
 
   // Each row is a clickable element that opens the existing edit dialog.
   await rows.first().click();
