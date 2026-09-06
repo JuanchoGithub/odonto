@@ -34,7 +34,9 @@
     "configureClinic": "Configurar clínica",
     "done": "Listo",
     "undo": "Deshacer",
-    "deleted": "Eliminado"
+    "deleted": "Eliminado",
+    "searching": "Buscando…",
+    "noResults": "Sin resultados"
   },
   "nav": {
     "dashboard": "Panel",

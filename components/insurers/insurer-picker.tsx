@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useServerSearch } from '@/lib/hooks/use-server-search';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, Plus, X } from 'lucide-react';
@@ -34,27 +35,32 @@ export function InsurerPicker({
   const tPi = useTranslations('patientOnboarding');
   const tCommon = useTranslations('common');
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [insurers, setInsurers] = useState<InsurerOption[]>([]);
   const [newOpen, setNewOpen] = useState(false);
   const [freeText, setFreeText] = useState<{ name: string; plan: string }>({
     name: initialName ?? '',
     plan: initialPlan ?? '',
   });
 
-  useEffect(() => {
-    fetch('/api/insurers')
-      .then((r) => r.json())
-      .then((data) => setInsurers(data))
-      .catch(() => setInsurers([]));
-  }, [newOpen]);
-
-  const filtered = query
-    ? insurers.filter((i) =>
-        i.name.toLowerCase().includes(query.toLowerCase()) ||
-        (i.plan ?? '').toLowerCase().includes(query.toLowerCase()),
-      )
-    : insurers;
+  // Server-driven search (name/plan) — refetches after the inline
+  // "new insurer" dialog closes so the fresh record shows up.
+  const fetchInsurers = useCallback(async (q: string, signal: AbortSignal) => {
+    const r = await fetch(`/api/insurers?q=${encodeURIComponent(q)}`, {
+      signal,
+    });
+    if (!r.ok) return [];
+    const data = await r.json();
+    return Array.isArray(data) ? (data as InsurerOption[]) : [];
+  }, []);
+  const {
+    query,
+    setQuery,
+    items: insurers,
+    setItems: setInsurers,
+    loading,
+  } = useServerSearch<InsurerOption>({
+    fetchItems: fetchInsurers,
+    refreshDeps: [newOpen],
+  });
 
   const selected = insurers.find((i) => i.id === value);
 
@@ -124,12 +130,16 @@ export function InsurerPicker({
                 <span className="w-3.5" />
                 <span className="text-muted-foreground italic">{tPi('insurerNone')}</span>
               </button>
-              {filtered.length === 0 ? (
+              {loading ? (
                 <div className="text-xs text-muted-foreground p-2 text-center">
-                  {tCommon('search')}
+                  {tCommon('loading')}
+                </div>
+              ) : insurers.length === 0 ? (
+                <div className="text-xs text-muted-foreground p-2 text-center">
+                  {tCommon('noResults')}
                 </div>
               ) : (
-                filtered.map((i) => (
+                insurers.map((i) => (
                   <button
                     key={i.id}
                     type="button"

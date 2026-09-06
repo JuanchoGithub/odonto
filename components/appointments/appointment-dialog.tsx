@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, ChevronDown, Check, UserPlus, Trash2 } from 'lucide-react';
@@ -27,6 +27,11 @@ import { useRouter } from '@/lib/navigation';
 import { format } from 'date-fns';
 import { PatientForm } from '@/components/patients/patient-form';
 import { createPatientInline, type PatientRow } from '@/server/actions/patients';
+import {
+  fetchPatientOptions,
+  type PatientOption,
+} from '@/lib/patient-options';
+import { useServerSearch } from '@/lib/hooks/use-server-search';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import { Share2 } from 'lucide-react';
 import type { Role } from '@/lib/schemas/common';
@@ -320,7 +325,16 @@ export function AppointmentDialog({
                 <PatientPicker
                   patients={patients}
                   value={patientId}
-                  onChange={setPatientId}
+                  onChange={(id, opt) => {
+                    setPatientId(id);
+                    // Keep the picked patient's contact info available even if
+                    // it isn't part of the prefetched list (e.g. found by phone).
+                    if (opt) {
+                      setPatients((list) =>
+                        list.some((x) => x.id === id) ? list : [...list, opt],
+                      );
+                    }
+                  }}
                   onCreateNew={() => setNewPatientOpen(true)}
                 />
               )}
@@ -560,23 +574,27 @@ function PatientPicker({
   onChange,
   onCreateNew,
 }: {
-  patients: { id: string; name: string }[];
+  patients: PatientOption[];
   value: string;
-  onChange: (v: string) => void;
+  onChange: (id: string, opt?: PatientOption) => void;
   onCreateNew: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
   const t = useTranslations('patients');
   const tCommon = useTranslations('common');
+  const fetchPatients = useCallback(
+    (q: string, signal: AbortSignal) => fetchPatientOptions(q, signal),
+    [],
+  );
+  const { query, setQuery, items, loading } = useServerSearch<PatientOption>({
+    fetchItems: fetchPatients,
+    enabled: open,
+  });
+  // The selected patient may not be in the current result page (or the
+  // parent's prefetched list), so keep a local copy for display.
+  const [selectedOpt, setSelectedOpt] = useState<PatientOption | null>(null);
 
-  const selected = patients.find((p) => p.id === value);
-  const filtered = query
-    ? patients.filter((p) =>
-        p.name.toLowerCase().includes(query.toLowerCase()) ||
-        p.id.toLowerCase().includes(query.toLowerCase()),
-      )
-    : patients;
+  const selected = patients.find((p) => p.id === value) ?? selectedOpt;
 
   return (
     <div className="relative">
@@ -604,17 +622,22 @@ function PatientPicker({
             className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1 sm:text-sm"
           />
           <div className="max-h-48 overflow-y-auto">
-            {filtered.length === 0 ? (
+            {loading ? (
               <div className="text-xs text-muted-foreground p-2 text-center">
-                {t('new')}
+                {tCommon('loading')}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="text-xs text-muted-foreground p-2 text-center">
+                {tCommon('noResults')}
               </div>
             ) : (
-              filtered.map((p) => (
+              items.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => {
-                    onChange(p.id);
+                    setSelectedOpt(p);
+                    onChange(p.id, p);
                     setOpen(false);
                     setQuery('');
                   }}

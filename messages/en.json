@@ -34,7 +34,9 @@
     "configureClinic": "Configure clinic",
     "done": "Done",
     "undo": "Undo",
-    "deleted": "Deleted"
+    "deleted": "Deleted",
+    "searching": "Searching…",
+    "noResults": "No results"
   },
   "nav": {
     "dashboard": "Dashboard",

@@ -1,16 +1,14 @@
 'use client';
-import { useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Link } from '@/lib/navigation';
-import { Search } from 'lucide-react';
+import { Link, useRouter } from '@/lib/navigation';
+import { SearchSuggest } from '@/components/ui/search-suggest';
+import type { PatientRow } from '@/server/actions/patients';
 
 export function PatientSearch({ initial }: { initial?: string }) {
   const t = useTranslations('common');
   const tNav = useTranslations('patients');
-  const [q, setQ] = useState(initial ?? '');
-  const [, startTransition] = useTransition();
+  const router = useRouter();
 
   return (
     <form
@@ -18,24 +16,28 @@ export function PatientSearch({ initial }: { initial?: string }) {
       method="get"
       onSubmit={(e) => {
         e.preventDefault();
-        const params = new URLSearchParams();
-        if (q) params.set('q', q);
-        startTransition(() => {
-          window.location.assign(`/patients${params.toString() ? `?${params}` : ''}`);
-        });
+        const q = String(new FormData(e.currentTarget).get('q') ?? '').trim();
+        router.push(q ? `/patients?q=${encodeURIComponent(q)}` : '/patients');
       }}
       className="flex items-center gap-2"
     >
-      <div className="relative flex-1 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          name="q"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t('search')}
-          className="pl-9"
-        />
-      </div>
+      <SearchSuggest<PatientRow>
+        initial={initial}
+        placeholder={t('search')}
+        fetchUrl={(query) => `/api/patients?q=${encodeURIComponent(query)}&limit=8`}
+        getHref={(p) => `/patients/${p.id}`}
+        optionTestId="patient-suggest-option"
+        renderItem={(p) => (
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium">
+              {p.last_name}, {p.first_name}
+            </span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {[p.document_id, p.phone, p.email].filter(Boolean).join(' · ') || '—'}
+            </span>
+          </span>
+        )}
+      />
       <Button type="submit" variant="secondary">
         {t('search')}
       </Button>

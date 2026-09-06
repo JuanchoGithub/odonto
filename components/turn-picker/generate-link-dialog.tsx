@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
 import { X, Copy, Check, Link2, Share, UserPlus, ChevronDown } from 'lucide-react';
@@ -21,6 +21,11 @@ import {
   type TurnPickerLinkListItem,
 } from '@/server/actions/turn-picker';
 import { createPatientInline, type PatientRow } from '@/server/actions/patients';
+import {
+  fetchPatientOptions,
+  type PatientOption,
+} from '@/lib/patient-options';
+import { useServerSearch } from '@/lib/hooks/use-server-search';
 import type { Role } from '@/lib/schemas/common';
 import { useToast } from '@/components/ui/toaster';
 
@@ -305,44 +310,32 @@ function PatientPickerInline({
   const tPat = useTranslations('patients');
   const tCommon = useTranslations('common');
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
-  const [loaded, setLoaded] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
+  const fetchPatients = useCallback(
+    (q: string, signal: AbortSignal) => fetchPatientOptions(q, signal),
+    [],
+  );
+  const { query, setQuery, items, setItems, loading } =
+    useServerSearch<PatientOption>({
+      fetchItems: fetchPatients,
+      enabled: open,
+    });
+  // The selected patient may not be in the current result page.
+  const [selectedOpt, setSelectedOpt] = useState<PatientOption | null>(null);
 
-  useEffect(() => {
-    fetch('/api/patients?limit=200')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        const list = Array.isArray(data) ? data : [];
-        setPatients(
-          list.map((p: PatientRow) => ({
-            id: p.id,
-            name: `${p.last_name}, ${p.first_name}`,
-          })),
-        );
-        setLoaded(true);
-      })
-      .catch(() => {
-        setPatients([]);
-        setLoaded(true);
-      });
-  }, []);
-
-  const filtered = query
-    ? patients.filter((p) =>
-        p.name.toLowerCase().includes(query.toLowerCase()),
-      )
-    : patients;
-  const selected = patients.find((p) => p.id === value);
+  const selected = items.find((p) => p.id === value) ?? selectedOpt;
 
   function onCreated(p: PatientRow) {
     setNewOpen(false);
     if (p?.id) {
-      setPatients((list) => [
-        ...list,
-        { id: p.id, name: `${p.last_name}, ${p.first_name}` },
-      ]);
+      const opt: PatientOption = {
+        id: p.id,
+        name: `${p.last_name}, ${p.first_name}`,
+        phone: p.phone,
+        email: p.email,
+      };
+      setItems((list) => [...list, opt]);
+      setSelectedOpt(opt);
       onChange(p.id);
       setOpen(false);
       setQuery('');
@@ -380,21 +373,22 @@ function PatientPickerInline({
             className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1 sm:text-sm"
           />
           <div className="max-h-48 overflow-y-auto">
-            {!loaded ? (
+            {loading ? (
               <div className="p-2 text-center text-xs text-muted-foreground">
                 {tCommon('loading')}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : items.length === 0 ? (
               <div className="p-2 text-center text-xs text-muted-foreground">
-                —
+                {tCommon('noResults')}
               </div>
             ) : (
-              filtered.map((p) => (
+              items.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   data-testid="tp-patient-option"
                   onClick={() => {
+                    setSelectedOpt(p);
                     onChange(p.id);
                     setOpen(false);
                     setQuery('');

@@ -4,9 +4,9 @@ import { listInsurers } from '@/server/actions/insurers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from '@/lib/navigation';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Search, Plus, Shield } from 'lucide-react';
+import { InsurerSearch } from '@/components/insurers/insurer-search';
+import { Shield } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { queryOne } from '@/lib/db';
 import type { AppLocale } from '@/lib/schemas/common';
@@ -36,23 +36,7 @@ export default async function InsurersPage({
     <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
-        <form action="/insurers" method="get" className="flex items-center gap-2 flex-1 max-w-md justify-end">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              name="q"
-              defaultValue={q}
-              placeholder={t('searchPlaceholder')}
-              className="pl-9"
-            />
-          </div>
-          <Button type="submit" variant="secondary">
-            {tCommon('search')}
-          </Button>
-          <Button asChild>
-            <Link href="/insurers/new"><Plus className="h-4 w-4" />{t('new')}</Link>
-          </Button>
-        </form>
+        <InsurerSearch initial={q} />
       </div>
 
       <Card>

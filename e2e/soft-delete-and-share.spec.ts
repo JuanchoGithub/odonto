@@ -62,6 +62,8 @@ test('share button on appointments page', async ({ page }) => {
   const list = dialog.getByTestId('tp-patient-list');
   await expect(list).toBeVisible();
   const options = dialog.getByTestId('tp-patient-option');
+  // The list is server-driven (debounced fetch) — wait for it to populate.
+  await expect(options.first()).toBeVisible({ timeout: 10_000 });
   const fullCount = await options.count();
   expect(fullCount).toBeGreaterThan(1);
   await dialog.getByPlaceholder(/search|buscar/i).fill('García');

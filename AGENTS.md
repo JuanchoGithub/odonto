@@ -18,6 +18,7 @@ Bilingual (es / en) clinic management app. Modules:
 - **Insurers** (obras sociales) — master table, searchable, with inline onboarding
 - **Treatments** — per-patient pipeline + cost
 - **Billing** — invoices (two-rate tax) + payments + jsPDF export
+- **Search everywhere is type-ahead.** `/patients` and `/insurers` show a suggestions dropdown while typing (debounced ~300ms against `/api/patients?q=` / `/api/insurers?q=`; Enter opens the highlighted match, Submit still loads the filtered list). The patient/insurer pickers (appointment dialog, turn-link dialog, patient form) are **server-driven**: they search name/document/phone/email via the API instead of a prefetched 200-row cap. Shared pieces: `lib/hooks/use-server-search.ts` (debounced, abortable, stale-safe), `components/ui/search-suggest.tsx` (dropdown), `lib/patient-options.ts` (patient fetcher).
 - **Reports** — recharts dashboards (revenue, top treatments, no-show, by-dentist)
 - **Settings** — clinic profile (currency, locale, tax rates) + user management
 - **Attachments** — Vercel Blob storage (X-rays, photos, consent)
@@ -117,8 +118,10 @@ odonto/
 ├── lib/
 │   ├── auth.ts                   # Auth.js config (Credentials provider, JWT)
 │   ├── db.ts                     # @libsql/client wrapper, query/queryOne/transaction
+│   ├── hooks/                    # shared React hooks (use-server-search: debounced, abort-safe server search)
 │   ├── i18n.ts                   # next-intl routing + getRequestConfig
 │   ├── format.ts                 # formatMoney, formatDate (locale-aware)
+│   ├── patient-options.ts        # shared fetcher for patient pickers (server search by name/doc/phone/email)
 │   ├── rbac.ts                   # requireUser, requireRole, can(role, action)
 │   ├── schemas/                  # zod schemas (common, used by server actions)
 │   └── utils.ts                  # cn(), uid(), nowIso()
