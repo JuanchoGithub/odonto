@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { dentistColor } from '@/lib/colors';
 import { AppointmentDialog } from './appointment-dialog';
 import type { ApptRow } from '@/server/actions/appointments';
+import type { Role } from '@/lib/schemas/common';
 
 function statusVariant(s: string) {
   return s === 'completed'
@@ -30,9 +31,13 @@ function statusVariant(s: string) {
 export function PatientAppointments({
   patientId,
   dentists,
+  currentUserId,
+  viewerRole,
 }: {
   patientId: string;
   dentists: { id: string; name: string; color?: string | null }[];
+  currentUserId?: string;
+  viewerRole?: Role;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -194,6 +199,8 @@ export function PatientAppointments({
           dentists={dentists}
           appointment={editing}
           onCreated={refresh}
+          currentUserId={currentUserId}
+          viewerRole={viewerRole}
         />
       </CardContent>
     </Card>

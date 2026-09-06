@@ -29,6 +29,7 @@ import { PatientForm } from '@/components/patients/patient-form';
 import { createPatientInline, type PatientRow } from '@/server/actions/patients';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import { Share2 } from 'lucide-react';
+import type { Role } from '@/lib/schemas/common';
 
 const STATUS_OPTIONS = [
   'scheduled',
@@ -60,6 +61,8 @@ export function AppointmentDialog({
   dentists,
   appointment,
   onCreated,
+  currentUserId,
+  viewerRole,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
@@ -72,6 +75,9 @@ export function AppointmentDialog({
   /** When set, the dialog edits this appointment instead of creating. */
   appointment?: ApptRow | null;
   onCreated?: () => void;
+  /** When viewer is a dentist, lock dentist_id to this and hide the picker. */
+  currentUserId?: string;
+  viewerRole?: Role;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -87,7 +93,11 @@ export function AppointmentDialog({
   >([]);
   const [patientId, setPatientId] = useState<string>('');
   const [newPatientOpen, setNewPatientOpen] = useState(false);
-  const [dentistId, setDentistId] = useState<string>(dentists[0]?.id ?? '');
+  const [dentistId, setDentistId] = useState<string>(
+    viewerRole === 'dentist' && currentUserId
+      ? currentUserId
+      : dentists[0]?.id ?? '',
+  );
   const [status, setStatus] = useState<string>('scheduled');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -135,7 +145,11 @@ export function AppointmentDialog({
       setStatus(editing.status);
     } else {
       setPatientId('');
-      setDentistId(dentists[0]?.id ?? '');
+      setDentistId(
+        viewerRole === 'dentist' && currentUserId
+          ? currentUserId
+          : dentists[0]?.id ?? '',
+      );
       setStatus('scheduled');
     }
     const s = editing
@@ -152,7 +166,7 @@ export function AppointmentDialog({
     setTimeVal(format(s, 'HH:mm'));
     const dur = Math.max(15, Math.round((e.getTime() - s.getTime()) / 60000));
     setDurVal(DURATIONS.includes(dur) ? String(dur) : '30');
-  }, [open, editing, dentists, defaultStart, defaultEnd]);
+  }, [open, editing, dentists, defaultStart, defaultEnd, viewerRole, currentUserId]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -292,46 +306,72 @@ export function AppointmentDialog({
                   </Link>
                 ) : null}
               </div>
-              <PatientPicker
-                patients={patients}
-                value={patientId}
-                onChange={setPatientId}
-                onCreateNew={() => setNewPatientOpen(true)}
-              />
+              {editing ? (
+                <div
+                  data-testid="appt-patient-locked"
+                  className="flex min-h-[48px] w-full items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-base sm:text-sm"
+                >
+                  <span className="truncate">
+                    {patients.find((p) => p.id === patientId)?.name ??
+                      editing.patient_name}
+                  </span>
+                </div>
+              ) : (
+                <PatientPicker
+                  patients={patients}
+                  value={patientId}
+                  onChange={setPatientId}
+                  onCreateNew={() => setNewPatientOpen(true)}
+                />
+              )}
               {patientId ? <PatientContact patients={patients} patientId={patientId} /> : null}
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
+            {viewerRole === 'dentist' ? (
+              <div className="space-y-2">
                 <Label htmlFor="dentist_id">{t('dentist')}</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={!patientId}
-                  onClick={() => setShareOpen(true)}
-                  title={tTp('shareButton')}
+                <div
+                  data-testid="appt-dentist-locked"
+                  className="flex min-h-[48px] w-full items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-base sm:text-sm"
                 >
-                  <Share2 className="h-3.5 w-3.5" />
-                  {tTp('shareButton')}
-                </Button>
+                  <span className="truncate">
+                    {dentists.find((d) => d.id === dentistId)?.name ?? '—'}
+                  </span>
+                </div>
               </div>
-              <Select
-                name="dentist_id"
-                value={dentistId}
-                onValueChange={setDentistId}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {dentists.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="dentist_id">{t('dentist')}</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={!patientId}
+                    onClick={() => setShareOpen(true)}
+                    title={tTp('shareButton')}
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    {tTp('shareButton')}
+                  </Button>
+                </div>
+                <Select
+                  name="dentist_id"
+                  value={dentistId}
+                  onValueChange={setDentistId}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dentists.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {editing ? (
               <div
                 className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5"
@@ -486,6 +526,8 @@ export function AppointmentDialog({
           patientId={patientId}
           dentists={dentists}
           defaultDentistId={dentistId}
+          currentUserId={currentUserId}
+          viewerRole={viewerRole}
         />
       ) : null}
     </Dialog.Root>

@@ -38,6 +38,8 @@ export function ShareTurnButton({
         patientId={patientId}
         dentists={dentists}
         defaultDentistId={preselect}
+        currentUserId={currentUserId}
+        viewerRole={role}
       />
     </>
   );

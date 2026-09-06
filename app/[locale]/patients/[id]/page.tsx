@@ -159,7 +159,12 @@ export default async function PatientDetailPage({
           />
         </TabsContent>
         <TabsContent value="appointments">
-          <PatientAppointments patientId={id} dentists={dentists} />
+          <PatientAppointments
+            patientId={id}
+            dentists={dentists}
+            currentUserId={user.id}
+            viewerRole={user.role}
+          />
         </TabsContent>
       </Tabs>
     </div>

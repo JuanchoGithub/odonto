@@ -307,11 +307,15 @@ export function WeekCalendar({
           dentists={dentists}
           appointment={editingAppt}
           onCreated={refresh}
+          currentUserId={viewer?.id}
+          viewerRole={viewer?.role as any}
         />
         <GenerateTurnLinkDialog
           open={shareOpen}
           onOpenChange={setShareOpen}
           dentists={dentists}
+          currentUserId={viewer?.id}
+          viewerRole={viewer?.role as any}
         />
         <AttendSheet
           appointment={attendAppt}

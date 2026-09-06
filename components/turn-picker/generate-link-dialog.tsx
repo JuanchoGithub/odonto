@@ -20,6 +20,7 @@ import {
   type TurnPickerLinkListItem,
 } from '@/server/actions/turn-picker';
 import type { PatientRow } from '@/server/actions/patients';
+import type { Role } from '@/lib/schemas/common';
 import { useToast } from '@/components/ui/toaster';
 
 export function GenerateTurnLinkDialog({
@@ -28,6 +29,8 @@ export function GenerateTurnLinkDialog({
   patientId: fixedPatientId,
   dentists,
   defaultDentistId,
+  currentUserId,
+  viewerRole,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
@@ -36,6 +39,9 @@ export function GenerateTurnLinkDialog({
   dentists: { id: string; name: string }[];
   /** Preselect a dentist (e.g. current user). */
   defaultDentistId?: string;
+  /** When the viewer is a dentist, the dentist field is hidden and locked to them. */
+  currentUserId?: string;
+  viewerRole?: Role;
 }) {
   const t = useTranslations('turnPicker');
   const tAppt = useTranslations('appointments');
@@ -43,7 +49,11 @@ export function GenerateTurnLinkDialog({
   const { push } = useToast();
   const [url, setUrl] = useState<string | null>(null);
   const [slotMinutes, setSlotMinutes] = useState<string>('15');
-  const [dentistId, setDentistId] = useState<string>(defaultDentistId ?? dentists[0]?.id ?? '');
+  const [dentistId, setDentistId] = useState<string>(
+    viewerRole === 'dentist' && currentUserId
+      ? currentUserId
+      : defaultDentistId ?? dentists[0]?.id ?? '',
+  );
   const [patientId, setPatientId] = useState<string>(fixedPatientId ?? '');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -54,9 +64,13 @@ export function GenerateTurnLinkDialog({
     if (!open) return;
     setUrl(null);
     setError(null);
-    if (defaultDentistId) setDentistId(defaultDentistId);
+    if (viewerRole === 'dentist' && currentUserId) {
+      setDentistId(currentUserId);
+    } else if (defaultDentistId) {
+      setDentistId(defaultDentistId);
+    }
     if (fixedPatientId) setPatientId(fixedPatientId);
-  }, [open, fixedPatientId, defaultDentistId]);
+  }, [open, fixedPatientId, defaultDentistId, viewerRole, currentUserId]);
 
   // Load links for the currently-selected patient whenever it changes.
   useEffect(() => {
@@ -157,18 +171,29 @@ export function GenerateTurnLinkDialog({
               ) : null}
               <div className="space-y-2">
                 <Label>{t('dentist')}</Label>
-                <Select value={dentistId} onValueChange={setDentistId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {dentists.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {viewerRole === 'dentist' ? (
+                  <div
+                    data-testid="tp-dentist-locked"
+                    className="flex min-h-[48px] w-full items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-base sm:text-sm"
+                  >
+                    <span className="truncate">
+                      {dentists.find((d) => d.id === dentistId)?.name ?? '—'}
+                    </span>
+                  </div>
+                ) : (
+                  <Select value={dentistId} onValueChange={setDentistId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {dentists.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>{t('duration')}</Label>
