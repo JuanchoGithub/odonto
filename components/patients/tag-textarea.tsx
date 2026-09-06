@@ -18,20 +18,25 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+// Zero-width caret anchor after each pill so the caret can be placed past a
+// tag. Stripped when reading the value.
+const ZWSP = '​';
+
 // The pill is a plain *inline* span (NOT inline-flex/inline-block) so the caret
 // flows through it like normal text and it never expands the line box. It
 // inherits the surrounding font-size, so it is never taller than the text.
 const PILL_CLASS =
   'rounded bg-primary/10 px-1 font-medium text-primary whitespace-normal';
 
-// The literal marker delimiters (_word_, _"word word"_) stay as real characters
-// in the DOM, so reading via textContent round-trips the tag encoding and the
-// closing marker gives the caret a place to land past the pill.
+// Markers are kept in the DOM as hidden spans (invisible, but present for
+// textContent so tags round-trip). Only the word shows as a pill — no visible
+// underscores. A zero-width space after each pill gives the caret a place to
+// land so the user can keep typing past a tag.
 function tagHtml(value: string): string {
   const multi = /\s/.test(value);
   const open = multi ? '_"' : '_';
   const close = multi ? '"_' : '_';
-  return `${escapeHtml(open)}<span class="${PILL_CLASS}">${escapeHtml(value)}</span>${escapeHtml(close)}`;
+  return `<span class="hidden">${escapeHtml(open)}</span><span class="${PILL_CLASS}" data-tag-pill>${escapeHtml(value)}</span><span class="hidden">${escapeHtml(close)}</span>${ZWSP}`;
 }
 
 /** Render the editor's innerHTML: marker-wrapped segments become pills. */
@@ -88,7 +93,14 @@ export function TagTextarea({
     if (editorRef.current) editorRef.current.innerHTML = renderHtml(text);
   }
 
-  const matches = useMemo(() => findDictionaryMatches(plainText, dictionary), [plainText, dictionary]);
+  // Bottom tag list: dictionary terms found in the text PLUS any terms the
+  // user marked by hand (_tag_), so a freshly typed tag is visible here too.
+  const matches = useMemo(() => {
+    const dict = findDictionaryMatches(plainText, dictionary);
+    const seen = new Set(dict.map(keyOf));
+    const extra = findTaggedTerms(plainText).filter((x) => !seen.has(keyOf(x)));
+    return [...dict, ...extra];
+  }, [plainText, dictionary]);
   const taggedKeys = useMemo(
     () => new Set(findTaggedTerms(plainText).map(keyOf)),
     [plainText],
@@ -97,9 +109,59 @@ export function TagTextarea({
   function handleInput() {
     const el = editorRef.current;
     if (!el) return;
-    // textContent keeps the literal marker characters (_hiv_) so tags survive.
-    setPlainText(el.textContent ?? '');
+    // textContent (not innerText) so the hidden marker spans round-trip;
+    // strip only the zero-width caret anchors.
+    const text = (el.textContent ?? '').replaceAll(ZWSP, '');
+    setPlainText(text);
     setError(null);
+    liveConvert(el, text);
+  }
+
+  /**
+   * If the user just finished typing a complete marker (_tag_), convert it to
+   * a pill immediately and put the caret right after it. Ordinary typing (no
+   * new complete marker) leaves the DOM alone so the caret is never disturbed.
+   */
+  function liveConvert(el: HTMLElement, text: string) {
+    for (const term of findTaggedTerms(text)) {
+      const hasPill = Array.from(el.querySelectorAll('span[data-tag-pill]')).some(
+        (s) => s.textContent === term,
+      );
+      if (!hasPill) {
+        el.innerHTML = renderHtml(text);
+        placeCaretAfterTag(el, term);
+        return;
+      }
+    }
+  }
+
+  /** Put the caret just after the given tag's pill (past its closing marker). */
+  function placeCaretAfterTag(el: HTMLElement, term: string) {
+    const pills = el.querySelectorAll('span[data-tag-pill]');
+    for (const pill of pills) {
+      if (pill.textContent !== term) continue;
+      // Skip the hidden closing marker; land on the zero-width anchor after it.
+      let node: Node | null = pill.nextSibling;
+      while (
+        node &&
+        node.nodeType === Node.ELEMENT_NODE &&
+        (node as HTMLElement).classList.contains('hidden')
+      ) {
+        node = node.nextSibling;
+      }
+      const sel = window.getSelection();
+      if (!sel) return;
+      const range = document.createRange();
+      if (node && node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').startsWith(ZWSP)) {
+        range.setStart(node, 1);
+      } else {
+        range.setStartAfter(pill);
+      }
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
   }
 
   /** Toggle a dictionary term as tagged across all its occurrences. */
