@@ -134,6 +134,8 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
         onOpenChange={setShareOpen}
         dentists={[dentist]}
         defaultDentistId={dentist.id}
+        currentUserId={dentist.id}
+        viewerRole="dentist"
       />
       <AppointmentDialog
         open={addOpen}
@@ -141,6 +143,8 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
         defaultStart={null}
         dentists={[dentist]}
         onCreated={load}
+        currentUserId={dentist.id}
+        viewerRole="dentist"
       />
     </div>
   );

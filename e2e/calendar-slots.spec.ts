@@ -193,7 +193,7 @@ test('pending (shared, unbooked) links appear in the list view', async ({
   await shareDialog
     .getByRole('button', { name: /generar enlace|generate link/i })
     .click();
-  const urlInput = shareDialog.locator('input');
+  const urlInput = shareDialog.locator('#tp-url');
   await expect(urlInput).toBeVisible({ timeout: 10_000 });
   expect(await urlInput.inputValue()).toContain('/pick-turn/');
   await page.keyboard.press('Escape');

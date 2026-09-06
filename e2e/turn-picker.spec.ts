@@ -32,7 +32,7 @@ test('generate a turn-picker link from the patient page and book via the public 
     .click();
 
   // 5. Extract the generated URL
-  const urlInput = dialog.locator('input');
+  const urlInput = dialog.locator('#tp-url');
   await expect(urlInput).toBeVisible({ timeout: 10_000 });
   const url = await urlInput.inputValue();
   expect(url).toContain('/pick-turn/');

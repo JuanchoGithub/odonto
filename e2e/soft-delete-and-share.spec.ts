@@ -56,15 +56,14 @@ test('share button on appointments page', async ({ page }) => {
   const genBtn = dialog.getByRole('button', { name: /generate|generar/i });
   await expect(genBtn).toBeDisabled();
 
-  // Pick a patient
-  await dialog.getByRole('button', { name: /search|buscar/i }).click();
+  // Pick a patient (single inline search field)
   await dialog.getByPlaceholder(/search|buscar/i).fill('García');
   await dialog.getByText(/García/i).first().click();
 
   // Generate link
   await expect(genBtn).toBeEnabled();
   await genBtn.click();
-  const input = dialog.locator('input');
+  const input = dialog.locator('#tp-url');
   await expect(input).toBeVisible({ timeout: 10_000 });
   const url = await input.inputValue();
   expect(url).toContain('/pick-turn/');

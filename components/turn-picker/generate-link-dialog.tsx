@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
-import { X, Copy, Check, Link2, ChevronDown, Share } from 'lucide-react';
+import { X, Copy, Check, Link2, Share, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,13 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { PatientForm } from '@/components/patients/patient-form';
 import {
   createTurnPickerLink,
   listLinksForPatient,
   type TurnPickerLinkListItem,
 } from '@/server/actions/turn-picker';
-import type { PatientRow } from '@/server/actions/patients';
+import { createPatientInline, type PatientRow } from '@/server/actions/patients';
 import type { Role } from '@/lib/schemas/common';
 import { useToast } from '@/components/ui/toaster';
 
@@ -286,7 +286,12 @@ export function GenerateTurnLinkDialog({
   );
 }
 
-/** Simple patient search + select used when no patient is preselected. */
+/**
+ * Single-search patient picker used when no patient is preselected: one
+ * always-visible search field filters the list inline (no toggle button),
+ * plus a "new patient" row that opens the full intake without leaving
+ * the share flow — same pattern as the appointment dialog's picker.
+ */
 function PatientPickerInline({
   value,
   onChange,
@@ -294,10 +299,11 @@ function PatientPickerInline({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const tPat = useTranslations('patients');
   const tCommon = useTranslations('common');
-  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [patients, setPatients] = useState<{ id: string; name: string }[]>([]);
+  const [newOpen, setNewOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/patients?limit=200')
@@ -313,65 +319,128 @@ function PatientPickerInline({
       .catch(() => setPatients([]));
   }, []);
 
-  const filtered = query
-    ? patients.filter((p) =>
-        p.name.toLowerCase().includes(query.toLowerCase()),
-      )
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? patients.filter((p) => p.name.toLowerCase().includes(q))
     : patients;
-  const selected = patients.find((p) => p.id === value);
+
+  function onCreated(p: PatientRow) {
+    setNewOpen(false);
+    if (p?.id) {
+      setPatients((list) => [
+        ...list,
+        { id: p.id, name: `${p.last_name}, ${p.first_name}` },
+      ]);
+      onChange(p.id);
+      setQuery('');
+    }
+  }
 
   return (
-    <div className="relative">
+    <div className="space-y-1">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={tCommon('search') + '…'}
+        inputMode="search"
+        aria-label={tCommon('search')}
+        className="flex min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm"
+      />
+      <div className="max-h-48 overflow-y-auto rounded-md border border-input">
+        {filtered.length === 0 ? (
+          <div className="p-2 text-center text-xs text-muted-foreground">
+            {tPat('new')}
+          </div>
+        ) : (
+          filtered.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onChange(p.id)}
+              aria-pressed={value === p.id}
+              className={
+                'flex min-h-[44px] w-full items-center gap-2 px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground' +
+                (value === p.id ? ' bg-accent' : '')
+              }
+            >
+              {value === p.id ? (
+                <Check className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <span className="w-3.5 shrink-0" />
+              )}
+              <span className="truncate">{p.name}</span>
+            </button>
+          ))
+        )}
+      </div>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={cn(
-          'flex min-h-[48px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-base',
-          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:text-sm',
-        )}
+        onClick={() => setNewOpen(true)}
+        className="flex min-h-[44px] w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-primary hover:bg-accent"
       >
-        <span className={cn(!selected && 'text-muted-foreground')}>
-          {selected ? selected.name : tCommon('search') + '…'}
-        </span>
-        <ChevronDown className="h-4 w-4 opacity-50" />
+        <UserPlus className="h-3.5 w-3.5" />
+        {tPat('new')}
       </button>
-      {open ? (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md p-1">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={tCommon('search') + '…'}
-            inputMode="search"
-            className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1 sm:text-sm"
-          />
-          <div className="max-h-48 overflow-y-auto">
-            {filtered.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  onChange(p.id);
-                  setOpen(false);
-                  setQuery('');
-                }}
-                className={cn(
-                  'flex min-h-[44px] w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm',
-                  'hover:bg-accent hover:text-accent-foreground',
-                  value === p.id && 'bg-accent',
-                )}
-              >
-                {value === p.id ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <span className="w-3.5" />
-                )}
-                <span className="truncate">{p.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <NewPatientInlineDialog
+        open={newOpen}
+        onOpenChange={setNewOpen}
+        onCreated={onCreated}
+      />
     </div>
+  );
+}
+
+function NewPatientInlineDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (b: boolean) => void;
+  onCreated: (p: PatientRow) => void;
+}) {
+  const t = useTranslations('patientOnboarding');
+  const tCommon = useTranslations('common');
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/50" />
+        <Dialog.Content
+          className="fixed inset-x-0 bottom-0 z-[70] w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-3xl sm:max-h-[95vh]"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <Dialog.Title className="text-lg font-semibold">{t('title')}</Dialog.Title>
+              <p className="text-xs text-muted-foreground mt-1">{t('fullFormNotice')}</p>
+            </div>
+            <Dialog.Close asChild>
+              <Button variant="ghost" size="icon">
+                <X className="h-4 w-4" />
+              </Button>
+            </Dialog.Close>
+          </div>
+          <PatientForm
+            mode="full"
+            action={async (_prev, fd) => {
+              const res = await createPatientInline({}, fd);
+              if (res.ok) {
+                onCreated(res.patient);
+                return { ok: true };
+              }
+              return { error: res.error };
+            }}
+          />
+          <div className="mt-4 flex justify-end">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              {tCommon('cancel')}
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

@@ -74,7 +74,7 @@ test('turn-picker respects the clinic timezone when generating slots', async ({
   await dialog
     .getByRole('button', { name: /generar enlace|generate link/i })
     .click();
-  const urlInput = dialog.locator('input');
+  const urlInput = dialog.locator('#tp-url');
   await expect(urlInput).toBeVisible({ timeout: 10_000 });
   const url = await urlInput.inputValue();
   expect(url).toContain('/pick-turn/');
