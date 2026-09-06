@@ -64,6 +64,34 @@ export async function listDoctorQueue(dentistId?: string) {
   return { ok: true as const, items: withClinicClock(rows, tz) };
 }
 
+/**
+ * Who the dentist already attended today: completed appointments on the
+ * current clinic-local day, most recent first.
+ */
+export async function listDoctorAttendedToday(dentistId?: string) {
+  const user = await requireUser();
+  if (!can(user.role, 'appointments:read')) return forbidden();
+  // Dentists only ever see their own history; admins may pass an id.
+  const id = user.role === 'dentist' ? user.id : (dentistId ?? '');
+  if (!id) return forbidden();
+  const tz = await getClinicTimezone();
+  const nowIso = new Date().toISOString();
+  const todayDate = wallClockInTz(nowIso, tz).date;
+  const rows = await query<ApptRow>(
+    `${APPT_SELECT}
+     WHERE a.dentist_id = ?
+       AND a.status = 'completed'
+       AND datetime(a.starts_at) >= datetime(?, '-24 hours')
+       AND datetime(a.starts_at) <= datetime(?)
+     ORDER BY a.ends_at DESC`,
+    [id, nowIso, nowIso],
+  );
+  const items = withClinicClock(rows, tz).filter(
+    (r) => r.clinic_date === todayDate,
+  );
+  return { ok: true as const, items };
+}
+
 export type SecretarySchedule = {
   today: PanelAppt[];
   restOfWeek: { date: string; items: PanelAppt[] }[];

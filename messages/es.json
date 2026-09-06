@@ -59,6 +59,8 @@
     "giveTurn": "Dar nuevo turno",
     "nextHour": "Próxima hora",
     "emptyQueue": "Sin turnos en la próxima hora.",
+    "attendedToday": "Atendidos hoy",
+    "emptyAttended": "Todavía no atendiste a nadie hoy.",
     "today": "Hoy",
     "emptyToday": "Sin turnos hoy.",
     "restOfWeek": "Resto de la semana",

@@ -7,6 +7,7 @@ import { AttendSheet } from '@/components/appointments/attend-sheet';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import {
   listDoctorQueue,
+  listDoctorAttendedToday,
   type PanelAppt,
 } from '@/server/actions/dashboard';
 import { PanelApptCard } from './panel-appt-card';
@@ -16,21 +17,31 @@ import { usePanelRefresh } from './use-panel-refresh';
 export function DoctorPanel({ dentist }: { dentist: { id: string; name: string } }) {
   const t = useTranslations('dashboard');
   const [items, setItems] = useState<PanelAppt[]>([]);
+  const [attended, setAttended] = useState<PanelAppt[]>([]);
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await listDoctorQueue().catch(() => null);
-    if (res && 'ok' in res) {
-      setItems(res.items);
+    const [queue, done] = await Promise.all([
+      listDoctorQueue().catch(() => null),
+      listDoctorAttendedToday().catch(() => null),
+    ]);
+    if (queue && 'ok' in queue) {
+      setItems(queue.items);
       // Reconcile the open AttendSheet with fresh rows so its status
       // stepper never works off a stale snapshot.
       setAttendAppt((prev) => {
         if (!prev) return prev;
-        return res.items.find((r) => r.id === prev.id) ?? prev;
+        return (
+          queue.items.find((r) => r.id === prev.id) ??
+          (done && 'ok' in done
+            ? (done.items.find((r) => r.id === prev.id) ?? prev)
+            : prev)
+        );
       });
     }
+    if (done && 'ok' in done) setAttended(done.items);
     setLoaded(true);
   }, []);
 
@@ -67,6 +78,27 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
         ) : (
           <ul className="space-y-2">
             {items.map((a) => (
+              <PanelApptCard
+                key={a.id}
+                appt={a}
+                onAttend={setAttendAppt}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label={t('attendedToday')} data-testid="panel-attended">
+        <h2 className="mb-2 text-lg font-semibold">{t('attendedToday')}</h2>
+        {!loaded ? (
+          <p className="text-sm text-muted-foreground">{t('loading')}</p>
+        ) : attended.length === 0 ? (
+          <p className="rounded-xl border p-4 text-sm text-muted-foreground">
+            {t('emptyAttended')}
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {attended.map((a) => (
               <PanelApptCard
                 key={a.id}
                 appt={a}

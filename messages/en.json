@@ -59,6 +59,8 @@
     "giveTurn": "Give new appointment",
     "nextHour": "Next hour",
     "emptyQueue": "No appointments in the next hour.",
+    "attendedToday": "Seen today",
+    "emptyAttended": "Nobody seen yet today.",
     "today": "Today",
     "emptyToday": "No appointments today.",
     "restOfWeek": "Rest of the week",

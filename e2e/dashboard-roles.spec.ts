@@ -26,6 +26,11 @@ test('doctor panel: next-hour queue + give-turn button', async ({ page }) => {
   await expect(
     page.getByTestId('panel-appt-row').first().or(page.getByTestId('panel-empty').first()),
   ).toBeVisible({ timeout: 15_000 });
+  // Attended-today history section (most recent first).
+  await expect(
+    page.getByRole('heading', { name: /atendidos hoy|seen today/i }),
+  ).toBeVisible();
+  await expect(page.getByTestId('panel-attended')).toBeVisible();
 });
 
 test('secretary panel: today, follow-ups, payments', async ({ page }) => {
