@@ -4,10 +4,9 @@ Onboarding for AI agents and human contributors working on **Odonto**, a Next.js
 
 This is the source of truth. README.md is a one-page pointer; everything operational lives here.
 
-> **Deploy path (read this first).** Production deploys use a **Vercel Deploy Hook** — a per-project URL whose unique token is the URL itself. No CLI, no `vercel` token.
-> - **CI** (`.github/workflows/deploy.yml`): `POST $DEPLOY_HOOK_URL` on push to `main`, then polls `/es/login` until 200.
-> - **Local** (`scripts/deploy.mjs`): `node scripts/deploy.mjs --wait`.
-> - The hook URL lives in `DEPLOY_HOOK_URL` (GitHub repo secret) and is mirrored in `.local/.env.production`. The old `VERCEL_TOKEN` secret is unused and can be deleted. Full details in §11; the `vcp_` reason is in §12.9.
+> **Deploy path (read this first).** Production auto-deploys via the **Vercel Git integration** — every push to `main` builds and promotes automatically. No CLI, no `vercel` token, no deploy hook.
+> - **Deploy:** `git push origin main`. That's it. There is exactly one deploy path — do not add another trigger or you'll double-build.
+> - The old `VERCEL_TOKEN` GitHub secret is unused and can be deleted. Full details in §11; the `vcp_` reason is in §12.9.
 
 ---
 
@@ -52,7 +51,7 @@ Default currency is per-clinic; default locale is `es` (ARS) or `en` (USD), edit
 | Date | `date-fns` + `date-fns-tz` |
 | Tests | Playwright (e2e) |
 | CI | GitHub Actions (`.github/workflows/`) |
-| Hosting | Vercel — **deploys via a Deploy Hook URL, not the CLI** (see §11) |
+| Hosting | Vercel — **auto-deploys on push to `main` (Git integration), not the CLI** (see §11) |
 
 ---
 
@@ -61,22 +60,14 @@ Default currency is per-clinic; default locale is `es` (ARS) or `en` (USD), edit
 For the live production URL `https://midentista.vercel.app`:
 
 ```bash
-# Local
-set -a; source .local/.env.production; set +a
-node scripts/deploy.mjs --wait
+git push origin main   # Vercel Git integration builds + promotes automatically
 ```
 
 ```bash
-# CI
-git push origin main   # .github/workflows/deploy.yml does the same thing
+# Post-deploy check (site is up; for "is the NEW build live" see §11)
+curl -sS -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/es/login
+# 200 = up
 ```
-
-**Required secret / env** (one URL, two places):
-
-- **GitHub repo secret** `DEPLOY_HOOK_URL` → https://github.com/JuanchoGithub/odonto/settings/secrets/actions
-- **Local** `DEPLOY_HOOK_URL` line in `/Users/jayjay/gitrepos/odonto/.local/.env.production`
-
-How to create the hook: Vercel → `midentista` project → **Settings → Git → Deploy Hooks → Create Hook** (name it, branch `main`). Copy the URL. **Treat the URL like a password.**
 
 The `VERCEL_TOKEN` GitHub secret is no longer used by any workflow — safe to delete from https://github.com/JuanchoGithub/odonto/settings/secrets/actions.
 
@@ -341,10 +332,8 @@ npm run migrate
 
 ### Trigger a production deploy
 ```bash
-set -a; source .local/.env.production; set +a
-node scripts/deploy.mjs --wait    # polls /es/login until 200
+git push origin main   # Vercel Git integration builds + promotes automatically
 ```
-Or push to `main` — `.github/workflows/deploy.yml` calls the same hook and waits for the prod URL to return 200.
 The `postinstall` script also runs `migrate` against whatever env vars are set, so a fresh Vercel build (with `TURSO_URL` + `TURSO_TOKEN` set) will auto-apply pending migrations.
 
 ### Inspect a patient
@@ -365,12 +354,7 @@ git commit --allow-empty -m "chore: trigger redeploy" && git push
 
 ## 11. Deploy
 
-The `midentista` project is on Vercel. Deployments are triggered by **Vercel Deploy Hooks** — a unique URL that takes a `POST` and rebuilds the project. No CLI, no auth header, the URL itself is the credential.
-
-- **GitHub Actions** (`.github/workflows/deploy.yml`) fires on every push to `main`, calls the hook, then polls `/es/login` until 200.
-- **Local** (`scripts/deploy.mjs`) does the same thing from your terminal with `node scripts/deploy.mjs --wait`.
-
-**Required GitHub secret**: `DEPLOY_HOOK_URL` — a deploy-hook URL created at Vercel → `midentista` → Settings → Git → Deploy Hooks. Store it at https://github.com/JuanchoGithub/odonto/settings/secrets/actions. Mirror it in `.local/.env.production` so `scripts/deploy.mjs` works locally.
+The `midentista` project is on Vercel with the **Git integration** connected: every push to `main` builds and promotes to production automatically. No CLI, no hook, no token. There is exactly one deploy path — do not add another trigger or you'll double-build.
 
 **Live URL**: `https://midentista.vercel.app`
 
@@ -394,12 +378,13 @@ The script will:
 2. Create a Vercel Blob store named `odonto` if one doesn't exist, and capture its `BLOB_READ_WRITE_TOKEN`.
 3. Push `TURSO_URL`, `TURSO_TOKEN`, `AUTH_SECRET` (random 32-byte), `AUTH_URL`, `BLOB_READ_WRITE_TOKEN` to Vercel for all three env targets.
 4. Run `npm run migrate` against the production Turso DB.
-5. Create a deploy hook (or reuse `DEPLOY_HOOK_URL` from env) so future pushes auto-deploy.
+5. Push to `main` — the Git integration builds and promotes automatically.
 
 ### Post-deploy verification
 ```bash
 curl -sS -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/es/login
-# 200 = up
+# 200 = up (but it can be the STALE build while the new one is still building —
+# for "is the NEW build live", check the Vercel dashboard or wait ~2 min)
 ```
 
 ### Rollback
@@ -432,7 +417,7 @@ The current `VERCEL_TOKEN` GitHub secret is a `vcp_` personal access token, whic
 
 10. **Mass "outside working hours" rejections → check `clinics.timezone` first.** If staff report that every create/move fails, verify the clinic timezone in Settings (it applies to every availability check). A common trap: saving the clinic form while the wrong timezone is shown silently persists it. Also verify the dentist's own weekly schedule (Settings → Schedules) — a narrow dentist schedule overrides clinic business hours and legitimately blocks writes outside it.
 
-9. **Vercel CLI + `vcp_` tokens**: `vcp_` personal access tokens work for the REST API but the Vercel CLI rejects them with "token is not valid" when used via `--token`. Use them only for REST API calls (which is what `scripts/vercel-setup.mjs` does). **Production deploys are triggered by a Vercel Deploy Hook** (created in `midentista → Settings → Git → Deploy Hooks`) — `POST` to that URL from `.github/workflows/deploy.yml` and from `scripts/deploy.mjs`. The URL itself is the credential; store it in `DEPLOY_HOOK_URL` (GitHub repo secret) and `.local/.env.production` (local). No CLI, no token.
+9. **Vercel CLI + `vcp_` tokens**: `vcp_` personal access tokens work for the REST API but the Vercel CLI rejects them with "token is not valid" when used via `--token`. Use them only for REST API calls (which is what `scripts/vercel-setup.mjs` does). **Production deploys happen via the Vercel Git integration** (push to `main` auto-builds). No CLI, no token, no hook.
 
 10. **The build step on Vercel runs `postinstall`** which is `node scripts/migrate.mjs || true`. So fresh deploys auto-apply migrations as long as `TURSO_URL` + `TURSO_TOKEN` are set in the build env. If they're missing, the build still succeeds (because of `|| true`) and you must apply migrations manually.
 
@@ -522,7 +507,7 @@ The dental-charting standard is enforced in code. **Every** surface that shows a
 
 ### 13.10 What NOT to do
 
-- Do not call `vercel deploy` from CI or locally — the Vercel CLI rejects `vcp_` tokens. Use the deploy hook (§3, §11). The Vercel GitHub App integration is not configured for this project.
+- Do not call `vercel deploy` from CI or locally — the Vercel CLI rejects `vcp_` tokens. Push to `main` instead; the Vercel Git integration auto-deploys (§3, §11). Do not add a deploy hook or second trigger — it would double-build.
 - Do not add `w-full` to a centered dialog — on phones it produces 0px gutter.
 - Do not use `autoFocus` on an input inside a dialog. iOS pops the keyboard, pushes the layout, and obscures the form. `appointment-dialog.tsx`'s `PatientPicker` removed `autoFocus` for exactly this reason.
 - Do not put `overflow-x-auto` on the page-level container. It hides that the inner content is wider than the viewport. Wrap tables, not pages.
