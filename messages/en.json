@@ -57,6 +57,7 @@
     "unpaidInvoices": "Unpaid invoices",
     "loading": "Loading…",
     "giveTurn": "Give new appointment",
+    "addTurn": "Book appointment",
     "nextHour": "Next hour",
     "emptyQueue": "No appointments in the next hour.",
     "attendedToday": "Seen today",

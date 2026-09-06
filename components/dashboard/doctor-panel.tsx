@@ -1,9 +1,10 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Link2 } from 'lucide-react';
+import { Link2, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AttendSheet } from '@/components/appointments/attend-sheet';
+import { AppointmentDialog } from '@/components/appointments/appointment-dialog';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import {
   listDoctorQueue,
@@ -20,6 +21,7 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
   const [attended, setAttended] = useState<PanelAppt[]>([]);
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
@@ -61,6 +63,16 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
         >
           <Link2 className="mr-2 h-5 w-5" />
           {t('giveTurn')}
+        </Button>
+        <Button
+          size="lg"
+          variant="outline"
+          onClick={() => setAddOpen(true)}
+          className="min-h-[48px]"
+          data-testid="panel-add-turn"
+        >
+          <CalendarPlus className="mr-2 h-5 w-5" />
+          {t('addTurn')}
         </Button>
       </div>
 
@@ -122,6 +134,13 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
         onOpenChange={setShareOpen}
         dentists={[dentist]}
         defaultDentistId={dentist.id}
+      />
+      <AppointmentDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        defaultStart={null}
+        dentists={[dentist]}
+        onCreated={load}
       />
     </div>
   );

@@ -57,6 +57,7 @@
     "unpaidInvoices": "Facturas impagas",
     "loading": "Cargando…",
     "giveTurn": "Dar nuevo turno",
+    "addTurn": "Agregar turno",
     "nextHour": "Próxima hora",
     "emptyQueue": "Sin turnos en la próxima hora.",
     "attendedToday": "Atendidos hoy",

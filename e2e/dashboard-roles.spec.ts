@@ -22,6 +22,14 @@ test('doctor panel: next-hour queue + give-turn button', async ({ page }) => {
     page.getByRole('heading', { name: /próxima hora|next hour/i }),
   ).toBeVisible();
   await expect(page.getByTestId('panel-give-turn')).toBeVisible();
+  await expect(page.getByTestId('panel-add-turn')).toBeVisible();
+  // "Add turn" opens the full booking dialog (date/time + save).
+  await page.getByTestId('panel-add-turn').click();
+  await expect(
+    page.getByRole('heading', { name: /nuevo turno|new appointment/i }),
+  ).toBeVisible({ timeout: 15_000 });
+  // Close it again: an open Radix modal aria-hides the page behind it.
+  await page.keyboard.press('Escape');
   // Queue is either rows or the empty state — both prove the panel loaded.
   await expect(
     page.getByTestId('panel-appt-row').first().or(page.getByTestId('panel-empty').first()),
