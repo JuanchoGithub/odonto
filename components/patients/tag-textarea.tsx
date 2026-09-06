@@ -41,49 +41,6 @@ function renderHtml(text: string): string {
     .join('');
 }
 
-/** Current caret offset (char index into the editor's text) or -1 if none. */
-function getCaretOffset(el: HTMLElement): number {
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return -1;
-  const range = sel.getRangeAt(0);
-  if (!el.contains(range.startContainer)) return -1;
-  if (range.startContainer.nodeType === Node.TEXT_NODE) {
-    const pre = range.cloneRange();
-    pre.selectNodeContents(el);
-    pre.setEnd(range.startContainer, range.startOffset);
-    return pre.toString().length;
-  }
-  return 0;
-}
-
-/** Place the caret at the given text offset, or the end if out of range. */
-function setCaretOffset(el: HTMLElement, offset: number) {
-  el.focus();
-  const sel = window.getSelection();
-  if (!sel) return;
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-  let remaining = offset;
-  let node = walker.nextNode();
-  while (node) {
-    const len = (node.textContent ?? '').length;
-    if (remaining <= len) {
-      const range = document.createRange();
-      range.setStart(node, remaining);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-      return;
-    }
-    remaining -= len;
-    node = walker.nextNode();
-  }
-  const end = document.createRange();
-  end.selectNodeContents(el);
-  end.collapse(false);
-  sel.removeAllRanges();
-  sel.addRange(end);
-}
-
 function escapeRegexChar(c: string): string {
   return c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -145,22 +102,6 @@ export function TagTextarea({
     setError(null);
   }
 
-  function handleFocus() {
-    const el = editorRef.current;
-    if (!el) return;
-    // Switch from pretty pills to raw marker text so the caret behaves exactly
-    // like a plain textarea (type past a tag without polluting it). The raw view
-    // is the same characters, so the caret offset is preserved.
-    const offset = getCaretOffset(el);
-    setEditing(true);
-    el.innerHTML = escapeHtml(plainText);
-    setCaretOffset(el, offset);
-  }
-
-  function handleBlur() {
-    setEditing(false);
-  }
-
   /** Toggle a dictionary term as tagged across all its occurrences. */
   function toggle(term: string) {
     const key = keyOf(term);
@@ -194,8 +135,8 @@ export function TagTextarea({
         aria-label={name}
         data-field={name}
         onInput={handleInput}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
+        onFocus={() => setEditing(true)}
+        onBlur={() => setEditing(false)}
         className="block min-h-[80px] w-full cursor-text rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         suppressContentEditableWarning
         data-placeholder={placeholder}
