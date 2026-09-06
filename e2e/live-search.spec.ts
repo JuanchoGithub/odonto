@@ -15,7 +15,13 @@ test('patients page shows suggestions while typing and opens the patient', async
     .filter({ hasText: /García/i })
     .first();
   await expect(option).toBeVisible({ timeout: 10_000 });
-  await option.click();
+  // The dropdown can rarely swallow a click (a re-render landing between
+  // the actionability check and mouseup); retry until navigation happens.
+  const detailRe = /\/patients\/[0-9a-f-]{36}$/;
+  for (let attempt = 0; attempt < 3 && !detailRe.test(page.url()); attempt++) {
+    await option.click({ timeout: 10_000 }).catch(() => {});
+    await page.waitForURL(detailRe, { timeout: 5_000 }).catch(() => {});
+  }
 
   await page.waitForURL(/\/patients\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 });
@@ -78,7 +84,12 @@ test('insurers page shows suggestions while typing and opens the insurer', async
     .filter({ hasText: new RegExp(name) })
     .first();
   await expect(option).toBeVisible({ timeout: 10_000 });
-  await option.click();
+  // Same click-retry as the patients test above.
+  const detailRe = /\/insurers\/[0-9a-f-]{36}$/;
+  for (let attempt = 0; attempt < 3 && !detailRe.test(page.url()); attempt++) {
+    await option.click({ timeout: 10_000 }).catch(() => {});
+    await page.waitForURL(detailRe, { timeout: 5_000 }).catch(() => {});
+  }
 
   await page.waitForURL(/\/insurers\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 });

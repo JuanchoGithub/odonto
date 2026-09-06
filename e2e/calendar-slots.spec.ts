@@ -112,10 +112,15 @@ test('blocks are sized by duration, overlaps are allowed, drag reschedules', asy
   const movedBox = (await moved.boundingBox())!;
   expect(Math.abs(movedBox.y - (dragBox.y + 28))).toBeLessThan(8);
 
-  // List view shows the same appointments
+  // List view shows the same appointments.
+  // NOTE: list rows render twice (mobile cards first in DOM, desktop table
+  // second) — scope to :visible so desktop runs don't grab the hidden cards.
   await page.getByTestId('view-list').click();
   await expect(
-    page.getByTestId('appt-list-row').filter({ hasText: '14:00' }).first(),
+    page
+      .locator('[data-testid="appt-list-row"]:visible')
+      .filter({ hasText: '14:00' })
+      .first(),
   ).toBeVisible();
   await page.getByTestId('view-calendar').click();
   await expect(block60).toBeVisible();
@@ -129,10 +134,37 @@ test('drag-select on empty grid pre-fills a range and records the method', async
   await settleCalendar(page);
 
   const col = page.getByTestId('day-col-2'); // Wednesday
+  await expect(col).toBeVisible({ timeout: 15_000 });
   const box = (await col.boundingBox())!;
-  // 11:30 = (11.5*60-480)/15 = 14 slots → y = 14*14 = 196px
+  if (!box) throw new Error('day column has no bounding box after becoming visible');
+  // Find a free 2-slot (30-min) gap instead of hardcoding 11:30: reruns on
+  // a reused DB leave blocks behind (overlaps are allowed), and dragging
+  // onto an existing block move-drags it instead of opening the dialog.
+  // Grid: 8:00–19:00 at 14px per 15-min slot.
+  const badgeBoxes = await col.getByTestId('appt-badge').evaluateAll((els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    }),
+  );
+  const colTop = box.y;
+  const rel = badgeBoxes.map((b) => ({ top: b.top - colTop, bottom: b.bottom - colTop }));
+  let slotIndex = -1;
+  // Start at 09:00 (slot 4): the seeded working hours are 9–18, so earlier
+  // slots would be rejected by the availability check.
+  for (let i = 4; i + 2 <= 40; i++) {
+    const y0 = i * 14 - 2;
+    const y1 = (i + 2) * 14 + 2;
+    if (!rel.some((b) => b.top < y1 && b.bottom > y0)) {
+      slotIndex = i;
+      break;
+    }
+  }
+  expect(slotIndex, 'expected a free 30-min gap on Wednesday').toBeGreaterThanOrEqual(0);
+  const startMin = 8 * 60 + slotIndex * 15;
+  const startText = `${pad(Math.floor(startMin / 60))}:${pad(startMin % 60)}`;
   const x = box.x + box.width / 2;
-  const y = box.y + 196 + 2;
+  const y = box.y + slotIndex * 14 + 2;
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.mouse.move(x, y + 25, { steps: 4 });
@@ -140,7 +172,7 @@ test('drag-select on empty grid pre-fills a range and records the method', async
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByTestId('appt-start-time')).toHaveText('11:30');
+  await expect(dialog.getByTestId('appt-start-time')).toHaveText(startText);
   await expect(dialog.getByTestId('appt-duration')).toHaveText(/30 min/);
 
   await pickPatient(dialog);
@@ -149,17 +181,17 @@ test('drag-select on empty grid pre-fills a range and records the method', async
     .click();
   await expect(dialog).not.toBeVisible({ timeout: 10_000 });
 
-  // The calendar block exists at 11:30…
+  // The calendar block exists at the dragged time…
   await expect(
-    page.getByTestId('appt-badge').filter({ hasText: '11:30' }).first(),
+    page.getByTestId('appt-badge').filter({ hasText: startText }).first(),
   ).toBeVisible();
 
   // …and the list view shows the appointment with contact info;
   // who/how it was created lives in the edit dialog.
   await page.getByTestId('view-list').click();
   const row = page
-    .getByTestId('appt-list-row')
-    .filter({ hasText: '11:30' })
+    .locator('[data-testid="appt-list-row"]:visible')
+    .filter({ hasText: startText })
     .first();
   await expect(row).toBeVisible();
   await expect(row).toContainText('Dr. Demo'); // dentist column
@@ -203,7 +235,7 @@ test('pending (shared, unbooked) links appear in the list view', async ({
   await settleCalendar(page);
   await page.getByTestId('view-list').click();
   const pending = page
-    .getByTestId('pending-link-row')
+    .locator('[data-testid="pending-link-row"]:visible')
     .filter({ hasText: /García/ })
     .first();
   await expect(pending).toBeVisible({ timeout: 10_000 });

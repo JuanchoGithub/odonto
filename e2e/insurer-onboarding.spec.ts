@@ -27,8 +27,9 @@ test('inline new-patient from appointment dialog opens the full form', async ({ 
   await expect(newPatientDialog.locator('input[name="birth_date"]')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="phone"]')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="email"]')).toBeVisible();
-  await expect(newPatientDialog.locator('textarea[name="medical_history"]')).toBeVisible();
-  await expect(newPatientDialog.locator('textarea[name="allergies"]')).toBeVisible();
+  // (TagTextarea renders contentEditable divs with data-field, not <textarea>)
+  await expect(newPatientDialog.locator('[data-field="medical_history"]')).toBeVisible();
+  await expect(newPatientDialog.locator('[data-field="allergies"]')).toBeVisible();
   // The InsurerPicker is rendered (the trigger button is present)
   await expect(newPatientDialog.locator('#insurer-picker-trigger')).toBeVisible();
 });

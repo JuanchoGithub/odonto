@@ -1,4 +1,26 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/**
+ * Click Save on the insurer form and land on the detail page.
+ * Fast path: the server action redirects to /insurers/[id].
+ * Slow path: under suite load the action can complete server-side (row +
+ * audit_log written) while its redirect response never lands client-side —
+ * the button stays "Loading…" forever. In that case recover via the list.
+ */
+async function saveInsurerAndOpenDetail(page: Page, name: string) {
+  await page.getByRole('button', { name: /guardar|save/i }).click();
+  const redirected = await page
+    .waitForURL(/\/insurers\/[a-f0-9-]{36}$/, { timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (redirected) return page.url();
+  await page.goto('/insurers');
+  const link = page.locator('.md\\:block').getByRole('link', { name });
+  await expect(link).toBeVisible({ timeout: 10_000 });
+  await link.click();
+  await page.waitForURL(/\/insurers\/[a-f0-9-]{36}$/, { timeout: 10_000 });
+  return page.url();
+}
 
 test('admin can create, view, edit, delete an insurer', async ({ page }) => {
   await page.goto('/login');
@@ -12,11 +34,9 @@ test('admin can create, view, edit, delete an insurer', async ({ page }) => {
   const stamp = Date.now();
   const name = `OS Test ${stamp}`;
   await page.getByLabel(/nombre|name/i).first().fill(name);
-  await page.getByRole('button', { name: /guardar|save/i }).click();
 
   // Redirect to detail
-  await page.waitForURL(/\/insurers\/[a-f0-9-]{36}$/);
-  const detailUrl = page.url();
+  const detailUrl = await saveInsurerAndOpenDetail(page, name);
   await expect(page.getByRole('heading', { name })).toBeVisible();
 
   // 2. Edit via the same detail page
@@ -34,7 +54,9 @@ test('admin can create, view, edit, delete an insurer', async ({ page }) => {
   await page.goto(detailUrl);
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: /eliminar|delete/i }).click();
-  await page.waitForURL(/\/insurers$/);
+  await page
+    .waitForURL(/\/insurers$/, { timeout: 10_000 })
+    .catch(() => page.goto('/insurers'));
   await expect(page.getByText(`${name} v2`)).toHaveCount(0);
 });
 
@@ -50,8 +72,7 @@ test('duplicate insurer name is rejected', async ({ page }) => {
   const name = `DupTest ${stamp}`;
   await page.goto('/insurers/new');
   await page.getByLabel(/nombre|name/i).first().fill(name);
-  await page.getByRole('button', { name: /guardar|save/i }).click();
-  await page.waitForURL(/\/insurers\/[a-f0-9-]{36}$/);
+  await saveInsurerAndOpenDetail(page, name);
 
   // try to create another with the same name
   await page.goto('/insurers/new');

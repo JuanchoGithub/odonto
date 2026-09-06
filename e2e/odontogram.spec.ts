@@ -792,7 +792,11 @@ test('odontogram: mobile viewport shows the tooth-list picker and edit sheet', a
 
   await expect(page.getByTestId('tooth-edit-sheet')).not.toBeVisible();
   const sixteen = page.locator('[data-tooth-list-item="16"]');
-  await expect(sixteen).toHaveClass(/bg-blue-500/);
+  // The list button never carries condition colors itself (the symbol rule:
+  // clinical encoding lives inside ToothSvg). It signals "has findings" via
+  // the border + accessible label instead.
+  await expect(sixteen).toHaveAttribute('aria-label', /1 condition/);
+  await expect(sixteen).toHaveClass(/border-transparent/);
 });
 
 test('odontogram: tablet viewport (md) keeps the 2-row chart layout', async ({

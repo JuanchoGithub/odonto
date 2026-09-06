@@ -23,9 +23,10 @@ async function findRiskyPatientId(page: Page) {
   const url = page.url();
   const patientId = url.match(/\/patients\/([a-f0-9-]{36})$/)![1];
 
-  // Add a risk via the medical tab
+  // Add a risk via the medical tab (TagTextarea is contentEditable —
+  // getByLabel doesn't match contenteditable, so use data-field)
   await page.getByRole('tab', { name: /médico|medical/i }).click();
-  await page.getByLabel(/alergias a medicamentos|medication allergies/i).fill('Penicilina');
+  await page.locator('[data-field="allergies_medication"]').fill('Penicilina');
   await page
     .getByRole('button', { name: /guardar|save/i })
     .click();

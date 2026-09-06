@@ -372,6 +372,12 @@ function ApptBlock({
     colWidth: number;
     origStart: number;
     origEnd: number;
+    // Last computed drop target, written synchronously on every pointermove.
+    // onPointerUp reads THIS, not the `preview` state: state updates flush
+    // asynchronously, so a fast drag can pointerup before the re-render and
+    // `preview` would still be null from the stale closure (dropped drop).
+    lastMove?: { deltaMin: number; dayDelta: number };
+    lastResizeDurMin?: number;
   } | null>(null);
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const suppressClickRef = useRef(false);
@@ -453,6 +459,7 @@ function ApptBlock({
         Math.max(startMin0 + deltaMin, DAY_START_MIN),
         DAY_END_MIN - durMin,
       );
+      d.lastMove = { deltaMin: clamped - startMin0, dayDelta };
       setPreview({
         mode: 'move',
         deltaMin: clamped - startMin0,
@@ -465,12 +472,13 @@ function ApptBlock({
       );
       const startMin0 = minutesOfDay(new Date(d.origStart));
       const maxDur = DAY_END_MIN - startMin0;
+      d.lastResizeDurMin = Math.min(
+        Math.max(origDurMin + deltaMin, SLOT_MINUTES),
+        maxDur,
+      );
       setPreview({
         mode: 'resize',
-        durMin: Math.min(
-          Math.max(origDurMin + deltaMin, SLOT_MINUTES),
-          maxDur,
-        ),
+        durMin: d.lastResizeDurMin,
       });
     }
   }
@@ -484,7 +492,6 @@ function ApptBlock({
     } catch {
       /* already released */
     }
-    const p = preview;
     setPreview(null);
     if (!d.moved) {
       // Not a drag — let the click handler open the edit dialog.
@@ -492,15 +499,17 @@ function ApptBlock({
     }
     // The click that follows this pointerup must be swallowed.
     suppressClickRef.current = true;
-    if (!p) return;
-    if (p.mode === 'move') {
-      const shift = p.deltaMin * 60000 + p.dayDelta * 86400000;
+    // Commit from the ref (synchronous), NOT from `preview` state — see above.
+    if (d.mode === 'move') {
+      if (!d.lastMove) return;
+      const shift = d.lastMove.deltaMin * 60000 + d.lastMove.dayDelta * 86400000;
       onCommit(appt, new Date(d.origStart + shift), new Date(d.origEnd + shift));
     } else {
+      if (d.lastResizeDurMin == null) return;
       onCommit(
         appt,
         new Date(d.origStart),
-        new Date(d.origStart + p.durMin * 60000),
+        new Date(d.origStart + d.lastResizeDurMin * 60000),
       );
     }
   }
@@ -571,7 +580,12 @@ function ApptBlock({
       <div
         aria-hidden
         data-testid="appt-resize"
-        className="absolute bottom-0 inset-x-0 flex h-[24px] cursor-ns-resize items-end justify-center pb-0.5"
+        className="absolute bottom-0 inset-x-0 flex cursor-ns-resize items-end justify-center pb-0.5"
+        // The hit area must never swallow the whole block: on a 1-slot
+        // (14px) block a full 24px handle leaves no move-grabbable area, so
+        // short appointments could be resized but never moved by drag.
+        // Cap the handle at half the block height instead.
+        style={{ height: Math.min(24, height / 2) }}
         onPointerDown={(e) => onPointerDown(e, 'resize')}
       >
         <span className="h-[5px] w-10 rounded-full bg-white/70" />

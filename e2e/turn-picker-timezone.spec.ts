@@ -13,11 +13,13 @@ async function loginAs(page: Page, email: string, password: string) {
 async function setClinicTimezone(page: Page, tz: string) {
   await loginAs(page, 'admin@local', 'Admin123!');
   await page.goto('/settings');
-  const tzTrigger = page.getByTestId('clinic-timezone');
+  // :visible — RSC streaming can briefly mount a hidden duplicate of the
+  // whole settings card (0×0 twin); strict-mode then sees two testids.
+  const tzTrigger = page.locator('[data-testid="clinic-timezone"]:visible');
   await expect(tzTrigger).toBeVisible();
   await tzTrigger.click();
   await page.getByRole('option', { name: tz, exact: true }).click();
-  await page.getByTestId('clinic-save').click();
+  await page.locator('[data-testid="clinic-save"]:visible').click();
   await page.waitForLoadState('networkidle');
 }
 
@@ -29,23 +31,54 @@ test('turn-picker respects the clinic timezone when generating slots', async ({
   // server-local time with clinic-local time would be visible.
   await setClinicTimezone(page, 'America/Argentina/Buenos_Aires');
 
+  // Wipe ALL of the dentist's schedule windows and save. The seed gives
+  // dentists no explicit schedule (clinic-hours fallback), so wiping
+  // restores the pristine state.
+  async function clearSchedule() {
+    await page.goto('/settings/schedules');
+    const weekly = page.getByTestId('weekly-schedule');
+    for (let guard = 0; guard < 30; guard++) {
+      const trash = weekly.getByTestId('remove-window');
+      if ((await trash.count()) === 0) break;
+      try {
+        await trash.first().click({ timeout: 2_000 });
+      } catch {
+        /* node disappeared mid-click */
+      }
+    }
+    await weekly
+      .getByRole('button', { name: /guardar|save/i })
+      .click();
+    await page.waitForLoadState('networkidle');
+  }
+
+  // This test mutates global state (clinic timezone + the dentist's
+  // schedule). Restore both in a finally so a mid-test failure can't
+  // poison the rest of the suite (or the next run on a reused DB).
+  async function restoreAll() {
+    try {
+      await page.context().clearCookies();
+      await setClinicTimezone(page, 'UTC');
+      await page.context().clearCookies();
+      await loginAs(page, 'doc@local', 'Doctor123!');
+      await clearSchedule();
+    } catch {
+      /* best-effort: the suite must not fail twice */
+    }
+  }
+
+  try {
+  // Force the clinic timezone to a non-UTC zone so any bug that confuses
+  // server-local time with clinic-local time would be visible.
+  await setClinicTimezone(page, 'America/Argentina/Buenos_Aires');
+
   // Log in as the dentist and set Mon 09:00–13:00 (clinic-local) only.
   await page.context().clearCookies();
   await loginAs(page, 'doc@local', 'Doctor123!');
 
-  await page.goto('/settings/schedules');
-  const weekly = page.getByTestId('weekly-schedule');
+  await clearSchedule();
 
-  // Wipe any pre-existing windows first.
-  for (let guard = 0; guard < 30; guard++) {
-    const trash = weekly.getByTestId('remove-window');
-    if ((await trash.count()) === 0) break;
-    try {
-      await trash.first().click({ timeout: 2_000 });
-    } catch {
-      /* node disappeared mid-click */
-    }
-  }
+  const weekly = page.getByTestId('weekly-schedule');
 
   // Add one window on day 1 (Monday) and fill 09:00 / 13:00.
   const monday = weekly.getByTestId('weekly-day-1');
@@ -135,6 +168,46 @@ test('turn-picker respects the clinic timezone when generating slots', async ({
     slotMinutes.add(dtf.format(new Date(s.start)));
   }
 
+  // The e2e DB is shared across specs: other tests may have booked part of
+  // this Monday (e.g. turn-picker.spec books the dentist's first free slot).
+  // Subtract genuinely-occupied slots so we only assert on free ones.
+  const artDay = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const toMin = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  };
+  const dayBefore = new Date(`${mondayDate}T12:00:00Z`);
+  dayBefore.setUTCDate(dayBefore.getUTCDate() - 1);
+  const apptsRes = await page.request.get(
+    `/api/appointments?start=${encodeURIComponent(dayBefore.toISOString())}`,
+  );
+  const occupied = new Set<string>();
+  if (apptsRes.ok()) {
+    const appts = (await apptsRes.json()) as {
+      starts_at: string;
+      ends_at: string;
+      status: string;
+    }[];
+    for (const a of appts) {
+      if (a.status === 'cancelled' || a.status === 'no_show') continue;
+      if (artDay.format(new Date(a.starts_at)) !== mondayDate) continue;
+      const sMin = toMin(dtf.format(new Date(a.starts_at)));
+      const eMin = toMin(dtf.format(new Date(a.ends_at)));
+      for (let m = 9 * 60; m + 15 <= 13 * 60; m += 15) {
+        if (m < eMin && m + 15 > sMin) {
+          occupied.add(
+            `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`,
+          );
+        }
+      }
+    }
+  }
+
   // Expected slots: 09:00, 09:15, ..., 12:45 (16 slots at 15-min granularity).
   const expected: string[] = [];
   for (let m = 9 * 60; m + 15 <= 13 * 60; m += 15) {
@@ -143,8 +216,11 @@ test('turn-picker respects the clinic timezone when generating slots', async ({
     );
   }
   for (const e of expected) {
+    if (occupied.has(e)) continue; // booked by another spec, not our window
     expect(slotMinutes, `missing slot ${e} ART`).toContain(e);
   }
+  // Guard against a vacuous pass: most of the window must actually be free.
+  expect(expected.length - occupied.size).toBeGreaterThanOrEqual(8);
   // No slot outside the 09:00–13:00 window.
   for (const got of slotMinutes) {
     const [h, m] = got.split(':').map(Number);
@@ -154,7 +230,7 @@ test('turn-picker respects the clinic timezone when generating slots', async ({
     expect(h * 60 + m, `unexpected slot ${got} ART`).toBeLessThan(13 * 60);
   }
 
-  // Restore the clinic timezone to UTC so other tests aren't affected.
-  await page.context().clearCookies();
-  await setClinicTimezone(page, 'UTC');
+  } finally {
+    await restoreAll();
+  }
 });

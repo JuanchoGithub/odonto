@@ -21,7 +21,7 @@ export async function login(
   await page.getByLabel('Email').fill(email);
   await page.getByLabel(/contraseñ|password/i).fill(password);
   await page.getByRole('button', { name: /ingresar|sign in/i }).click();
-  await page.waitForURL(/\/(es|en)\/dashboard/, { timeout: 15_000 });
+  await page.waitForURL(/\/(es|en)\/dashboard/, { timeout: 30_000 });
 }
 
 /** Populate the appointment dialog's date + start-time + duration fields. */

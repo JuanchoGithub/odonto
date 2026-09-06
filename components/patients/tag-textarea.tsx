@@ -191,6 +191,7 @@ export function TagTextarea({
     <div className={cn('space-y-1.5', className)}>
       <div
         ref={editorRef}
+        id={name}
         contentEditable
         role="textbox"
         aria-multiline="true"

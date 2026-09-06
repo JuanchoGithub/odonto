@@ -23,14 +23,19 @@ test('medical tab: full clinical form, save, cross-tab preservation, risk banner
   await page.waitForURL(/\/patients\/[a-f0-9-]{36}$/);
 
   // 2. Open the medical tab and fill clinical fields
+  // (TagTextarea fields are contentEditable divs — getByLabel doesn't match
+  // contenteditable, so target them via data-field; plain Inputs below still
+  // use getByLabel.)
   await page.getByRole('tab', { name: /médico|medical/i }).click();
-  await expect(page.getByLabel(/alergias a medicamentos|medication allergies/i)).toBeVisible();
-  await page.getByLabel(/alergias a medicamentos|medication allergies/i).fill('Penicilina');
-  await page.getByLabel(/enfermedades transmisibles|contagious diseases/i).fill('Hepatitis B');
+  const allergiesMed = page.locator('[data-field="allergies_medication"]');
+  const contagious = page.locator('[data-field="contagious_diseases"]');
+  await expect(allergiesMed).toBeVisible();
+  await allergiesMed.fill('Penicilina');
+  await contagious.fill('Hepatitis B');
   await page.getByLabel(/diabetes/i).fill('Tipo 2');
   await page.getByLabel(/grupo sanguíneo|blood type/i).fill('A+');
   await page.getByLabel(/tensión arterial|blood pressure/i).fill('120/80');
-  await page.getByLabel(/condiciones crónicas|chronic conditions/i).fill('Hipertensión');
+  await page.locator('[data-field="chronic_conditions"]').fill('Hipertensión');
   await page.getByRole('button', { name: /guardar|save/i }).click();
   await page.waitForTimeout(1500);
 
@@ -104,10 +109,11 @@ test('inline new-patient dialog (from appointment) shows the full intake', async
   await expect(newPatientDialog.locator('input[name="first_name"]')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="last_name"]')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="birth_date"]')).toBeVisible();
-  // Clinical section also present
-  await expect(newPatientDialog.locator('textarea[name="medical_history"]')).toBeVisible();
-  await expect(newPatientDialog.locator('textarea[name="contagious_diseases"]')).toBeVisible();
-  await expect(newPatientDialog.locator('textarea[name="allergies_medication"]')).toBeVisible();
+  // Clinical section also present (TagTextarea renders a contentEditable
+  // div with data-field, not a <textarea>)
+  await expect(newPatientDialog.locator('[data-field="medical_history"]')).toBeVisible();
+  await expect(newPatientDialog.locator('[data-field="contagious_diseases"]')).toBeVisible();
+  await expect(newPatientDialog.locator('[data-field="allergies_medication"]')).toBeVisible();
   // Email field
   await expect(newPatientDialog.locator('input[name="email"]')).toBeVisible();
 
