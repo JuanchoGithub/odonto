@@ -14,7 +14,7 @@ This is the source of truth. README.md is a one-page pointer; everything operati
 ## 1. What is Odonto?
 
 Bilingual (es / en) clinic management app. Modules:
-- **Patients** — CRUD + insurance link + per-patient odontogram + treatments + invoices
+- **Patients** — CRUD + insurance link + per-patient odontogram + treatments + invoices; **two tabs on the detail page** — General (identity, contact, insurer) and Médico (clinical: chronic_conditions, contagious_diseases, current_medications, allergies_medication, blood_pressure, blood_type, diabetes, pregnant, last_medical_update) — each saves independently; hidden inputs in one mode preserve the OTHER mode's values; a red risk banner appears at the top of both General and Médico tabs when contagious_diseases or allergies_medication is non-empty
 - **Appointments** — week calendar on a 15-minute slot grid; blocks are sized by duration; drag to move (cross-day too) and drag the bottom edge to extend; drag on empty space to select a range and create with that duration; overlapping appointments are allowed (rendered side-by-side); each dentist has a color (random on creation, editable in Settings → Users); doctor filter for receptionists; calendar/list view toggle; non-working hours are shaded gray (per-dentist when filtered, clinic business hours on the "all" view); the dialog takes `_date` + 15-min start-time select + duration; each appointment records `created_by` + `created_via` (`manual` = New button, `click` = slot click, `drag` = drag-select, `shared` = patient self-booked via turn picker); the list view additionally shows pending (shared, unbooked) turn-picker links
 - **Insurers** (obras sociales) — master table, searchable, with inline onboarding
 - **Treatments** — per-patient pipeline + cost
@@ -297,6 +297,8 @@ Nav links are filtered in `components/nav/top-nav.tsx` based on `user.role`.
 - `insurers` — `name UNIQUE`, plan/phone/email/notes.
 - `attachments` — Vercel Blob references.
 - `audit_log` — every write to a clinical entity appends a row (`entity`, `entity_id`, `action`, `meta` JSON, `at`).
+
+**Clinical columns on `patients`** (added in 0008_patient_clinical.sql): `chronic_conditions`, `contagious_diseases`, `current_medications`, `allergies_medication`, `blood_pressure`, `blood_type`, `diabetes`, `pregnant` (enum: yes/no/unknown/empty), `last_medical_update`. All nullable.
 
 `PRAGMA foreign_keys = ON` is set in the migration. **Never disable it.**
 
