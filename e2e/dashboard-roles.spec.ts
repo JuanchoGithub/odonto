@@ -1,0 +1,49 @@
+import { test, expect, type Page } from '@playwright/test';
+
+const ADMIN = { email: 'admin@local', password: 'Admin123!' };
+const DENTIST = { email: 'doc@local', password: 'Doctor123!' };
+const FRONT = { email: 'front@local', password: 'Front123!' };
+
+async function login(page: Page, who: { email: string; password: string }) {
+  await page.goto('/login');
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await page.getByLabel('Email').fill(who.email);
+  await page.getByLabel(/contraseñ|password/i).fill(who.password);
+  await page
+    .getByRole('button', { name: /ingresar|sign in/i })
+    .click();
+  await page.waitForURL(/\/(es|en)\/dashboard/, { timeout: 15_000 });
+}
+
+test('doctor panel: next-hour queue + give-turn button', async ({ page }) => {
+  await login(page, DENTIST);
+  await expect(page.getByTestId('doctor-panel')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /próxima hora|next hour/i }),
+  ).toBeVisible();
+  await expect(page.getByTestId('panel-give-turn')).toBeVisible();
+  // Queue is either rows or the empty state — both prove the panel loaded.
+  await expect(
+    page.getByTestId('panel-appt-row').first().or(page.getByTestId('panel-empty').first()),
+  ).toBeVisible({ timeout: 15_000 });
+});
+
+test('secretary panel: today, follow-ups, payments', async ({ page }) => {
+  await login(page, FRONT);
+  await expect(page.getByTestId('secretary-panel')).toBeVisible();
+  await expect(page.getByTestId('panel-give-turn')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /^hoy|today$/i }).first(),
+  ).toBeVisible();
+  await expect(page.getByTestId('panel-followups')).toBeVisible();
+  await expect(page.getByTestId('panel-followup-late')).toBeVisible();
+  await expect(page.getByTestId('panel-followup-noshow')).toBeVisible();
+  await expect(page.getByTestId('panel-followup-incomplete')).toBeVisible();
+  await expect(page.getByTestId('panel-payments')).toBeVisible();
+});
+
+test('admin panel: KPI cards (unchanged)', async ({ page }) => {
+  await login(page, ADMIN);
+  await expect(page.getByTestId('admin-panel')).toBeVisible();
+  await expect(page.getByText(/pacientes activos|active patients/i)).toBeVisible();
+});

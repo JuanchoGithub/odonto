@@ -1,8 +1,10 @@
 import { setRequestLocale, getTranslations } from 'next-intl/server';
 import { requireUser } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import { queryOne } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DoctorPanel } from '@/components/dashboard/doctor-panel';
+import { SecretaryPanel } from '@/components/dashboard/secretary-panel';
 
 type Clinic = { id: string; name: string; currency: string; locale: string };
 
@@ -21,6 +23,31 @@ export default async function DashboardPage({
   );
   if (!clinic) redirect(`/${locale}/settings?firstRun=1`);
 
+  return (
+    <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
+        <p className="text-muted-foreground">{tCommon('appName')} · {clinic.name}</p>
+      </div>
+      {user.role === 'dentist' ? (
+        <DoctorPanel dentist={{ id: user.id, name: user.name ?? '' }} />
+      ) : user.role === 'receptionist' ? (
+        <SecretaryPanel
+          dentists={await query<{ id: string; name: string }>(
+            "SELECT id, name FROM users WHERE role = 'dentist' ORDER BY name",
+          )}
+          currency={clinic.currency}
+          locale={clinic.locale}
+        />
+      ) : (
+        <AdminCards clinic={clinic} />
+      )}
+    </div>
+  );
+}
+
+async function AdminCards({ clinic }: { clinic: Clinic }) {
+  const t = await getTranslations('dashboard');
   const today = new Date().toISOString().slice(0, 10);
   const startOfWeek = new Date();
   startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
@@ -57,25 +84,19 @@ export default async function DashboardPage({
   ];
 
   return (
-    <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
-        <p className="text-muted-foreground">{tCommon('appName')} · {clinic.name}</p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {cards.map((c) => (
-          <Card key={c.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {c.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{c.value}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="admin-panel">
+      {cards.map((c) => (
+        <Card key={c.label}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {c.label}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-semibold">{c.value}</div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
