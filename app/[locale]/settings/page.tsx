@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ClinicForm } from '@/components/settings/clinic-form';
 import { UserForm } from '@/components/settings/user-form';
 import { UserColorCell } from '@/components/settings/user-color-cell';
+import { MedicalTagsManager } from '@/components/settings/medical-tags-manager';
 import { Badge } from '@/components/ui/badge';
+import { listAllMedicalTags } from '@/server/actions/medical-tags';
 
 type Clinic = {
   id: string;
@@ -42,9 +44,10 @@ export default async function SettingsPage({
   const t = await getTranslations('settings');
   const tCommon = await getTranslations('common');
   const sp = await searchParams;
-  const [clinic, users] = await Promise.all([
+  const [clinic, users, medicalTags] = await Promise.all([
     queryOne<Clinic>('SELECT * FROM clinics LIMIT 1'),
     query<User>('SELECT id, email, name, role, locale, created_at, color FROM users ORDER BY created_at'),
+    listAllMedicalTags(),
   ]);
 
   return (
@@ -127,6 +130,15 @@ export default async function SettingsPage({
             </table>
           </div>
           <UserForm />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('medicalTags')}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t('medicalTagsHint')}</p>
+        </CardHeader>
+        <CardContent>
+          <MedicalTagsManager initial={medicalTags} />
         </CardContent>
       </Card>
     </div>

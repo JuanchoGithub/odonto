@@ -98,6 +98,8 @@
     "riskAlertTitle": "Alerta clínica",
     "riskAlertContagious": "Enfermedad transmisible",
     "riskAlertAllergy": "Alergia a medicamento",
+    "tagThisWord": "Marcar \"{word}\" como etiqueta",
+    "addingTag": "Guardando…",
     "deleteTitle": "Eliminar paciente",
     "deleteConfirm": "¿Eliminar a {name}? Podés deshacer esto desde el aviso que aparece abajo a la derecha.",
     "deleted": "Paciente eliminado",
@@ -282,7 +284,14 @@
     "newUser": "Nuevo usuario",
     "role": "Rol",
     "color": "Color",
-    "password": "Contraseña"
+    "password": "Contraseña",
+    "medicalTags": "Etiquetas médicas",
+    "medicalTagsHint": "Las palabras etiquetadas se resaltan en la pestaña Médico de cada paciente. Quitar una etiqueta afecta a todos los pacientes que la usan.",
+    "tagField": "Campo",
+    "tagTermPlaceholder": "Nueva etiqueta (una sola palabra)",
+    "addTag": "Agregar",
+    "removeTag": "Quitar etiqueta {term}",
+    "noTags": "Sin etiquetas todavía para este campo."
   },
   "insurers": {
     "title": "Obras sociales y prepagas",

@@ -1,5 +1,5 @@
 'use client';
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,12 +13,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { InsurerPicker } from '@/components/insurers/insurer-picker';
+import { TagTextarea } from '@/components/patients/tag-textarea';
 import {
   createPatient,
   updatePatient,
   type PatientFormState,
   type PatientRow,
 } from '@/server/actions/patients';
+import { listAllMedicalTags } from '@/server/actions/medical-tags';
 import { cn } from '@/lib/utils';
 
 type Mode = 'general' | 'medical' | 'full';
@@ -61,6 +63,12 @@ export function PatientForm({
     name: patient?.insurance_provider ?? '',
     plan: patient?.insurance_plan ?? '',
   });
+
+  const [dictionaries, setDictionaries] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    listAllMedicalTags().then(setDictionaries).catch(() => {});
+  }, []);
+  const dictFor = (field: string) => dictionaries[field] ?? [];
 
   const baseBound = action
     ? action
@@ -224,32 +232,32 @@ export function PatientForm({
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="contagious_diseases">{t('contagiousDiseases')}</Label>
-                <Textarea
-                  id="contagious_diseases"
+                <TagTextarea
                   name="contagious_diseases"
                   defaultValue={patient?.contagious_diseases ?? ''}
-                  rows={2}
+                  dictionary={dictFor('contagious_diseases')}
                   placeholder={t('contagiousDiseasesHint')}
+                  rows={2}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="allergies_medication">{t('allergiesMedication')}</Label>
-                <Textarea
-                  id="allergies_medication"
+                <TagTextarea
                   name="allergies_medication"
                   defaultValue={patient?.allergies_medication ?? ''}
-                  rows={2}
+                  dictionary={dictFor('allergies_medication')}
                   placeholder={t('allergiesMedicationHint')}
+                  rows={2}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="current_medications">{t('currentMedications')}</Label>
-                <Textarea
-                  id="current_medications"
+                <TagTextarea
                   name="current_medications"
                   defaultValue={patient?.current_medications ?? ''}
-                  rows={2}
+                  dictionary={dictFor('current_medications')}
                   placeholder={t('currentMedicationsHint')}
+                  rows={2}
                 />
               </div>
             </div>
@@ -262,12 +270,12 @@ export function PatientForm({
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="chronic_conditions">{t('chronicConditions')}</Label>
-                <Textarea
-                  id="chronic_conditions"
+                <TagTextarea
                   name="chronic_conditions"
                   defaultValue={patient?.chronic_conditions ?? ''}
-                  rows={2}
+                  dictionary={dictFor('chronic_conditions')}
                   placeholder={t('chronicConditionsHint')}
+                  rows={2}
                 />
               </div>
               <div className="space-y-2">
@@ -311,21 +319,21 @@ export function PatientForm({
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="medical_history">{t('medicalHistory')}</Label>
-                <Textarea
-                  id="medical_history"
+                <TagTextarea
                   name="medical_history"
                   defaultValue={patient?.medical_history ?? ''}
+                  dictionary={dictFor('medical_history')}
                   rows={3}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="allergies">{t('allergies')}</Label>
-                <Textarea
-                  id="allergies"
+                <TagTextarea
                   name="allergies"
                   defaultValue={patient?.allergies ?? ''}
-                  rows={2}
+                  dictionary={dictFor('allergies')}
                   placeholder={t('allergiesHint')}
+                  rows={2}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">

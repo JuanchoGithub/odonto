@@ -98,6 +98,8 @@
     "riskAlertTitle": "Clinical alert",
     "riskAlertContagious": "Contagious disease",
     "riskAlertAllergy": "Medication allergy",
+    "tagThisWord": "Tag \"{word}\"",
+    "addingTag": "Saving…",
     "deleteTitle": "Delete patient",
     "deleteConfirm": "Delete {name}? You can undo this from the toast at the bottom right.",
     "deleted": "Patient deleted",
@@ -282,7 +284,14 @@
     "newUser": "New user",
     "role": "Role",
     "color": "Color",
-    "password": "Password"
+    "password": "Password",
+    "medicalTags": "Medical tags",
+    "medicalTagsHint": "Tagged words are highlighted on each patient's Medical tab. Removing a tag affects every patient that uses it.",
+    "tagField": "Field",
+    "tagTermPlaceholder": "New tag (single word)",
+    "addTag": "Add",
+    "removeTag": "Remove tag {term}",
+    "noTags": "No tags yet for this field."
   },
   "insurers": {
     "title": "Insurers and health plans",

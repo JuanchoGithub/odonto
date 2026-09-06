@@ -69,6 +69,13 @@
   }
 }
 
+/* Placeholder for the contenteditable tag editor (tag-textarea.tsx). */
+[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
 @layer utilities {
   .pt-safe {
     padding-top: env(safe-area-inset-top);

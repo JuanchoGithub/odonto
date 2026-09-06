@@ -51,6 +51,8 @@ export function can(role: Role, action: string): boolean {
       'reports:read',
       'insurers:read',
       'insurers:write',
+      'medical-tags:read',
+      'medical-tags:write',
     ],
     receptionist: [
       'patients:read',
