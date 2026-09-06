@@ -1,16 +1,15 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { addMedicalTag } from '@/server/actions/medical-tags';
 import {
-  MIN_TAG_LENGTH,
-  stripPunct,
+  parseMarkers,
+  findTaggedTerms,
+  findDictionaryMatches,
+  wrapTerm,
   keyOf,
-  type MedicalTagField,
 } from '@/lib/medical-tags';
 import { cn } from '@/lib/utils';
 
-/** Strip surrounding punctuation so "aspirin," matches the "aspirin" tag. */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -19,32 +18,31 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** Build the editor's innerHTML: dictionary matches become chips, rest is free text. */
-function tokenizeHtml(text: string, dictionary: string[]): string {
-  const set = new Set(dictionary.map((d) => keyOf(d)));
-  let out = '';
-  let last = 0;
-  const re = /\S+/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) out += escapeHtml(text.slice(last, m.index));
-    const token = m[0];
-    const core = keyOf(stripPunct(token));
-    if (core.length >= MIN_TAG_LENGTH && set.has(core)) {
-      out += `<span class="mx-0.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-sm font-medium text-primary">${escapeHtml(token)}</span>`;
-    } else {
-      out += escapeHtml(token);
-    }
-    last = m.index + token.length;
-  }
-  if (last < text.length) out += escapeHtml(text.slice(last));
-  return out;
+const PILL_CLASS =
+  'mx-0.5 inline-flex items-center rounded bg-primary/10 px-1.5 py-px align-middle text-xs font-medium leading-tight text-primary';
+
+/** Render the editor's innerHTML: marker-wrapped segments become pills. */
+function renderHtml(text: string): string {
+  return parseMarkers(text)
+    .map((s) =>
+      s.type === 'tag'
+        ? `<span class="${PILL_CLASS}">${escapeHtml(s.value)}</span>`
+        : escapeHtml(s.value),
+    )
+    .join('');
 }
 
-/** Last word typed so far (for the "tag this word" suggestion). */
-function lastWord(text: string): string {
-  const words = text.trim().split(/\s+/);
-  return stripPunct(words[words.length - 1] ?? '');
+function escapeRegexChar(c: string): string {
+  return c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Wrap every occurrence of `term` (case/accent tolerant) in markers. */
+function wrapOccurrences(text: string, term: string): string {
+  const pattern = keyOf(term)
+    .split(' ')
+    .map(escapeRegexChar)
+    .join('\\s+');
+  return text.replace(new RegExp(pattern, 'gi'), () => wrapTerm(term));
 }
 
 export function TagTextarea({
@@ -66,48 +64,54 @@ export function TagTextarea({
   const editorRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
   const [plainText, setPlainText] = useState(defaultValue ?? '');
-  const [pendingTerm, setPendingTerm] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const dictSet = useMemo(() => new Set(dictionary.map((d) => keyOf(d))), [dictionary]);
 
-  // Re-render chips whenever the text or dictionary changes, but NOT while the
-  // user is actively editing (re-tokenizing mid-keystroke jumps the caret).
+  // Re-render pills on blur/display (not mid-keystroke, to protect the caret).
   useEffect(() => {
     if (editorRef.current && !editing) {
-      editorRef.current.innerHTML = tokenizeHtml(plainText, dictionary);
+      editorRef.current.innerHTML = renderHtml(plainText);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plainText, dictionary, editing]);
+  }, [plainText, editing]);
+
+  function applyRender(text: string) {
+    if (editorRef.current) editorRef.current.innerHTML = renderHtml(text);
+  }
+
+  const matches = useMemo(() => findDictionaryMatches(plainText, dictionary), [plainText, dictionary]);
+  const taggedKeys = useMemo(
+    () => new Set(findTaggedTerms(plainText).map(keyOf)),
+    [plainText],
+  );
 
   function handleInput() {
     const el = editorRef.current;
     if (!el) return;
-    const text = el.innerText ?? el.textContent ?? '';
-    setPlainText(text);
-    const word = lastWord(text);
-    setPendingTerm(
-      word.length >= MIN_TAG_LENGTH && !dictSet.has(keyOf(word)) ? word : null,
-    );
+    setPlainText(el.innerText ?? el.textContent ?? '');
     setError(null);
   }
 
-  async function handleTag() {
-    if (!pendingTerm) return;
-    setAdding(true);
-    setError(null);
-    const res = await addMedicalTag(name as MedicalTagField, pendingTerm);
-    setAdding(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    setPendingTerm(null);
-    // Re-render chips in place (leave editing state alone; the word is already
-    // in the text, so tokenization will highlight it).
-    if (editorRef.current) {
-      editorRef.current.innerHTML = tokenizeHtml(plainText, dictionary.concat(res.term));
+  /** Toggle a dictionary term as tagged across all its occurrences. */
+  function toggle(term: string) {
+    const key = keyOf(term);
+    if (taggedKeys.has(key)) {
+      // Un-tag: remove this term's markers only (leave other tags untouched).
+      const parts = key
+        .split(' ')
+        .map(escapeRegexChar)
+        .join('\\s+');
+      const patterns = [new RegExp(`_"(?:${parts})"_`, 'gi'), new RegExp(`_(?:${parts})_`, 'gi')];
+      let next = plainText;
+      for (const re of patterns) {
+        next = next.replace(re, (s) => (s.includes('_"_') ? s.slice(2, -2) : s.slice(1, -1)));
+      }
+      setPlainText(next);
+      applyRender(next);
+    } else {
+      const next = wrapOccurrences(plainText, term);
+      setPlainText(next);
+      applyRender(next);
     }
   }
 
@@ -127,16 +131,30 @@ export function TagTextarea({
         suppressContentEditableWarning
         data-placeholder={placeholder}
       />
-      {pendingTerm ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={adding}
-            onClick={handleTag}
-            className="inline-flex min-h-[44px] items-center gap-1 rounded-full border border-input bg-background px-3 text-sm font-medium text-primary touch-manipulation disabled:opacity-50"
-          >
-            {adding ? t('addingTag') : t('tagThisWord', { word: pendingTerm })}
-          </button>
+      {matches.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">{t('knownTags')}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {matches.map((term) => {
+              const on = taggedKeys.has(keyOf(term));
+              return (
+                <button
+                  key={term}
+                  type="button"
+                  onClick={() => toggle(term)}
+                  aria-pressed={on}
+                  className={cn(
+                    'inline-flex min-h-[44px] items-center gap-1 rounded-full border px-3 text-sm font-medium touch-manipulation',
+                    on
+                      ? 'border-transparent bg-primary/10 text-primary'
+                      : 'border-input bg-background text-muted-foreground',
+                  )}
+                >
+                  {term}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

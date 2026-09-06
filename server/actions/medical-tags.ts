@@ -9,6 +9,7 @@ import {
   stripPunct,
   keyOf,
   validateTagTerm,
+  findTaggedTerms,
   type MedicalTagField,
 } from '@/lib/medical-tags';
 
@@ -109,4 +110,20 @@ export async function deleteMedicalTag(
   revalidatePath('/settings');
   revalidatePath(`/patients`);
   return { ok: true, term: existing.term };
+}
+
+/**
+ * Parse a saved medical field and add any marker-tagged terms to the shared
+ * dictionary. Runs on patient save so tags a doctor wrote by hand (or via the
+ * editor) populate the vocabulary for everyone. Idempotent.
+ */
+export async function syncTagsFromField(field: string, text: string | null | undefined): Promise<void> {
+  if (!text) return;
+  for (const term of findTaggedTerms(text)) {
+    try {
+      await addMedicalTag(field, term);
+    } catch {
+      // Never block the patient save because the tag sync failed.
+    }
+  }
 }

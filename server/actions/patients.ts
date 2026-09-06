@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
+import { syncTagsFromField } from '@/server/actions/medical-tags';
+import { MEDICAL_TAG_FIELDS } from '@/lib/medical-tags';
 
 const PatientSchema = z.object({
   first_name: z.string().min(1),
@@ -49,6 +51,13 @@ function escapeLike(s: string): string {
 function clampLimit(limit: number): number {
   if (!Number.isFinite(limit)) return 200;
   return Math.min(200, Math.max(1, Math.floor(limit)));
+}
+
+/** After a patient write, add any marker-tagged terms to the shared dictionary. */
+async function syncPatientTags(data: z.infer<typeof PatientSchema>): Promise<void> {
+  for (const field of MEDICAL_TAG_FIELDS) {
+    await syncTagsFromField(field, data[field] as string | null | undefined);
+  }
 }
 
 async function insertPatientWithAudit(
@@ -98,6 +107,7 @@ async function insertPatientWithAudit(
       [uid(), userId, id],
     );
   });
+  await syncPatientTags(data);
   return id;
 }
 
@@ -163,6 +173,7 @@ export async function updatePatient(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'update', 'patient', ?)`,
     [uid(), user.id, id],
   );
+  await syncPatientTags(data);
   revalidatePath(`/patients/${id}`);
   return { ok: true };
 }

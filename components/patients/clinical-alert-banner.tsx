@@ -1,6 +1,7 @@
 import { useTranslations } from 'next-intl';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { unmark } from '@/lib/medical-tags';
 import type { PatientRow } from '@/server/actions/patients';
 
 export function ClinicalAlertBanner({
@@ -22,13 +23,13 @@ export function ClinicalAlertBanner({
   if (patient.contagious_diseases?.trim()) {
     items.push({
       label: t('riskAlertContagious'),
-      detail: patient.contagious_diseases,
+      detail: unmark(patient.contagious_diseases),
     });
   }
   if (patient.allergies_medication?.trim()) {
     items.push({
       label: t('riskAlertAllergy'),
-      detail: patient.allergies_medication,
+      detail: unmark(patient.allergies_medication),
     });
   }
 
