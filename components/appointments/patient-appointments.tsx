@@ -4,6 +4,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { format, type Locale } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -15,7 +16,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { dentistColor } from '@/lib/colors';
 import { AppointmentDialog } from './appointment-dialog';
-import type { ApptRow } from '@/server/actions/appointments';
+import {
+  updateAppointmentStatus,
+  type ApptRow,
+} from '@/server/actions/appointments';
+import { useToast } from '@/components/ui/toaster';
 import type { Role } from '@/lib/schemas/common';
 
 function statusVariant(s: string) {
@@ -41,11 +46,15 @@ export function PatientAppointments({
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
+  const tDash = useTranslations('dashboard');
+  const tErr = useTranslations('errors');
   const localeStr = useLocale();
   const dateFnsLocale: Locale = localeStr.startsWith('en') ? enUS : es;
   const [rows, setRows] = useState<ApptRow[] | null>(null);
   const [editing, setEditing] = useState<ApptRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { push } = useToast();
+  const now = Date.now();
 
   async function refresh() {
     const res = await fetch(`/api/appointments?patient_id=${patientId}`);
@@ -60,6 +69,34 @@ export function PatientAppointments({
   function openEdit(a: ApptRow) {
     setEditing(a);
     setDialogOpen(true);
+  }
+
+  // Secondary no-show path: a stale "scheduled" appointment still sitting on
+  // the patient page after the auto sweep didn't catch it (or hasn't run yet).
+  function NoShowQuickAction({ appt }: { appt: ApptRow }) {
+    const overdue =
+      appt.status === 'scheduled' &&
+      new Date(appt.ends_at).getTime() < now;
+    if (!overdue) return null;
+    return (
+      <button
+        type="button"
+        data-testid="patient-mark-noshow"
+        onClick={async (e) => {
+          e.stopPropagation();
+          const res = await updateAppointmentStatus(appt.id, 'no_show');
+          if ('error' in res) {
+            push({ title: tErr('generic'), variant: 'destructive' });
+            return;
+          }
+          push({ title: tDash('markedNoShow'), variant: 'success' });
+          refresh();
+        }}
+        className="inline-flex min-h-[36px] items-center rounded-md border border-amber-500/50 px-2 text-xs font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+      >
+        {tDash('markNoShow')}
+      </button>
+    );
   }
 
   return (
@@ -112,11 +149,17 @@ export function PatientAppointments({
                           <Badge variant={statusVariant(a.status)} className="shrink-0">
                             {t(`status.${a.status}` as any)}
                           </Badge>
+                          {(a.reprogram_count ?? 0) > 0 ? (
+                            <Badge variant="secondary" data-testid="reprogram-badge">
+                              {t('reprogrammed', { count: a.reprogram_count })}
+                            </Badge>
+                          ) : null}
                           {a.creator_name ? (
                             <span className="text-xs text-muted-foreground">
                               {t('addedBy')} {a.creator_name}
                             </span>
                           ) : null}
+                          <NoShowQuickAction appt={a} />
                         </span>
                       </span>
                     </button>
@@ -135,6 +178,7 @@ export function PatientAppointments({
                     <TableHead>{t('dentist')}</TableHead>
                     <TableHead>{t('reason')}</TableHead>
                     <TableHead>{tCommon('status')}</TableHead>
+                    <TableHead>{tCommon('actions')}</TableHead>
                     <TableHead>{t('addedBy')}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -171,9 +215,19 @@ export function PatientAppointments({
                           {a.reason ?? '—'}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={statusVariant(a.status)}>
-                            {t(`status.${a.status}` as any)}
-                          </Badge>
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                            <Badge variant={statusVariant(a.status)}>
+                              {t(`status.${a.status}` as any)}
+                            </Badge>
+                            {(a.reprogram_count ?? 0) > 0 ? (
+                              <Badge variant="secondary" data-testid="reprogram-badge">
+                                {t('reprogrammed', { count: a.reprogram_count })}
+                              </Badge>
+                            ) : null}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <NoShowQuickAction appt={a} />
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {a.creator_name ?? '—'}

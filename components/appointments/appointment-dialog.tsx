@@ -45,6 +45,20 @@ const STATUS_OPTIONS = [
   'no_show',
 ] as const;
 
+const TERMINAL_STATUSES = ['completed', 'cancelled', 'no_show'] as const;
+function isTerminal(s: string) {
+  return (TERMINAL_STATUSES as readonly string[]).includes(s);
+}
+
+const CANCEL_REASONS = [
+  'patient_request',
+  'dentist_request',
+  'no_answer',
+  'duplicate',
+  'schedule_change',
+  'other',
+] as const;
+
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 
 // 15-minute start times, 08:00 – 18:45 (mirrors the calendar display window)
@@ -105,6 +119,9 @@ export function AppointmentDialog({
   );
   const [status, setStatus] = useState<string>('scheduled');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [cancelReason, setCancelReason] = useState<string>('patient_request');
+  const [reopenArmed, setReopenArmed] = useState(false);
+  const pendingFd = useRef<FormData | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [dateVal, setDateVal] = useState('');
   const [timeVal, setTimeVal] = useState('');
@@ -144,10 +161,13 @@ export function AppointmentDialog({
     prevEditingId.current = editing?.id ?? null;
     if (!open) return;
     if (!justOpened && !editSwap) return;
+    setReopenArmed(false);
+    pendingFd.current = null;
     if (editing) {
       setPatientId(editing.patient_id);
       setDentistId(editing.dentist_id);
       setStatus(editing.status);
+      setCancelReason(editing.cancel_reason ?? 'patient_request');
     } else {
       setPatientId('');
       setDentistId(
@@ -156,6 +176,7 @@ export function AppointmentDialog({
           : dentists[0]?.id ?? '',
       );
       setStatus('scheduled');
+      setCancelReason('patient_request');
     }
     const s = editing
       ? new Date(editing.starts_at)
@@ -173,6 +194,64 @@ export function AppointmentDialog({
     setDurVal(DURATIONS.includes(dur) ? String(dur) : '30');
   }, [open, editing, dentists, defaultStart, defaultEnd, viewerRole, currentUserId]);
 
+  function buildFd(form: HTMLFormElement): FormData {
+    const fd = new FormData(form);
+    // Send timezone-aware ISO instants: the naive y-m-d/HH:mm was a source
+    // of timezone ambiguity between browser and server.
+    const startLocal = new Date(`${dateVal}T${timeVal}:00`);
+    const endLocal = new Date(startLocal.getTime() + Number(durVal) * 60000);
+    fd.set('starts_at', startLocal.toISOString());
+    fd.set('ends_at', endLocal.toISOString());
+    fd.set('created_via', createdVia);
+    fd.set('patient_id', patientId);
+    fd.set('dentist_id', dentistId);
+    fd.set('status', status);
+    if (status === 'cancelled') fd.set('cancel_reason', cancelReason);
+    if (editing) fd.set('id', editing.id);
+    return fd;
+  }
+
+  async function submitFd(fd: FormData) {
+    if (reopenArmed) fd.set('reopen', 'true');
+    const res = editing
+      ? await updateAppointment(fd)
+      : await createAppointment(fd);
+    if (res && 'error' in res && res.error === 'terminal') {
+      // Terminal → active needs an explicit reopen confirmation.
+      pendingFd.current = fd;
+      setReopenArmed(true);
+      return;
+    }
+    if (res && 'error' in res && res.error === 'conflict') {
+      setError(t('conflict'));
+      return;
+    }
+    if (res && 'error' in res && res.error === 'patient_not_found') {
+      setError(t('patientNotFound'));
+      return;
+    }
+    if (res && 'error' in res && res.error === 'invalid') {
+      setError(t('invalid'));
+      return;
+    }
+    if (res && 'error' in res && res.error) {
+      setError(tErr('generic'));
+      return;
+    }
+    if (
+      editing &&
+      res &&
+      'ok' in res &&
+      'reprogrammed' in res &&
+      res.reprogrammed
+    ) {
+      push({ title: t('rescheduledToast'), variant: 'success' });
+    }
+    onOpenChange(false);
+    if (onCreated) onCreated();
+    else router.refresh();
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!patientId) {
@@ -182,40 +261,22 @@ export function AppointmentDialog({
     setError(null);
     setLoading(true);
     try {
-      const fd = new FormData(e.currentTarget);
-      // Send timezone-aware ISO instants: the naive y-m-d/HH:mm was a source
-      // of timezone ambiguity between browser and server.
-      const startLocal = new Date(`${dateVal}T${timeVal}:00`);
-      const endLocal = new Date(startLocal.getTime() + Number(durVal) * 60000);
-      fd.set('starts_at', startLocal.toISOString());
-      fd.set('ends_at', endLocal.toISOString());
-      fd.set('created_via', createdVia);
-      fd.set('patient_id', patientId);
-      fd.set('dentist_id', dentistId);
-      fd.set('status', status);
-      if (editing) fd.set('id', editing.id);
-      const res = editing
-        ? await updateAppointment(fd)
-        : await createAppointment(fd);
-      if (res && 'error' in res && res.error === 'conflict') {
-        setError(t('conflict'));
-        return;
-      }
-      if (res && 'error' in res && res.error === 'patient_not_found') {
-        setError(t('patientNotFound'));
-        return;
-      }
-      if (res && 'error' in res && res.error === 'invalid') {
-        setError(t('invalid'));
-        return;
-      }
-      if (res && 'error' in res && res.error) {
-        setError(tErr('generic'));
-        return;
-      }
-      onOpenChange(false);
-      if (onCreated) onCreated();
-      else router.refresh();
+      await submitFd(buildFd(e.currentTarget));
+    } catch {
+      setError(tErr('generic'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onConfirmReopen() {
+    if (!pendingFd.current) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await submitFd(pendingFd.current);
+      setReopenArmed(false);
+      pendingFd.current = null;
     } catch {
       setError(tErr('generic'));
     } finally {
@@ -228,7 +289,7 @@ export function AppointmentDialog({
     setLoading(true);
     setError(null);
     try {
-      await deleteAppointment(editing.id);
+      await deleteAppointment(editing.id, cancelReason);
       onOpenChange(false);
       push({ title: tCommon('deleted'), variant: 'default' });
       if (onCreated) onCreated();
@@ -404,6 +465,21 @@ export function AppointmentDialog({
                         : editing.created_via)
                     : '—'}
                 </div>
+                {(editing.reprogram_count ?? 0) > 0 ? (
+                  <div data-testid="appt-reprogram">
+                    <span className="font-medium">
+                      {t('reprogrammed', { count: editing.reprogram_count })}
+                    </span>
+                    {editing.original_starts_at ? (
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · {t('originalDate', {
+                          date: format(new Date(editing.original_starts_at), 'Pp'),
+                        })}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {editing ? (
@@ -421,6 +497,28 @@ export function AppointmentDialog({
                     ))}
                   </SelectContent>
                 </Select>
+                {status === 'cancelled' ? (
+                  <div className="space-y-1">
+                    <Label htmlFor="cancel_reason">{t('cancelReasonLabel')}</Label>
+                    <Select value={cancelReason} onValueChange={setCancelReason}>
+                      <SelectTrigger data-testid="appt-cancel-reason">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CANCEL_REASONS.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {t(`cancelReason.${r}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+                {isTerminal(editing.status) && !isTerminal(status) ? (
+                  <p className="text-xs text-amber-700 dark:text-amber-300" data-testid="reopen-notice">
+                    {t('reopenNotice', { status: t(`status.${editing.status}`) })}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2">
@@ -475,17 +573,69 @@ export function AppointmentDialog({
               <Textarea id="notes" name="notes" rows={2} defaultValue={editing?.notes ?? ''} />
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {reopenArmed ? (
+              <div
+                className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2"
+                data-testid="reopen-confirm"
+              >
+                <span className="flex-1 text-xs text-amber-800 dark:text-amber-200">
+                  {t('reopenNotice', {
+                    status: editing ? t(`status.${editing.status}`) : '',
+                  })}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setReopenArmed(false);
+                    pendingFd.current = null;
+                  }}
+                >
+                  {tCommon('cancel')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={loading}
+                  onClick={onConfirmReopen}
+                  data-testid="reopen-confirm-btn"
+                >
+                  {t('reopenConfirm')}
+                </Button>
+              </div>
+            ) : null}
             <div className="flex items-center gap-2">
               {editing ? (
                 <div className="flex-1 flex items-center gap-2">
                   {confirmDelete ? (
                     <>
+                      <Select
+                        value={cancelReason}
+                        onValueChange={setCancelReason}
+                      >
+                        <SelectTrigger
+                          data-testid="appt-delete-reason"
+                          className="h-9 w-full max-w-[180px]"
+                          title={t('cancelReasonLabel')}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CANCEL_REASONS.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {t(`cancelReason.${r}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Button
                         type="button"
                         variant="destructive"
                         size="sm"
                         onClick={onDelete}
                         disabled={loading}
+                        data-testid="appt-delete-confirm"
                       >
                         {tCommon('delete')}
                       </Button>

@@ -1,5 +1,6 @@
 'use client';
 import { format, type Locale } from 'date-fns';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -32,6 +33,17 @@ function statusVariant(s: string) {
       : s === 'no_show'
         ? 'warning'
         : ('default' as const);
+}
+
+/** "Rescheduled ×N" chip shown next to the status badge. */
+function ReprogramBadge({ count }: { count: number | null }) {
+  const t = useTranslations('appointments');
+  if (!count || count < 1) return null;
+  return (
+    <Badge variant="secondary" className="shrink-0" data-testid="reprogram-badge">
+      {t('reprogrammed', { count })}
+    </Badge>
+  );
 }
 
 function ContactCell({
@@ -146,6 +158,7 @@ export function AppointmentList({
                         <Badge variant={statusVariant(a.status)} className="shrink-0">
                           {statusLabel(a.status)}
                         </Badge>
+                        <ReprogramBadge count={a.reprogram_count} />
                         {a.patient_phone ? (
                           <a
                             href={`tel:${a.patient_phone}`}
@@ -215,9 +228,12 @@ export function AppointmentList({
                       id={a.dentist_id}
                     />
                     <TableCell>
-                      <Badge variant={statusVariant(a.status)}>
-                        {statusLabel(a.status)}
-                      </Badge>
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        <Badge variant={statusVariant(a.status)}>
+                          {statusLabel(a.status)}
+                        </Badge>
+                        <ReprogramBadge count={a.reprogram_count} />
+                      </span>
                     </TableCell>
                   </TableRow>
                 );

@@ -233,9 +233,14 @@ export async function saveWeeklySchedule(
   for (const o of orphans) {
     const dec = d.decisions[o.id]!;
     if (dec.action === 'cancel') {
-      await query(`UPDATE appointments SET status = 'cancelled' WHERE id = ?`, [
-        o.id,
-      ]);
+      await query(
+        `UPDATE appointments SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?, cancel_reason = 'schedule_change' WHERE id = ?`,
+        [nowIso(), user.id, o.id],
+      );
+      await query(
+        `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'cancel', 'appointment', ?, ?)`,
+        [uid(), user.id, o.id, JSON.stringify({ via: 'schedule-change', cancel_reason: 'schedule_change' })],
+      );
     } else if (dec.action === 'exception') {
       // Keep it: create a custom_hours exception matching the appointment window,
       // measured in the clinic's timezone (not the server's local time).
@@ -256,9 +261,23 @@ export async function saveWeeklySchedule(
         ],
       );
     } else if (dec.action === 'reschedule' && dec.new_starts_at && dec.new_ends_at) {
+      const prev = await queryOne<{ starts_at: string; ends_at: string; reprogram_count: number | null; original_starts_at: string | null }>(
+        `SELECT starts_at, ends_at, reprogram_count, original_starts_at FROM appointments WHERE id = ?`,
+        [o.id],
+      );
       await query(
-        `UPDATE appointments SET starts_at = ?, ends_at = ? WHERE id = ?`,
-        [dec.new_starts_at, dec.new_ends_at, o.id],
+        `UPDATE appointments SET starts_at = ?, ends_at = ?,
+          reprogram_count = COALESCE(reprogram_count, 0) + 1,
+          original_starts_at = COALESCE(original_starts_at, ?) WHERE id = ?`,
+        [dec.new_starts_at, dec.new_ends_at, prev?.starts_at ?? o.starts_at, o.id],
+      );
+      await query(
+        `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'reschedule', 'appointment', ?, ?)`,
+        [uid(), user.id, o.id, JSON.stringify({
+          from: { starts_at: prev?.starts_at ?? o.starts_at, ends_at: prev?.ends_at ?? o.ends_at },
+          to: { starts_at: dec.new_starts_at, ends_at: dec.new_ends_at },
+          via: 'schedule-change',
+        })],
       );
     }
   }

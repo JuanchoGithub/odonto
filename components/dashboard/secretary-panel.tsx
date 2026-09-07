@@ -58,6 +58,7 @@ export function SecretaryPanel({
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
+  const [armingComplete, setArmingComplete] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
@@ -103,6 +104,21 @@ export function SecretaryPanel({
       return;
     }
     push({ title: t('markedNoShow'), variant: 'success' });
+    load();
+  }
+
+  async function confirmAttended(id: string) {
+    if (armingComplete !== id) {
+      setArmingComplete(id);
+      return;
+    }
+    setArmingComplete(null);
+    const res = await updateAppointmentStatus(id, 'completed').catch(() => null);
+    if (!res || 'error' in res) {
+      push({ title: tErr('generic'), variant: 'destructive' });
+      return;
+    }
+    push({ title: t('markedAttended'), variant: 'success' });
     load();
   }
 
@@ -210,6 +226,21 @@ export function SecretaryPanel({
               empty={t('emptyFollowUp')}
               items={followUps.notCompleted}
               onAttend={setAttendAppt}
+              extra={(a) => (
+                <div className="mt-1">
+                  <Button
+                    size="sm"
+                    variant={armingComplete === a.id ? 'secondary' : 'outline'}
+                    onClick={() => confirmAttended(a.id)}
+                    data-testid="panel-mark-attended"
+                    className="min-h-[44px]"
+                  >
+                    {armingComplete === a.id
+                      ? t('confirmAttended')
+                      : t('markAttended')}
+                  </Button>
+                </div>
+              )}
             />
           </div>
         </section>

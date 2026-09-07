@@ -567,6 +567,15 @@ function ApptBlock({
         <div className={cn('font-semibold', inactive && 'line-through')}>
           {format(new Date(dispStart), 'HH:mm')}–
           {format(new Date(dispEnd), 'HH:mm')}
+          {(appt.reprogram_count ?? 0) > 0 ? (
+            <span
+              className="ml-1 font-normal opacity-80"
+              title={`reprogrammed ×${appt.reprogram_count}`}
+              data-testid="reprogram-marker"
+            >
+              ↺{appt.reprogram_count}
+            </span>
+          ) : null}
         </div>
         {height >= SLOT_PX * 2 ? (
           <div className={cn('truncate', inactive && 'line-through')}>

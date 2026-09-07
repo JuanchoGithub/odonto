@@ -75,6 +75,9 @@
     "markNoShow": "Mark no-show",
     "confirmNoShow": "Confirm no-show",
     "markedNoShow": "Marked as no-show",
+    "markAttended": "Mark as attended",
+    "confirmAttended": "Confirm attended",
+    "markedAttended": "Marked as attended",
     "payments": "Payments",
     "unpaid": "Unpaid invoices",
     "emptyUnpaid": "No outstanding balances.",
@@ -185,7 +188,24 @@
     "advanceTo": "Advance to",
     "openChart": "Open chart",
     "call": "Call",
-    "emptyPatient": "This patient has no appointments yet."
+    "emptyPatient": "This patient has no appointments yet.",
+    "reprogrammed": "Rescheduled ×{count}",
+    "originalDate": "Original: {date}",
+    "rescheduledToast": "Appointment rescheduled",
+    "cancelTitle": "Cancel appointment",
+    "cancelReasonLabel": "Cancellation reason",
+    "cancelConfirm": "Confirm cancellation",
+    "cancelReason": {
+      "patient_request": "Patient request",
+      "dentist_request": "Dentist request",
+      "no_answer": "No answer",
+      "duplicate": "Duplicate appointment",
+      "schedule_change": "Schedule change",
+      "other": "Other"
+    },
+    "reopenNotice": "This appointment is finalized ({status}). Confirm the reopen to make it active again.",
+    "reopenConfirm": "Confirm reopen",
+    "terminal": "That status is final. Confirm the reopen to reactivate it."
   },
   "odontogram": {
     "title": "Odontogram",
@@ -293,7 +313,8 @@
     "title": "Reports",
     "revenue": "Revenue",
     "topTreatments": "Top treatments",
-    "noShowRate": "No-show rate",
+    "noShowRate": "No-show rate (last 90 days)",
+    "reprogramRate": "Reschedule rate (last 90 days)",
     "byDentist": "Dentist productivity",
     "dateRange": "Date range"
   },

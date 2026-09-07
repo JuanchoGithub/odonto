@@ -15,6 +15,7 @@ This is the source of truth. README.md is a one-page pointer; everything operati
 Bilingual (es / en) clinic management app. Modules:
 - **Patients** — CRUD + insurance link + per-patient odontogram + treatments + invoices; **two tabs on the detail page** — General (identity, contact, insurer) and Médico (clinical: chronic_conditions, contagious_diseases, current_medications, allergies_medication, blood_pressure, blood_type, diabetes, pregnant, last_medical_update) — each saves independently; hidden inputs in one mode preserve the OTHER mode's values; a red risk banner appears at the top of both General and Médico tabs when contagious_diseases or allergies_medication is non-empty
 - **Appointments** — week calendar on a 15-minute slot grid; blocks are sized by duration; drag to move (cross-day too) and drag the bottom edge to extend; drag on empty space to select a range and create with that duration; overlapping appointments are allowed (rendered side-by-side); each dentist has a color (random on creation, editable in Settings → Users); doctor filter for receptionists; calendar/list view toggle; non-working hours are shaded gray (per-dentist when filtered, clinic business hours on the "all" view); the dialog takes `_date` + 15-min start-time select + duration; each appointment records `created_by` + `created_via` (`manual` = New button, `click` = slot click, `drag` = drag-select, `shared` = patient self-booked via turn picker); the list view additionally shows pending (shared, unbooked) turn-picker links
+- **Appointment outcomes** — statuses `scheduled | arrived | in_chair | completed | cancelled | no_show` (terminal: completed/cancelled/no_show; reopening one requires the explicit `reopen=true` ack surfaced in the dialog). **Reprogramming** = any starts/ends/dentist change in `updateAppointment` — auto-bumps `reprogram_count`, sets `original_starts_at` once, and writes an `audit_log` `reschedule` row with from/to; rendered as a "Reprogramado ×N" chip (list cards, patient page) and a ↺N marker on calendar blocks. **Cancellation** is manual with a picklist `cancel_reason` (patient_request / dentist_request / no_answer / duplicate / schedule_change / other) + `cancelled_at`/`cancelled_by`. **No-show** is automatic: Vercel Cron hits `GET /api/cron/mark-no-shows` hourly (see `vercel.json`; guarded by `CRON_SECRET`, grace via `NO_SHOW_GRACE_MIN`, default 60 min); an overdue `scheduled` appointment flips to `no_show` (`no_show_by='auto'`) unless payment/invoice/treatment/attachment/odontogram evidence in the visit window proves attendance (then auto-`completed`); `arrived`/`in_chair` never auto-flip (patient did show) — they land in the secretary "Sin completar" follow-up, which now has a "Marcar como atendido" one-tap confirm. `server/actions/appointments.ts::sweepOverdueNoShows` is the shared core; system-origin audit rows must use `user_id=NULL` (FK-safe) with the marker stored in `no_show_by`. e2e: `e2e/appointment-outcomes.spec.ts`
 - **Insurers** (obras sociales) — master table, searchable, with inline onboarding
 - **Treatments** — per-patient pipeline + cost
 - **Billing** — invoices (two-rate tax) + payments + jsPDF export
@@ -243,6 +244,7 @@ TURSO_TOKEN=<turso-platform-auth-token>
 AUTH_SECRET=<openssl rand -base64 32>
 AUTH_URL=https://midentista.vercel.app
 BLOB_READ_WRITE_TOKEN=<vercel-blob-rw-token>
+CRON_SECRET=<openssl rand -base64 32>   # guards /api/cron/* (auto no-show sweep)
 ```
 
 This file:
@@ -255,7 +257,7 @@ This file:
 1. Create a Turso DB: `turso db create odonto` (or via the web UI), capture the URL and a `turso db tokens create` token.
 2. Run `npm run migrate` with `TURSO_URL` and `TURSO_TOKEN` exported to apply migrations.
 3. Run `npm run seed` with `CLINIC_LOCALE=es` to create the seed data.
-4. In the Vercel dashboard for `midentista` (or run `scripts/vercel-setup.mjs` which does the same thing programmatically), set the five env vars above on all three targets (production / preview / development).
+4. In the Vercel dashboard for `midentista` (or run `scripts/vercel-setup.mjs` which does the same thing programmatically), set the six env vars above on all three targets (production / preview / development).
 5. Add `VERCEL_TOKEN` as a GitHub Actions repository secret so the Deploy workflow can run `vercel build --prod && vercel deploy --prebuilt --prod`.
 
 Detailed step-by-step in §11.
@@ -293,6 +295,8 @@ Nav links are filtered in `components/nav/top-nav.tsx` based on `user.role`.
 - `audit_log` — every write to a clinical entity appends a row (`entity`, `entity_id`, `action`, `meta` JSON, `at`).
 
 **Clinical columns on `patients`** (added in 0008_patient_clinical.sql): `chronic_conditions`, `contagious_diseases`, `current_medications`, `allergies_medication`, `blood_pressure`, `blood_type`, `diabetes`, `pregnant` (enum: yes/no/unknown/empty), `last_medical_update`. All nullable.
+
+**Outcome columns on `appointments`** (added in 0011_appointment_outcomes.sql): `reprogram_count`, `original_starts_at`, `cancelled_at`, `cancelled_by`, `cancel_reason`, `no_show_at`, `no_show_by`, `completed_at` + `idx_appointments_status_ends`. All additive/nullable; `reprogram_count` defaults 0.
 
 `PRAGMA foreign_keys = ON` is set in the migration. **Never disable it.**
 
@@ -379,7 +383,7 @@ node scripts/vercel-setup.mjs
 The script will:
 1. Look up (or create) the Vercel project named `VERCEL_PROJECT` (default: `midentista`).
 2. Create a Vercel Blob store named `odonto` if one doesn't exist, and capture its `BLOB_READ_WRITE_TOKEN`.
-3. Push `TURSO_URL`, `TURSO_TOKEN`, `AUTH_SECRET` (random 32-byte), `AUTH_URL`, `BLOB_READ_WRITE_TOKEN` to Vercel for all three env targets.
+3. Push `TURSO_URL`, `TURSO_TOKEN`, `AUTH_SECRET` (random 32-byte), `AUTH_URL`, `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET` (random 32-byte) to Vercel for all three env targets.
 4. Run `npm run migrate` against the production Turso DB.
 5. Push to `main` — the Git integration builds and promotes automatically.
 
@@ -423,6 +427,8 @@ The current `VERCEL_TOKEN` GitHub secret is a `vcp_` personal access token, whic
 9. **Vercel CLI + `vcp_` tokens**: `vcp_` personal access tokens work for the REST API but the Vercel CLI rejects them with "token is not valid" when used via `--token`. Use them only for REST API calls (which is what `scripts/vercel-setup.mjs` does). **Production deploys happen via the Vercel Git integration** (push to `main` auto-builds). No CLI, no token, no hook.
 
 10. **The build step on Vercel runs `postinstall`** which is `node scripts/migrate.mjs || true`. So fresh deploys auto-apply migrations as long as `TURSO_URL` + `TURSO_TOKEN` are set in the build env. If they're missing, the build still succeeds (because of `|| true`) and you must apply migrations manually.
+
+11. **System-origin `audit_log` rows must use `user_id = NULL`.** `audit_log.user_id` is an FK to `users(id)` — a marker like `'auto'` violates it and throws `SQLITE_CONSTRAINT_FOREIGNKEY` mid-sweep (the appointment row was already updated, so it half-applies). Store the marker on the domain row instead (e.g. `appointments.no_show_by = 'auto'`); only real user ids go into `audit_log.user_id`.
 
 ---
 

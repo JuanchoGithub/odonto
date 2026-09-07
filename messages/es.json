@@ -75,6 +75,9 @@
     "markNoShow": "Marcar no asistió",
     "confirmNoShow": "Confirmar no asistió",
     "markedNoShow": "Marcado como no asistió",
+    "markAttended": "Marcar como atendido",
+    "confirmAttended": "Confirmar atendido",
+    "markedAttended": "Marcado como atendido",
     "payments": "Pagos",
     "unpaid": "Facturas impagas",
     "emptyUnpaid": "Sin saldos pendientes.",
@@ -185,7 +188,24 @@
     "advanceTo": "Avanzar a",
     "openChart": "Abrir ficha",
     "call": "Llamar",
-    "emptyPatient": "Este paciente todavía no tiene turnos registrados."
+    "emptyPatient": "Este paciente todavía no tiene turnos registrados.",
+    "reprogrammed": "Reprogramado ×{count}",
+    "originalDate": "Original: {date}",
+    "rescheduledToast": "Turno reprogramado",
+    "cancelTitle": "Cancelar turno",
+    "cancelReasonLabel": "Motivo de cancelación",
+    "cancelConfirm": "Confirmar cancelación",
+    "cancelReason": {
+      "patient_request": "Pedido del paciente",
+      "dentist_request": "Pedido del profesional",
+      "no_answer": "No atiende / no responde",
+      "duplicate": "Turno duplicado",
+      "schedule_change": "Cambio de horario del profesional",
+      "other": "Otro"
+    },
+    "reopenNotice": "Este turno está finalizado ({status}). Para volver a activarlo confirmá la reapertura.",
+    "reopenConfirm": "Confirmar reapertura",
+    "terminal": "Ese estado es final. Confirmá la reapertura para reactivarlo."
   },
   "odontogram": {
     "title": "Odontograma",
@@ -293,7 +313,8 @@
     "title": "Reportes",
     "revenue": "Ingresos",
     "topTreatments": "Tratamientos más frecuentes",
-    "noShowRate": "Tasa de inasistencia",
+    "noShowRate": "Tasa de inasistencia (últimos 90 días)",
+    "reprogramRate": "Tasa de reprogramación (últimos 90 días)",
     "byDentist": "Productividad por odontólogo",
     "dateRange": "Rango de fechas"
   },

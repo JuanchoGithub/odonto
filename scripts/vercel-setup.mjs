@@ -169,6 +169,9 @@ const envVars = {
   AUTH_SECRET: AUTH_SECRET,
   AUTH_URL: productionUrl,
   BLOB_READ_WRITE_TOKEN: BLOB_READ_WRITE_TOKEN,
+  // Guards /api/cron/* (auto no-show sweep). Vercel Cron calls carry
+  // Authorization: Bearer <CRON_SECRET>; the route 503s without one on Vercel.
+  CRON_SECRET: process.env.CRON_SECRET || randomBytes(32).toString('base64'),
 };
 
 function setEnv(key, value, target) {

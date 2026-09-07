@@ -17,7 +17,7 @@ export default async function ReportsPage({
   const t = await getTranslations('reports');
   const tCommon = await getTranslations('common');
 
-  const [clinicRows, revenueRows, topRows, noShowRow, byDentistRows] = await Promise.all([
+  const [clinicRows, revenueRows, topRows, noShowRow, reprogramRow, byDentistRows] = await Promise.all([
     query<{ currency: Currency; locale: AppLocale }>(
       'SELECT currency, locale FROM clinics LIMIT 1',
     ),
@@ -33,9 +33,23 @@ export default async function ReportsPage({
        GROUP BY description ORDER BY count DESC LIMIT 8`,
     ),
     query<{ total: number; no_show: number }>(
+      // Denominator: appointments that actually concluded in the last 90 days
+      // (attended or missed) — cancelled and future/scheduled rows don't count.
       `SELECT
-         (SELECT COUNT(*) FROM appointments) as total,
-         (SELECT COUNT(*) FROM appointments WHERE status = 'no_show') as no_show`,
+         (SELECT COUNT(*) FROM appointments
+            WHERE status IN ('completed','no_show')
+              AND starts_at >= date('now', '-90 days')) as total,
+         (SELECT COUNT(*) FROM appointments
+            WHERE status = 'no_show'
+              AND starts_at >= date('now', '-90 days')) as no_show`,
+    ),
+    query<{ moved: number; total: number }>(
+      `SELECT
+         (SELECT COUNT(*) FROM appointments
+            WHERE reprogram_count > 0
+              AND starts_at >= date('now', '-90 days')) as moved,
+         (SELECT COUNT(*) FROM appointments
+            WHERE starts_at >= date('now', '-90 days')) as total`,
     ),
     query<{ dentist: string; count: number }>(
       `SELECT u.name as dentist, COUNT(*) as count
@@ -52,6 +66,9 @@ export default async function ReportsPage({
   const total = noShowRow[0]?.total ?? 0;
   const noShows = noShowRow[0]?.no_show ?? 0;
   const noShowPct = total > 0 ? Math.round((noShows / total) * 100) : 0;
+  const moved = reprogramRow[0]?.moved ?? 0;
+  const movedTotal = reprogramRow[0]?.total ?? 0;
+  const movedPct = movedTotal > 0 ? Math.round((moved / movedTotal) * 100) : 0;
 
   return (
     <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
@@ -67,6 +84,19 @@ export default async function ReportsPage({
             <div className="text-3xl font-semibold">{noShowPct}%</div>
             <p className="text-xs text-muted-foreground">
               {noShows} / {total}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {t('reprogramRate')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-semibold">{movedPct}%</div>
+            <p className="text-xs text-muted-foreground">
+              {moved} / {movedTotal}
             </p>
           </CardContent>
         </Card>
