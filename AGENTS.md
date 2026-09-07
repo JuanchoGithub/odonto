@@ -363,6 +363,8 @@ git commit --allow-empty -m "chore: trigger redeploy" && git push
 
 The `midentista` project on Vercel (production URL `https://midentista.vercel.app`) has the **Git integration** connected: every push to `main` builds and promotes to production automatically. No CLI, no hook, no token. There is exactly one deploy path — do not add another trigger or you'll double-build.
 
+> **Project name is `midentista` — do not confuse it with the package name.** The Vercel *project* is `midentista` (the repo's `package.json` name is `odonto`, but that is not the Vercel project). When adding env vars (e.g. `CRON_SECRET`) use the **`midentista`** project's Environment Variables, or serverless functions won't see them.
+
 **Live URL**: `https://midentista.vercel.app`
 
 ### Fresh production deploy (bootstrap)
@@ -374,7 +376,7 @@ export VERCEL_TOKEN='<vercel-token>'            # https://vercel.com/account/tok
 export TURSO_URL='libsql://<db>-<org>.turso.io'
 export TURSO_TOKEN='<turso-platform-token>'
 
-# Optional: if you have a pre-existing Vercel project with a different name
+# Optional: only set if the Vercel project name differs from `midentista`
 export VERCEL_PROJECT='midentista'
 
 node scripts/vercel-setup.mjs

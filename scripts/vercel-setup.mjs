@@ -93,8 +93,8 @@ function findProjectByName(name) {
   }
 }
 
-const pkg = JSON.parse(runCapture('cat', ['package.json']));
-const desiredName = VERCEL_PROJECT_OVERRIDE || pkg.name;
+// The Vercel project is `midentista` (not the package name `odonto`).
+const desiredName = VERCEL_PROJECT_OVERRIDE || 'midentista';
 console.log(`\n=== 1. Resolving Vercel project (${desiredName}) ===\n`);
 
 let project = findProjectByName(desiredName);
