@@ -1,12 +1,11 @@
 'use client';
 import { useTranslations } from 'next-intl';
-import { Phone } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Phone, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { dentistColor } from '@/lib/colors';
 import type { PanelAppt } from '@/server/actions/dashboard';
 
-/** Status accent colors for the left bar when `statusAccent` is on. */
+/** Status accent colors for the left bar / dot when `statusAccent` is on. */
 export function statusAccentBar(status: string): string {
   switch (status) {
     case 'completed':
@@ -24,8 +23,8 @@ export function statusAccentBar(status: string): string {
 }
 
 /**
- * Compact queue card shared by the role panels. Times come from the
- * server in clinic wall-clock (never browser TZ).
+ * Compact queue card shared by the role panels. Patient + time + actions.
+ * Times come from the server in clinic wall-clock (never browser TZ).
  */
 export function PanelApptCard({
   appt,
@@ -43,6 +42,10 @@ export function PanelApptCard({
   statusAccent?: boolean;
 }) {
   const t = useTranslations('appointments');
+  const active =
+    appt.status === 'scheduled' ||
+    appt.status === 'arrived' ||
+    appt.status === 'in_chair';
   return (
     <li
       data-testid="panel-appt-row"
@@ -60,43 +63,49 @@ export function PanelApptCard({
         }
       />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
           <span className="truncate text-base font-semibold">
             {appt.patient_name}
           </span>
-          <Badge variant="default" className="shrink-0">
-            {t(`status.${appt.status}`)}
-          </Badge>
+          <span className="shrink-0 text-base font-semibold tabular-nums">
+            {appt.start_hhmm}
+          </span>
         </div>
-        <div className="text-sm text-muted-foreground">
-          {appt.start_hhmm}–{appt.end_hhmm}
-          {showDentist ? ` · ${appt.dentist_name}` : null}
+        <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+          <span
+            aria-hidden
+            title={t(`status.${appt.status}`)}
+            className={`h-2 w-2 shrink-0 rounded-full ${statusAccentBar(appt.status)}`}
+          />
+          <span className="truncate">
+            {appt.start_hhmm}–{appt.end_hhmm}
+            {showDentist ? ` · ${appt.dentist_name}` : null}
+            {appt.reason ? ` · ${appt.reason}` : null}
+          </span>
         </div>
-        {appt.reason ? (
-          <div className="truncate text-sm">{appt.reason}</div>
-        ) : null}
         {extra}
       </div>
-      <div className="flex shrink-0 flex-col gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         {appt.patient_phone ? (
           <a
             href={`tel:${appt.patient_phone}`}
             aria-label={`${t('call')} ${appt.patient_name}`}
+            title={`${t('call')} ${appt.patient_name}`}
             onClick={(e) => e.stopPropagation()}
             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border active:bg-accent"
           >
             <Phone className="h-5 w-5" />
           </a>
         ) : null}
-        {appt.status === 'scheduled' ||
-        appt.status === 'arrived' ||
-        appt.status === 'in_chair' ? (
+        {active ? (
           <Button
             size="sm"
+            variant="outline"
             onClick={() => onAttend(appt)}
             data-testid="panel-attend"
-            className="min-h-[44px]"
+            className="min-h-[44px] gap-1 px-2.5"
           >
+            <Play className="h-4 w-4" />
             {t('attend')}
           </Button>
         ) : null}
