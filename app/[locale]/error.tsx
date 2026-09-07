@@ -1,6 +1,11 @@
 'use client';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert';
 
 export default function GlobalError({
   error,
@@ -15,23 +20,26 @@ export default function GlobalError({
 
   return (
     <div className="container py-16">
-      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-6 max-w-xl mx-auto">
-        <h2 className="text-lg font-semibold">Something went wrong</h2>
-        <p className="text-sm text-muted-foreground mt-1">
+      <Alert
+        variant="destructive"
+        className="max-w-xl mx-auto flex flex-col items-start gap-3 [&>svg]:static [&>svg~*]:pl-0"
+      >
+        <AlertTitle>Something went wrong</AlertTitle>
+        <AlertDescription className="text-muted-foreground">
           {error.message || 'Unexpected error'}
-        </p>
+        </AlertDescription>
         {error.digest ? (
-          <p className="text-xs text-muted-foreground mt-2 font-mono">
+          <p className="text-xs text-muted-foreground font-mono">
             ref: {error.digest}
           </p>
         ) : null}
-        <div className="mt-4 flex gap-2">
+        <div className="mt-2 flex gap-2">
           <Button onClick={reset}>Try again</Button>
           <Button variant="outline" onClick={() => (window.location.href = '/')}>
             Go home
           </Button>
         </div>
-      </div>
+      </Alert>
     </div>
   );
 }
