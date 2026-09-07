@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openManualCreate } from './helpers';
 
 const ADMIN = { email: 'admin@local', password: 'Admin123!' };
 
@@ -93,7 +94,7 @@ test('inline new-patient dialog (from appointment) shows the full intake', async
   await login(page, ADMIN);
 
   await page.goto('/appointments');
-  await page.getByRole('button', { name: /nuevo turno|new appointment/i }).click();
+  await openManualCreate(page);
 
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();

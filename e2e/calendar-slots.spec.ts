@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { pad, login, fillWhen, pickPatient, settleCalendar } from './helpers';
+import { pad, login, fillWhen, pickPatient, settleCalendar, openManualCreate } from './helpers';
 
 /** A day in the currently displayed week (0=Mon … 6=Sun) at h:m local time. */
 function weekDate(dayOffset: number, h: number, m: number) {
@@ -13,9 +13,7 @@ function weekDate(dayOffset: number, h: number, m: number) {
 }
 
 async function createAppt(page: Page, start: Date, durationMin: number) {
-  await page
-    .getByRole('button', { name: /nuevo turno|new appointment/i })
-    .click();
+  await openManualCreate(page);
   const dialog = page.getByRole('dialog');
   await pickPatient(dialog);
   await fillWhen(dialog, page, start, durationMin);

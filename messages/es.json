@@ -217,7 +217,10 @@
     },
     "reopenNotice": "Este turno está finalizado ({status}). Para volver a activarlo confirmá la reapertura.",
     "reopenConfirm": "Confirmar reapertura",
-    "terminal": "Ese estado es final. Confirmá la reapertura para reactivarlo."
+    "terminal": "Ese estado es final. Confirmá la reapertura para reactivarlo.",
+    "addManual": "Añadir manualmente",
+    "addManualDesc": "Elegí paciente, fecha, hora y motivo",
+    "shareLinkDesc": "El paciente elige día y hora con un enlace"
   },
   "odontogram": {
     "title": "Odontograma",

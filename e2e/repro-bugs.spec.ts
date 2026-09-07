@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openManualCreate } from './helpers';
 
 // Bug 1: Gender picker works from /patients/new but NOT from the appointment
 // dialog's inline new-patient form.
@@ -22,7 +23,7 @@ test('repro: gender picker must work in the inline new-patient form', async ({
 
   // Path B: inline new-patient from appointment dialog
   await page.goto('/appointments');
-  await page.getByRole('button', { name: /nuevo turno|new appointment/i }).click();
+  await openManualCreate(page);
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
 
@@ -57,7 +58,7 @@ test('repro: insurance onboarding form receives clicks (not the patient form)', 
   await page.waitForURL(/\/(es|en)\/dashboard/);
 
   await page.goto('/appointments');
-  await page.getByRole('button', { name: /nuevo turno|new appointment/i }).click();
+  await openManualCreate(page);
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
 

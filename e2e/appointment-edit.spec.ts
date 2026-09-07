@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { fillWhen } from './helpers';
+import { fillWhen, openManualCreate } from './helpers';
 
 test('clicking an appointment opens the edit dialog (not the patient page)', async ({
   page,
@@ -25,9 +25,7 @@ test('clicking an appointment opens the edit dialog (not the patient page)', asy
 
 
   await page.goto('/appointments');
-  await page
-    .getByRole('button', { name: /nuevo turno|new appointment/i })
-    .click();
+  await openManualCreate(page);
   const dialog = page.getByRole('dialog');
   await dialog.getByTestId('appt-patient-input').fill('García');
   await dialog.getByTestId('appt-patient-option').first().click();

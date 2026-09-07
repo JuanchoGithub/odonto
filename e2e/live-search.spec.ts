@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from './helpers';
+import { login, openManualCreate } from './helpers';
 
 test('patients page shows suggestions while typing and opens the patient', async ({
   page,
@@ -41,9 +41,7 @@ test('appointment patient picker searches the server (phone match)', async ({
   expect(res.ok()).toBeTruthy();
 
   await page.goto('/appointments');
-  await page
-    .getByRole('button', { name: /nuevo turno|new appointment/i })
-    .click();
+  await openManualCreate(page);
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
 

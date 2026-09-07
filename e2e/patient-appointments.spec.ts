@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { fillWhen } from './helpers';
+import { fillWhen, openManualCreate } from './helpers';
 
 const PATIENT = 'García';
 
@@ -22,9 +22,7 @@ test('patient detail shows full appointment history in the appointments tab', as
     start.setHours(hourOffset + 9, minutes, 0, 0);
 
     await page.goto('/appointments');
-    await page
-      .getByRole('button', { name: /nuevo turno|new appointment/i })
-      .click();
+    await openManualCreate(page);
     const dialog = page.getByRole('dialog');
     await dialog.getByTestId('appt-patient-input').fill(PATIENT);
     await dialog.getByTestId('appt-patient-option').first().click();

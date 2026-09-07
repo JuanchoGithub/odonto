@@ -397,19 +397,9 @@ export function AppointmentDialog({
               )}
               {patientId ? <PatientContact patients={patients} patientId={patientId} /> : null}
             </div>
-            {viewerRole === 'dentist' ? (
-              <div className="space-y-2">
-                <Label htmlFor="dentist_id">{t('dentist')}</Label>
-                <div
-                  data-testid="appt-dentist-locked"
-                  className="flex min-h-[48px] w-full items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-base sm:text-sm"
-                >
-                  <span className="truncate">
-                    {dentists.find((d) => d.id === dentistId)?.name ?? '—'}
-                  </span>
-                </div>
-              </div>
-            ) : (
+            {/* Dentists always book as themselves — the field is hidden
+                entirely to save screen space (dentistId defaults to them). */}
+            {viewerRole === 'dentist' ? null : (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="dentist_id">{t('dentist')}</Label>

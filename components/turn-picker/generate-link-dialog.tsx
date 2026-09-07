@@ -171,18 +171,11 @@ export function GenerateTurnLinkDialog({
                   />
                 </div>
               ) : null}
-              <div className="space-y-2">
-                <Label>{t('dentist')}</Label>
-                {viewerRole === 'dentist' ? (
-                  <div
-                    data-testid="tp-dentist-locked"
-                    className="flex min-h-[48px] w-full items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-base sm:text-sm"
-                  >
-                    <span className="truncate">
-                      {dentists.find((d) => d.id === dentistId)?.name ?? '—'}
-                    </span>
-                  </div>
-                ) : (
+              {/* Dentists always share as themselves — hidden entirely
+                  to save screen space (dentistId defaults to them). */}
+              {viewerRole === 'dentist' ? null : (
+                <div className="space-y-2">
+                  <Label>{t('dentist')}</Label>
                   <Select value={dentistId} onValueChange={setDentistId}>
                     <SelectTrigger>
                       <SelectValue />
@@ -195,8 +188,8 @@ export function GenerateTurnLinkDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                )}
-              </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>{t('duration')}</Label>
                 <Select value={slotMinutes} onValueChange={setSlotMinutes}>

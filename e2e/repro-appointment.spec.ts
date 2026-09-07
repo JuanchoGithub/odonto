@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { fillWhen } from './helpers';
+import { fillWhen, openManualCreate } from './helpers';
 
 test('appointment dialog is a searchable combobox, not a free-text id field', async ({
   page,
@@ -13,9 +13,8 @@ test('appointment dialog is a searchable combobox, not a free-text id field', as
   await page.goto('/appointments');
   await expect(page.getByRole('heading', { name: /turnos|appointments/i })).toBeVisible();
 
-  // Click "+ Nuevo turno" button
-  const newBtn = page.getByRole('button', { name: /nuevo turno|new appointment/i });
-  await newBtn.click();
+  // Open the manual form via "+ Nuevo turno" → chooser → manual
+  await openManualCreate(page);
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
@@ -57,8 +56,7 @@ test('inline "create new patient" from appointment dialog', async ({
   await page.waitForURL(/\/(es|en)\/dashboard/);
 
   await page.goto('/appointments');
-  const newBtn = page.getByRole('button', { name: /nuevo turno|new appointment/i });
-  await newBtn.click();
+  await openManualCreate(page);
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();

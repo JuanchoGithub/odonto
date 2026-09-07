@@ -4,7 +4,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { addDays, startOfWeek, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, Plus, Share2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   updateAppointment,
   getWeekWindowsAction,
@@ -15,6 +15,7 @@ import {
   AppointmentDialog,
   type CreatedVia,
 } from './appointment-dialog';
+import { AddTurnDialog } from './add-turn-dialog';
 import { AttendSheet } from './attend-sheet';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import { TimeGrid, type WorkingWindow } from './time-grid';
@@ -48,7 +49,6 @@ export function WeekCalendar({
   viewer?: { id: string; role: string };
 }) {
   const t = useTranslations('appointments');
-  const tTp = useTranslations('turnPicker');
   const tCommon = useTranslations('common');
   const tErr = useTranslations('errors');
   const localeStr = useLocale();
@@ -76,6 +76,7 @@ export function WeekCalendar({
   const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
   const [attendAppt, setAttendAppt] = useState<ApptRow | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   // Mobile-first: day agenda (list) is the default on small screens, where the
   // 7-day grid (~962px min-width) is unusable. Desktop keeps the calendar.
   const [view, setView] = useState<'calendar' | 'list'>(() => {
@@ -236,14 +237,7 @@ export function WeekCalendar({
                 {t('viewList')}
               </TabsTrigger>
             </TabsList>
-            <Button
-              variant="outline"
-              onClick={() => setShareOpen(true)}
-            >
-              <Share2 className="h-4 w-4" />
-              {tTp('shareButton')}
-            </Button>
-            <Button onClick={() => openCreate(null, null, 'manual')}>
+            <Button onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" />
               {t('new')}
             </Button>
@@ -309,6 +303,18 @@ export function WeekCalendar({
           onCreated={refresh}
           currentUserId={viewer?.id}
           viewerRole={viewer?.role as any}
+        />
+        <AddTurnDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          onManual={() => {
+            setAddOpen(false);
+            openCreate(null, null, 'manual');
+          }}
+          onLink={() => {
+            setAddOpen(false);
+            setShareOpen(true);
+          }}
         />
         <GenerateTurnLinkDialog
           open={shareOpen}

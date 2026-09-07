@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { openManualCreate } from './helpers';
 
 const ADMIN = { email: 'admin@local', password: 'Admin123!' };
 
@@ -67,7 +68,7 @@ test('risk icon is hidden on list pages; patient detail header shows the icon re
   // The appointment dialog (which uses the patient picker) doesn't show icons either:
   // the single-input picker just shows the name as text
   await page.goto('/appointments');
-  await page.getByRole('button', { name: /nuevo turno|new appointment/i }).click();
+  await openManualCreate(page);
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
   await apptDialog.getByTestId('appt-patient-input').click();

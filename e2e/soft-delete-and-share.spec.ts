@@ -44,10 +44,11 @@ test('share button on appointments page', async ({ page }) => {
   await page.waitForURL(/\/(es|en)\/dashboard/, { timeout: 15000 });
 
   await page.goto('/appointments');
+  // Unified entry: "+ Nuevo turno" → chooser → generate-link option.
   await page
-    .getByRole('button', { name: /share appointment|compartir turno/i })
-    .first()
+    .getByRole('button', { name: /nuevo turno|new appointment/i })
     .click();
+  await page.getByTestId('add-turn-link').click();
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();

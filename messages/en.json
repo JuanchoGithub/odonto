@@ -217,7 +217,10 @@
     },
     "reopenNotice": "This appointment is finalized ({status}). Confirm the reopen to make it active again.",
     "reopenConfirm": "Confirm reopen",
-    "terminal": "That status is final. Confirm the reopen to reactivate it."
+    "terminal": "That status is final. Confirm the reopen to reactivate it.",
+    "addManual": "Add manually",
+    "addManualDesc": "Pick patient, date, time and reason",
+    "shareLinkDesc": "The patient picks a day and time via a link"
   },
   "odontogram": {
     "title": "Odontogram",

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { fillWhen } from './helpers';
+import { fillWhen, openManualCreate } from './helpers';
 
 async function login(page: Page) {
   await page.goto('/login');
@@ -56,9 +56,7 @@ test('editing a weekly schedule that orphans an appointment forces a decision', 
 
 
   await page.goto('/appointments');
-  await page
-    .getByRole('button', { name: /nuevo turno|new appointment/i })
-    .click();
+  await openManualCreate(page);
   const dialog = page.getByRole('dialog');
   await dialog.getByTestId('appt-patient-input').fill('García');
   await dialog.getByTestId('appt-patient-option').first().click();

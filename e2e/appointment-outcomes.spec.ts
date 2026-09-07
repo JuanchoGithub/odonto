@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { pad, login, fillWhen, pickPatient } from './helpers';
+import { pad, login, fillWhen, pickPatient, openManualCreate } from './helpers';
 
 /** Next weekday (Mon–Fri) — day part only, time is chosen per test. */
 function nextWeekday(offsetDays = 1) {
@@ -72,9 +72,7 @@ async function latestAt(page: Page, when: Date) {
 }
 
 async function createAppt(page: Page, start: Date, durationMin = 30) {
-  await page
-    .getByRole('button', { name: /nuevo turno|new appointment/i })
-    .click();
+  await openManualCreate(page);
   const dialog = page.getByRole('dialog');
   await pickPatient(dialog);
   await fillWhen(dialog, page, start, durationMin);

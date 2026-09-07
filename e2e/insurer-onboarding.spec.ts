@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openManualCreate } from './helpers';
 
 test('inline new-patient from appointment dialog opens the full form', async ({ page }) => {
   await page.goto('/login');
@@ -8,7 +9,7 @@ test('inline new-patient from appointment dialog opens the full form', async ({ 
   await page.waitForURL(/\/(es|en)\/dashboard/);
 
   await page.goto('/appointments');
-  await page.getByRole('button', { name: /nuevo turno|new appointment/i }).click();
+  await openManualCreate(page);
 
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
