@@ -8,6 +8,7 @@ import { TopNav } from '@/components/nav/top-nav';
 import { BottomNav } from '@/components/nav/bottom-nav';
 import { AuthProvider } from '@/components/auth/session-provider';
 import { Toaster } from '@/components/ui/toaster';
+import { ThemeProvider } from '@/components/theme/theme-provider';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -48,6 +49,7 @@ export default async function LocaleLayout({
     <AuthProvider>
       <NextIntlClientProvider messages={messages} locale={locale}>
         <Toaster>
+          <ThemeProvider>
           <div className="min-h-dvh flex flex-col">
             {session?.user ? (
               <TopNav
@@ -63,6 +65,7 @@ export default async function LocaleLayout({
             <main className="flex-1 pb-20 md:pb-0">{children}</main>
             {session?.user ? <BottomNav role={session.user.role} /> : null}
           </div>
+          </ThemeProvider>
         </Toaster>
       </NextIntlClientProvider>
     </AuthProvider>
