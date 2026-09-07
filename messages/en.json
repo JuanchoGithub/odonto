@@ -205,6 +205,7 @@
       "pending": "Pending"
     },
     "conflict": "That time is outside the dentist's working hours",
+    "saveOutsideHours": "Save anyway outside working hours",
     "patientNotFound": "That patient doesn't exist. Pick one from the list or create a new patient.",
     "viewPatient": "View patient",
     "invalid": "Invalid data. Check the fields.",

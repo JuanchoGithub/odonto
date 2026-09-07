@@ -75,6 +75,9 @@ export function AppointmentDialog({
   onCreated,
   currentUserId,
   viewerRole,
+  prefillStart,
+  prefillEnd,
+  prefillNonce,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
@@ -84,6 +87,12 @@ export function AppointmentDialog({
   /** When viewer is a dentist, the dentist field stays hidden (fixed). */
   currentUserId?: string;
   viewerRole?: Role;
+  /** Optional dropped-position prefill (drag-conflict routing). When present,
+   *  the form seeds date/time/duration from these instead of the row. */
+  prefillStart?: string | null;
+  prefillEnd?: string | null;
+  /** Bump to re-seed the form from prefill even for the same appointment id. */
+  prefillNonce?: number;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -92,6 +101,7 @@ export function AppointmentDialog({
   const { push } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [forceMode, setForceMode] = useState(false);
   const [patients, setPatients] = useState<
     { id: string; name: string; phone: string | null; email: string | null }[]
   >([]);
@@ -132,23 +142,32 @@ export function AppointmentDialog({
 
   // Reset form state whenever another appointment is opened for edit.
   const prevEditingId = useRef<string | null>(null);
+  const prevSeedKey = useRef<string | null>(null);
   useEffect(() => {
     if (!open) return;
-    if (prevEditingId.current === editing.id) return;
+    const hasPrefill = prefillStart && prefillEnd;
+    const seedKey = `${editing.id}::${hasPrefill ? prefillStart : ''}::${hasPrefill ? prefillEnd : ''}::${prefillNonce ?? 0}`;
+    if (prevEditingId.current === editing.id && prevSeedKey.current === seedKey) {
+      return;
+    }
     prevEditingId.current = editing.id;
+    prevSeedKey.current = seedKey;
     setReopenArmed(false);
+    setForceMode(false);
     pendingFd.current = null;
     setPatientId(editing.patient_id);
     setDentistId(editing.dentist_id);
     setStatus(editing.status);
     setCancelReason(editing.cancel_reason ?? 'patient_request');
-    const s = new Date(editing.starts_at);
-    const e = new Date(editing.ends_at);
+    // Prefer the dropped-position prefill (drag-conflict routing); fall back
+    // to the appointment's own times for a normal edit click.
+    const s = hasPrefill ? new Date(prefillStart) : new Date(editing.starts_at);
+    const e = hasPrefill ? new Date(prefillEnd) : new Date(editing.ends_at);
     setDateVal(format(s, 'yyyy-MM-dd'));
     setTimeVal(format(s, 'HH:mm'));
     const dur = Math.max(15, Math.round((e.getTime() - s.getTime()) / 60000));
     setDurVal(DURATIONS.includes(dur) ? String(dur) : '30');
-  }, [open, editing]);
+  }, [open, editing, prefillStart, prefillEnd, prefillNonce]);
 
   void currentUserId;
 
@@ -168,8 +187,9 @@ export function AppointmentDialog({
     return fd;
   }
 
-  async function submitFd(fd: FormData) {
+  async function submitFd(fd: FormData, force = false) {
     if (reopenArmed) fd.set('reopen', 'true');
+    if (force) fd.set('bypass_hours', 'true');
     const res = await updateAppointment(fd);
     if (res && 'error' in res && res.error === 'terminal') {
       // Terminal → active needs an explicit reopen confirmation.
@@ -178,7 +198,12 @@ export function AppointmentDialog({
       return;
     }
     if (res && 'error' in res && res.error === 'conflict') {
-      setError(t('conflict'));
+      if (!force) {
+        setError(t('conflict'));
+        setForceMode(true);
+        return;
+      }
+      setError(t('invalid'));
       return;
     }
     if (res && 'error' in res && res.error === 'invalid') {
@@ -192,6 +217,7 @@ export function AppointmentDialog({
     if (res && 'ok' in res && 'reprogrammed' in res && res.reprogrammed) {
       push({ title: t('rescheduledToast'), variant: 'success' });
     }
+    setForceMode(false);
     onOpenChange(false);
     if (onCreated) onCreated();
     else router.refresh();
@@ -202,7 +228,7 @@ export function AppointmentDialog({
     setError(null);
     setLoading(true);
     try {
-      await submitFd(buildFd(e.currentTarget));
+      await submitFd(buildFd(e.currentTarget), forceMode);
     } catch {
       setError(tErr('generic'));
     } finally {
@@ -215,7 +241,7 @@ export function AppointmentDialog({
     setError(null);
     setLoading(true);
     try {
-      await submitFd(pendingFd.current);
+      await submitFd(pendingFd.current, forceMode);
       setReopenArmed(false);
       pendingFd.current = null;
     } catch {
@@ -527,8 +553,17 @@ export function AppointmentDialog({
                   {tCommon('cancel')}
                 </Button>
               </Dialog.Close>
-              <Button type="submit" disabled={loading}>
-                {loading ? tCommon('loading') : tCommon('save')}
+              <Button
+                type="submit"
+                variant={forceMode ? 'warning' : 'default'}
+                disabled={loading}
+                data-testid="appt-save"
+              >
+                {loading
+                  ? tCommon('loading')
+                  : forceMode
+                    ? t('saveOutsideHours')
+                    : tCommon('save')}
               </Button>
             </div>
           </form>

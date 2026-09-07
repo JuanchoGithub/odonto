@@ -122,6 +122,7 @@ export function AddAppointmentDialog({
   const [phase, setPhase] = useState<Phase>('choice');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [forceMode, setForceMode] = useState(false);
   const [patients, setPatients] = useState<
     { id: string; name: string; phone: string | null; email: string | null }[]
   >([]);
@@ -173,6 +174,7 @@ export function AddAppointmentDialog({
     wasOpen.current = open;
     if (!justOpened) return;
     setError(null);
+    setForceMode(false);
     setPhase(startExpanded ? 'manual' : 'choice');
     setPatientId('');
     const initialDentist =
@@ -310,7 +312,7 @@ export function AddAppointmentDialog({
     copy(true);
   }
 
-  async function saveManual() {
+  async function saveManual(force = false) {
     if (!patientId) {
       setError(t('patientNotFound'));
       return;
@@ -330,9 +332,15 @@ export function AddAppointmentDialog({
       fd.set('status', 'scheduled');
       fd.set('reason', reason);
       fd.set('notes', notes);
+      if (force) fd.set('bypass_hours', 'true');
       const res = await createAppointment(fd);
       if (res && 'error' in res && res.error === 'conflict') {
-        setError(t('conflict'));
+        if (!force) {
+          setError(t('conflict'));
+          setForceMode(true);
+          return;
+        }
+        setError(t('invalid'));
         return;
       }
       if (res && 'error' in res && res.error === 'patient_not_found') {
@@ -347,6 +355,7 @@ export function AddAppointmentDialog({
         setError(tErr('generic'));
         return;
       }
+      setForceMode(false);
       onOpenChange(false);
       if (onCreated) onCreated();
       else router.refresh();
@@ -542,6 +551,7 @@ export function AddAppointmentDialog({
                       size="sm"
                       onClick={() => {
                         setError(null);
+                        setForceMode(false);
                         setPhase('choice');
                       }}
                       data-testid="add-appt-back"
@@ -557,10 +567,15 @@ export function AddAppointmentDialog({
                   </Dialog.Close>
                   <Button
                     type="button"
+                    variant={forceMode ? 'warning' : 'default'}
                     disabled={loading || !patientId}
-                    onClick={saveManual}
+                    onClick={() => saveManual(forceMode)}
                   >
-                    {loading ? tCommon('loading') : tCommon('save')}
+                    {loading
+                      ? tCommon('loading')
+                      : forceMode
+                        ? t('saveOutsideHours')
+                        : tCommon('save')}
                   </Button>
                 </div>
               </div>

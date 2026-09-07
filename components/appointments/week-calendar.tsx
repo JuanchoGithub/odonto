@@ -78,6 +78,12 @@ export function WeekCalendar({
   const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
   const [attendAppt, setAttendAppt] = useState<ApptRow | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  // Dropped-position prefill for the edit dialog when a drag hits a
+  // working-hours conflict (user must confirm the manual change).
+  const [prefill, setPrefill] = useState<{ start: string; end: string } | null>(
+    null,
+  );
+  const [prefillNonce, setPrefillNonce] = useState(0);
   // Mobile-first: day agenda (list) is the default on small screens, where the
   // 7-day grid (~962px min-width) is unusable. Desktop keeps the calendar.
   const [view, setView] = useState<'calendar' | 'list'>(() => {
@@ -141,8 +147,12 @@ export function WeekCalendar({
     setDialogOpen(true);
   }
 
-  function openEdit(a: ApptRow) {
+  function openEdit(a: ApptRow, start?: Date | null, end?: Date | null) {
     setEditingAppt(a);
+    setPrefill(
+      start && end ? { start: start.toISOString(), end: end.toISOString() } : null,
+    );
+    if (start && end) setPrefillNonce((n) => n + 1);
     setEditOpen(true);
   }
 
@@ -173,6 +183,11 @@ export function WeekCalendar({
         title: res.error === 'conflict' ? t('conflict') : tErr('generic'),
         variant: 'destructive',
       });
+      // Drags never auto-force-save outside working hours: route the user
+      // into the edit dialog pre-filled at the dropped slot to confirm manually.
+      if (res.error === 'conflict') {
+        openEdit(appt, start, end);
+      }
     } else {
       refresh();
     }
@@ -306,12 +321,18 @@ export function WeekCalendar({
         {editingAppt ? (
           <AppointmentDialog
             open={editOpen}
-            onOpenChange={setEditOpen}
+            onOpenChange={(o) => {
+              setEditOpen(o);
+              if (!o) setPrefill(null);
+            }}
             dentists={dentists}
             appointment={editingAppt}
             onCreated={refresh}
             currentUserId={viewer?.id}
             viewerRole={viewer?.role as any}
+            prefillStart={prefill?.start}
+            prefillEnd={prefill?.end}
+            prefillNonce={prefillNonce}
           />
         ) : null}
         <AttendSheet

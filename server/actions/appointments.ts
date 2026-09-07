@@ -45,6 +45,9 @@ const ApptObject = z.object({
   notes: z.string().optional().nullable(),
   status: ApptStatusSchema.default('scheduled'),
   created_via: z.enum(['manual', 'click', 'drag']).default('manual'),
+  // Explicit opt-in to save outside the dentist's working hours. Only a real
+  // caller-sent 'true' bypasses the gate — drags never set it.
+  bypass_hours: z.enum(['true', 'false']).optional(),
 });
 
 function validRange(d: { starts_at: string; ends_at: string }): boolean {
@@ -84,7 +87,8 @@ export async function createAppointment(fd: FormData) {
     data.starts_at,
     data.ends_at,
   );
-  if (!withinHours) return { error: 'conflict' as const };
+  const bypass = data.bypass_hours === 'true';
+  if (!bypass && !withinHours) return { error: 'conflict' as const };
 
   const id = uid();
   try {
@@ -172,7 +176,8 @@ export async function updateAppointment(
     data.starts_at,
     data.ends_at,
   );
-  if (!withinHours) return { error: 'conflict' as const };
+  const bypass = data.bypass_hours === 'true';
+  if (!bypass && !withinHours) return { error: 'conflict' as const };
 
   // Any date/time/dentist change tags the appointment as reprogrammed.
   const timeChanged =
