@@ -33,8 +33,8 @@ UPDATE clinics
           'kind', 'no_show',
           'label_es', 'Recordatorio de inasistencia',
           'label_en', 'No-show follow-up',
-          'body_es', 'Hola {{name}}, hoy {{weekday}} tenía un turno a las {{time}}, pero no se presentó, ¿podría confirmar si no va a venir? Gracias.',
-          'body_en', 'Hi {{name}}, today {{weekday}} you had an appointment at {{time}}, but you did not show up. Could you confirm whether you are still coming? Thank you.',
+          'body_es', 'Hola {{name}}, hoy {{weekday}} tenía un turno a las {{time}}, pero no se presentó, ¿podría confirmar si cancela el turno? Gracias.',
+          'body_en', 'Hi {{name}}, today {{weekday}} you had an appointment at {{time}}, but you did not show up. Could you confirm whether you are cancelling the appointment? Thank you.',
           'applies_to', 'past',
           'enabled', 1
         )

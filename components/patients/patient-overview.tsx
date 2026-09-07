@@ -142,6 +142,7 @@ export async function PatientOverview({
                 email={patient.email}
                 clinicDate={next?.clinicDate ?? last?.clinicDate}
                 startHhmm={next?.startHhmm ?? last?.startHhmm}
+                isFuture={!!next}
                 dentistName={next ? data.nextUpcoming?.dentist_name : data.lastPast?.dentist_name}
                 reason={next ? data.nextUpcoming?.reason : data.lastPast?.reason}
                 variant="block"

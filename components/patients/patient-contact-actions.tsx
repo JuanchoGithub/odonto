@@ -14,6 +14,9 @@ type PatientContactActionsProps = {
    *  context, so we accept the slight imprecision. */
   clinicDate?: string;
   startHhmm?: string;
+  /** Whether the referenced turn is in the future (drives the auto-pick:
+   *  future → confirmation, past → no-show follow-up). */
+  isFuture?: boolean;
   dentistName?: string | null;
   reason?: string | null;
   onPhoneSaved?: () => void;
@@ -32,6 +35,7 @@ export function PatientContactActions({
   email,
   clinicDate,
   startHhmm,
+  isFuture = false,
   dentistName,
   reason,
   onPhoneSaved,
@@ -78,7 +82,7 @@ export function PatientContactActions({
         templates={templates}
         countryCode={countryCode}
         status="scheduled"
-        isFuture={false}
+        isFuture={isFuture}
         variant="icon"
         onPhoneSaved={onPhoneSaved}
         testId={`overview-whatsapp-${patientId}`}
