@@ -1,8 +1,9 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { CalendarPlus } from 'lucide-react';
+import { CalendarPlus, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Link } from '@/lib/navigation';
 import { AttendSheet } from '@/components/appointments/attend-sheet';
 import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
 import { updateAppointmentStatus } from '@/server/actions/appointments';
@@ -70,19 +71,41 @@ function headlineLabel(
   });
 }
 
-/** Per-card "when" chip for an upcoming appointment. */
-function whenLabel(
+/** Grouped day header for the smart empty state (one per clinic day). */
+function dayHeaderLabel(
   t: Translate,
   locale: string,
   u: NextUpcoming,
 ): string {
-  if (u.days_until === 0) return t('whenToday', { time: u.appt.start_hhmm });
-  if (u.days_until === 1) return t('whenTomorrow');
+  if (u.days_until === 0) return t('dayToday');
+  if (u.days_until === 1) return t('dayTomorrow');
   if (u.week_delta === 0)
-    return t('whenDay', { weekday: weekdayName(u.weekday, locale) });
+    return t('dayDay', { weekday: weekdayName(u.weekday, locale) });
   if (u.week_delta === 1)
-    return t('whenNextWeek', { weekday: weekdayName(u.weekday, locale) });
-  return t('whenDate', { date: shortDate(u.appt.clinic_date, locale) });
+    return t('dayNextWeek', { weekday: weekdayName(u.weekday, locale) });
+  return t('dayDate', { date: shortDate(u.appt.clinic_date, locale) });
+}
+
+/** Group upcoming appts into contiguous same-day clusters. */
+function groupByDay(
+  t: Translate,
+  locale: string,
+  upcoming: NextUpcoming[],
+): { date: string; label: string; items: NextUpcoming[] }[] {
+  const groups: { date: string; label: string; items: NextUpcoming[] }[] = [];
+  for (const u of upcoming) {
+    const last = groups[groups.length - 1];
+    if (last && last.date === u.appt.clinic_date) {
+      last.items.push(u);
+    } else {
+      groups.push({
+        date: u.appt.clinic_date,
+        label: dayHeaderLabel(t, locale, u),
+        items: [u],
+      });
+    }
+  }
+  return groups;
 }
 
 /** Dentist panel: next-hour queue, attend flow, give new turns. */
@@ -91,6 +114,7 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
   const locale = useLocale();
   const [items, setItems] = useState<PanelAppt[]>([]);
   const [today, setToday] = useState<PanelAppt[]>([]);
+  const [nowHhmm, setNowHhmm] = useState<string | null>(null);
   const [nextUpcoming, setNextUpcoming] = useState<NextUpcoming[] | null>(null);
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
@@ -119,7 +143,10 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
         );
       });
     }
-    if (todayRows && 'ok' in todayRows) setToday(todayRows.items);
+    if (todayRows && 'ok' in todayRows) {
+      setToday(todayRows.items);
+      setNowHhmm(todayRows.now_hhmm);
+    }
     setLoaded(true);
   }, []);
 
@@ -146,6 +173,34 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
   const activeOverdue = (a: PanelAppt) =>
     (a.status === 'scheduled' || a.status === 'arrived') &&
     new Date(a.starts_at).getTime() <= Date.now();
+
+  const now = Date.now();
+  const future = today.filter((a) => Date.parse(a.starts_at) > now);
+  const past = today.filter((a) => Date.parse(a.starts_at) <= now);
+
+  const renderTodayCard = (a: PanelAppt) => (
+    <PanelApptCard
+      key={a.id}
+      appt={a}
+      onAttend={setAttendAppt}
+      statusAccent
+      extra={
+        activeOverdue(a) ? (
+          <div className="mt-1">
+            <Button
+              size="sm"
+              variant={armingNoShow === a.id ? 'destructive' : 'outline'}
+              onClick={() => markNoShow(a.id)}
+              data-testid="panel-mark-noshow"
+              className="min-h-[44px]"
+            >
+              {armingNoShow === a.id ? t('confirmNoShow') : t('markNoShow')}
+            </Button>
+          </div>
+        ) : null
+      }
+    />
+  );
 
   return (
     <div className="space-y-4" data-testid="doctor-panel">
@@ -174,16 +229,31 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
               <p className="text-sm font-medium">
                 {headlineLabel(t, locale, nextUpcoming[0])}
               </p>
-              <ul className="mt-3 space-y-2">
-                {nextUpcoming.map((u) => (
-                  <li key={u.appt.id} className="flex flex-col gap-1">
+              <ul className="mt-3 space-y-3">
+                {groupByDay(t, locale, nextUpcoming).map((g) => (
+                  <li key={g.date} className="flex flex-col gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {whenLabel(t, locale, u)}
+                      {g.label}
                     </span>
-                    <PanelApptCard appt={u.appt} onAttend={setAttendAppt} />
+                    <ul className="space-y-2">
+                      {g.items.map((u) => (
+                        <PanelApptCard
+                          key={u.appt.id}
+                          appt={u.appt}
+                          onAttend={setAttendAppt}
+                        />
+                      ))}
+                    </ul>
                   </li>
                 ))}
               </ul>
+              <Link
+                href="/appointments"
+                className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {t('viewAll')}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
             </div>
           ) : (
             <p
@@ -206,8 +276,8 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
         )}
       </section>
 
-      <section aria-label={t('today')} data-testid="panel-today">
-        <h2 className="mb-2 text-lg font-semibold">{t('today')}</h2>
+      <section aria-label={t('allToday')} data-testid="panel-today">
+        <h2 className="mb-2 text-lg font-semibold">{t('allToday')}</h2>
         {!loaded ? (
           <p className="text-sm text-muted-foreground">{t('loading')}</p>
         ) : today.length === 0 ? (
@@ -215,30 +285,31 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
             {t('emptyToday')}
           </p>
         ) : (
-          <ul className="space-y-2">
-            {today.map((a) => (
-              <PanelApptCard
-                key={a.id}
-                appt={a}
-                onAttend={setAttendAppt}
-                extra={
-                  activeOverdue(a) ? (
-                    <div className="mt-1">
-                      <Button
-                        size="sm"
-                        variant={armingNoShow === a.id ? 'destructive' : 'outline'}
-                        onClick={() => markNoShow(a.id)}
-                        data-testid="panel-mark-noshow"
-                        className="min-h-[44px]"
-                      >
-                        {armingNoShow === a.id ? t('confirmNoShow') : t('markNoShow')}
-                      </Button>
-                    </div>
-                  ) : null
-                }
-              />
-            ))}
-          </ul>
+          <div className="space-y-3">
+            {future.length > 0 ? (
+              <div>
+                <h3 className="mb-1 text-sm font-medium text-muted-foreground">
+                  {t('upcomingHeader')}
+                </h3>
+                <ul className="space-y-2">{future.map(renderTodayCard)}</ul>
+              </div>
+            ) : null}
+            <div className="flex items-center gap-3 py-1" aria-hidden>
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-xs font-medium text-muted-foreground">
+                {nowHhmm ? t('nowMarker', { time: nowHhmm }) : t('nowMarkerPlain')}
+              </span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            {past.length > 0 ? (
+              <div>
+                <h3 className="mb-1 text-sm font-medium text-muted-foreground">
+                  {t('pastHeader')}
+                </h3>
+                <ul className="space-y-2">{past.map(renderTodayCard)}</ul>
+              </div>
+            ) : null}
+          </div>
         )}
       </section>
 

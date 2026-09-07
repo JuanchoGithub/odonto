@@ -39,7 +39,7 @@ test('doctor panel: next-hour queue + single add-turn button', async ({ page }) 
   ).toBeVisible({ timeout: 15_000 });
   // Today's full schedule (attended + not-yet-attended turns).
   await expect(
-    page.getByRole('heading', { name: /^hoy|today$/i }).first(),
+    page.getByRole('heading', { name: /todos los turnos de hoy|all of today/i }),
   ).toBeVisible();
   await expect(page.getByTestId('panel-today')).toBeVisible();
 });

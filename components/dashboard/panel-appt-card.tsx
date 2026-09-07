@@ -6,6 +6,23 @@ import { Button } from '@/components/ui/button';
 import { dentistColor } from '@/lib/colors';
 import type { PanelAppt } from '@/server/actions/dashboard';
 
+/** Status accent colors for the left bar when `statusAccent` is on. */
+export function statusAccentBar(status: string): string {
+  switch (status) {
+    case 'completed':
+      return 'bg-emerald-500';
+    case 'no_show':
+    case 'cancelled':
+      return 'bg-red-400';
+    case 'arrived':
+    case 'in_chair':
+      return 'bg-amber-500';
+    case 'scheduled':
+    default:
+      return 'bg-sky-500';
+  }
+}
+
 /**
  * Compact queue card shared by the role panels. Times come from the
  * server in clinic wall-clock (never browser TZ).
@@ -15,12 +32,15 @@ export function PanelApptCard({
   showDentist = false,
   onAttend,
   extra,
+  statusAccent = false,
 }: {
   appt: PanelAppt;
   showDentist?: boolean;
   onAttend: (a: PanelAppt) => void;
   /** Optional extra action row (e.g. no-show confirm). */
   extra?: React.ReactNode;
+  /** Color the left bar by status instead of by dentist. */
+  statusAccent?: boolean;
 }) {
   const t = useTranslations('appointments');
   return (
@@ -30,10 +50,14 @@ export function PanelApptCard({
     >
       <span
         aria-hidden
-        className="h-10 w-1.5 shrink-0 rounded-full"
-        style={{
-          backgroundColor: dentistColor(appt.dentist_color, appt.dentist_id),
-        }}
+        className={`h-10 w-1.5 shrink-0 rounded-full ${
+          statusAccent ? statusAccentBar(appt.status) : ''
+        }`}
+        style={
+          statusAccent
+            ? undefined
+            : { backgroundColor: dentistColor(appt.dentist_color, appt.dentist_id) }
+        }
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

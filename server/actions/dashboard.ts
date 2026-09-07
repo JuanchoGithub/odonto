@@ -90,7 +90,7 @@ export async function listDoctorToday(dentistId?: string) {
   const items = withClinicClock(rows, tz).filter(
     (r) => r.clinic_date === todayDate,
   );
-  return { ok: true as const, items };
+  return { ok: true as const, items, now_hhmm: wallClockInTz(nowIso, tz).hhmm };
 }
 
 /** Monday-start key for a clinic-local date, used to bucket weeks. */
