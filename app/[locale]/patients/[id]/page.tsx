@@ -11,6 +11,7 @@ import { PatientTreatments } from '@/components/treatments/patient-treatments';
 import { PatientInvoices } from '@/components/billing/patient-invoices';
 import { PatientAttachments } from '@/components/attachments/patient-attachments';
 import { PatientAppointments } from '@/components/appointments/patient-appointments';
+import { PatientOverview } from '@/components/patients/patient-overview';
 import { formatDate } from '@/lib/format';
 import { query, queryOne } from '@/lib/db';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
@@ -22,7 +23,7 @@ import { ClinicalRiskIcon } from '@/components/patients/clinical-risk-icon';
 
 type Clinic = { currency: string; locale: AppLocale };
 
-const TABS = ['general', 'medical', 'odontogram', 'treatments', 'invoices', 'attachments', 'appointments'] as const;
+const TABS = ['overview', 'general', 'medical', 'odontogram', 'treatments', 'invoices', 'attachments', 'appointments'] as const;
 
 export default async function PatientDetailPage({
   params,
@@ -38,7 +39,7 @@ export default async function PatientDetailPage({
   const sp = searchParams ? await searchParams : {};
   const initialTab = (TABS as readonly string[]).includes(sp?.tab ?? '')
     ? (sp!.tab as (typeof TABS)[number])
-    : 'general';
+    : 'overview';
   const [patient, clinic, dentists] = await Promise.all([
     getPatient(id),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
@@ -105,6 +106,7 @@ export default async function PatientDetailPage({
 
       <Tabs key={initialTab} defaultValue={initialTab}>
         <TabsList className="w-full justify-start">
+          <TabsTrigger value="overview">{t('tabs.overview')}</TabsTrigger>
           <TabsTrigger value="general">{t('tabs.general')}</TabsTrigger>
           <TabsTrigger value="medical">{t('tabs.medical')}</TabsTrigger>
           <TabsTrigger value="odontogram">{t('tabs.odontogram')}</TabsTrigger>
@@ -113,6 +115,14 @@ export default async function PatientDetailPage({
           <TabsTrigger value="attachments">{t('tabs.attachments')}</TabsTrigger>
           <TabsTrigger value="appointments">{t('tabs.appointments')}</TabsTrigger>
         </TabsList>
+        <TabsContent value="overview">
+          <PatientOverview
+            patient={patient}
+            locale={(clinic?.locale ?? locale) as AppLocale}
+            currency={(clinic?.currency ?? 'USD') as Currency}
+            viewerRole={user.role}
+          />
+        </TabsContent>
         <TabsContent value="general">
           <Card>
             <CardHeader>

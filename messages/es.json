@@ -133,7 +133,19 @@
     "restored": "Paciente restaurado",
     "restore": "Restaurar",
     "deletedBanner": "Este paciente está eliminado. Podés restaurarlo para volver a editarlo.",
+    "overview": {
+      "lastTurn": "Último turno",
+      "nextTurn": "Próximo turno",
+      "noTurns": "Sin turnos registrados",
+      "noInsurance": "Sin obra social",
+      "noTreatments": "Sin tratamientos abiertos",
+      "unpaidBalance": "Saldo pendiente",
+      "noUnpaid": "Sin saldos pendientes",
+      "viewAll": "Ver todos",
+      "ageYears": "{age} años"
+    },
     "tabs": {
+      "overview": "Resumen",
       "general": "General",
       "medical": "Médico",
       "odontogram": "Odontograma",

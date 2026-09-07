@@ -133,7 +133,19 @@
     "restored": "Patient restored",
     "restore": "Restore",
     "deletedBanner": "This patient is deleted. Restore them to edit again.",
+    "overview": {
+      "lastTurn": "Last visit",
+      "nextTurn": "Next visit",
+      "noTurns": "No visits recorded",
+      "noInsurance": "No insurance",
+      "noTreatments": "No open treatments",
+      "unpaidBalance": "Outstanding balance",
+      "noUnpaid": "No outstanding balance",
+      "viewAll": "View all",
+      "ageYears": "{age} y.o."
+    },
     "tabs": {
+      "overview": "Overview",
       "general": "General",
       "medical": "Medical",
       "odontogram": "Odontogram",
