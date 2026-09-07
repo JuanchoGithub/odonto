@@ -2,12 +2,13 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
-import { requireRole, requireCan } from '@/lib/rbac';
+import { requireUser, requireCan } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 import {
   parseTemplates,
   serializeTemplates,
   BUILTIN_TEMPLATES,
+  buildUserWhatsappMap,
   type WhatsappTemplate,
 } from '@/lib/whatsapp';
 
@@ -35,15 +36,20 @@ const SettingsSchema = z.object({
 
 export type WhatsappSettingsInput = z.infer<typeof SettingsSchema>;
 
+/** Admins and receptionists may manage the clinic-wide WhatsApp defaults. */
+function canManageClinicWhatsapp(role: string): boolean {
+  return role === 'admin' || role === 'receptionist';
+}
+
 /**
- * Persist per-clinic WhatsApp settings (default country code + message
- * templates). Admin-only. Built-in templates (`confirmation`, `no_show`)
- * are preserved even if the admin removes them from the list — they get
- * restored from `BUILTIN_TEMPLATES` so the panel always has at least
- * something to ship.
+ * Persist per-clinic (admin-wide) WhatsApp settings: default country code +
+ * message templates. Allowed for admins and receptionists. Built-in
+ * templates (`confirmation`, `no_show`) are preserved even if they're
+ * removed from the list — they're restored from `BUILTIN_TEMPLATES`.
  */
 export async function updateWhatsappSettings(input: WhatsappSettingsInput) {
-  const me = await requireRole(['admin']);
+  const me = await requireUser();
+  if (!canManageClinicWhatsapp(me.role)) return { error: 'forbidden' as const };
   const parsed = SettingsSchema.safeParse(input);
   if (!parsed.success) return { error: 'invalid' as const };
   const clinic = await queryOne<{ id: string }>('SELECT id FROM clinics LIMIT 1');
@@ -72,6 +78,128 @@ export async function updateWhatsappSettings(input: WhatsappSettingsInput) {
   revalidatePath('/', 'layout');
   revalidatePath('/settings');
   return { ok: true as const };
+}
+
+/** Whether the actor may edit a given user's override (self, admin, or receptionist). */
+function canEditUserWhatsapp(actorRole: string, actorId: string, targetId: string) {
+  return canManageClinicWhatsapp(actorRole) || actorId === targetId;
+}
+
+/**
+ * Update a single user's WhatsApp override. Allowed for admins/receptionists
+ * (any user) and for the user editing their own. Passing `override: null`
+ * resets that user back to inheriting the clinic default.
+ */
+export async function updateUserWhatsappOverride(
+  targetUserId: string,
+  input: WhatsappSettingsInput | null,
+) {
+  const me = await requireUser();
+  if (!canEditUserWhatsapp(me.role, me.id, targetUserId)) {
+    return { error: 'forbidden' as const };
+  }
+  const target = await queryOne<{ id: string; name: string }>(
+    'SELECT id, name FROM users WHERE id = ?',
+    [targetUserId],
+  );
+  if (!target) return { error: 'not_found' as const };
+
+  if (input === null) {
+    // Reset to inherit clinic defaults.
+    await query(
+      `UPDATE users SET whatsapp_default_country_code = NULL, whatsapp_templates = NULL WHERE id = ?`,
+      [targetUserId],
+    );
+    await query(
+      `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'user', ?, ?)`,
+      [
+        uid(),
+        me.id,
+        targetUserId,
+        JSON.stringify({ kind: 'whatsapp_override', reset: true }),
+      ],
+    );
+    revalidatePath('/', 'layout');
+    return { ok: true as const };
+  }
+
+  const parsed = SettingsSchema.safeParse(input);
+  if (!parsed.success) return { error: 'invalid' as const };
+  const templates = ensureBuiltins(parsed.data.templates);
+  const cc = parsed.data.countryCode.startsWith('+')
+    ? parsed.data.countryCode
+    : `+${parsed.data.countryCode}`;
+  await query(
+    `UPDATE users SET whatsapp_default_country_code = ?, whatsapp_templates = ? WHERE id = ?`,
+    [cc, serializeTemplates(templates), targetUserId],
+  );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'user', ?, ?)`,
+    [
+      uid(),
+      me.id,
+      targetUserId,
+      JSON.stringify({ kind: 'whatsapp_override', country_code: cc, template_count: templates.length }),
+    ],
+  );
+  revalidatePath('/', 'layout');
+  return { ok: true as const };
+}
+
+/** Read a single user's override (null fields mean "inherit clinic"). */
+export async function getUserWhatsappOverride(userId: string): Promise<{
+  countryCode: string | null;
+  templates: string | null;
+}> {
+  await requireUser();
+  const row = await queryOne<{
+    whatsapp_default_country_code: string | null;
+    whatsapp_templates: string | null;
+  }>(
+    'SELECT whatsapp_default_country_code, whatsapp_templates FROM users WHERE id = ?',
+    [userId],
+  );
+  return {
+    countryCode: row?.whatsapp_default_country_code ?? null,
+    templates: row?.whatsapp_templates ?? null,
+  };
+}
+
+/**
+ * Clinic defaults + every user's override, for the provider / communication
+ * tab. This is used by the app layout (server shell) and the profile page,
+ * so it intentionally does NOT require auth — the pages that render the
+ * data are gated separately. The payload is clinic + user WhatsApp template
+ * config only, not sensitive patient data.
+ */
+export async function getWhatsappContextData(): Promise<{
+  countryCode: string;
+  templates: WhatsappTemplate[];
+  users: {
+    id: string;
+    name: string;
+    role: string;
+    whatsapp_templates: string | null;
+    whatsapp_default_country_code: string | null;
+  }[];
+}> {
+  const clinic = await queryOne<{
+    whatsapp_default_country_code: string;
+    whatsapp_templates: string;
+  }>('SELECT whatsapp_default_country_code, whatsapp_templates FROM clinics LIMIT 1');
+  const countryCode = clinic?.whatsapp_default_country_code || '+54';
+  const templates = parseTemplates(clinic?.whatsapp_templates ?? null);
+  const users = await query<{
+    id: string;
+    name: string;
+    role: string;
+    whatsapp_templates: string | null;
+    whatsapp_default_country_code: string | null;
+  }>(
+    `SELECT id, name, role, whatsapp_templates, whatsapp_default_country_code
+     FROM users ORDER BY name`,
+  );
+  return { countryCode, templates, users };
 }
 
 /** Make sure the two built-in templates are always present and in canonical order. */

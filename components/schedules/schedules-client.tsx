@@ -308,7 +308,7 @@ export function SchedulesClient({
             <Select
               value={targetDentistId}
               onValueChange={(v) =>
-                router.push(`/settings/schedules?dentist=${v}`)
+                router.push(`/profile?tab=times&dentist=${v}`)
               }
             >
               <SelectTrigger>

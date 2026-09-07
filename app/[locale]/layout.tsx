@@ -10,7 +10,8 @@ import { AuthProvider } from '@/components/auth/session-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { WhatsappProvider } from '@/components/whatsapp-provider';
-import { getWhatsappSettings } from '@/server/actions/whatsapp';
+import { getWhatsappContextData } from '@/server/actions/whatsapp';
+import { buildUserWhatsappMap } from '@/lib/whatsapp';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -39,7 +40,7 @@ export default async function LocaleLayout({
   const clinic = await queryOne<Clinic>(
     'SELECT id, name, currency, locale FROM clinics LIMIT 1',
   );
-  const whatsapp = await getWhatsappSettings();
+  const whatsapp = await getWhatsappContextData();
 
   // Block app until clinic is configured
   const strippedPath = '';
@@ -48,14 +49,18 @@ export default async function LocaleLayout({
     // so we just render children and let the /settings page detect via a server check.
   }
 
+  const whatsappByUser = buildUserWhatsappMap(
+    whatsapp.users,
+    whatsapp.templates,
+    whatsapp.countryCode,
+  );
+
   return (
     <AuthProvider>
       <NextIntlClientProvider messages={messages} locale={locale}>
         <WhatsappProvider
-          value={{
-            countryCode: whatsapp.countryCode,
-            templates: whatsapp.templates,
-          }}
+          clinic={{ countryCode: whatsapp.countryCode, templates: whatsapp.templates }}
+          byUser={Object.fromEntries(whatsappByUser)}
         >
           <Toaster>
             <ThemeProvider>

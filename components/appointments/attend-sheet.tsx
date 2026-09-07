@@ -209,6 +209,7 @@ export function AttendSheet({
         isFuture={isFuture}
         templates={templates}
         countryCode={countryCode}
+        dentistId={appointment.dentist_id}
         onOpened={onRefresh}
       />
     </Dialog.Root>

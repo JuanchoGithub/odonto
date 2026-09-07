@@ -285,6 +285,7 @@ export function AppointmentDialog({
                   startHhmm={editing.start_hhmm}
                   status={editing.status}
                   isFuture={Date.parse(editing.starts_at) > Date.now()}
+                  dentistId={editing.dentist_id}
                   dentistName={editing.dentist_name}
                   reason={editing.reason}
                 />
@@ -544,6 +545,7 @@ export function PatientContact({
   startHhmm,
   status,
   isFuture,
+  dentistId,
   dentistName,
   reason,
 }: {
@@ -553,6 +555,7 @@ export function PatientContact({
   startHhmm?: string;
   status?: string;
   isFuture?: boolean;
+  dentistId?: string | null;
   dentistName?: string | null;
   reason?: string | null;
 }) {
@@ -600,6 +603,7 @@ export function PatientContact({
             countryCode={countryCode}
             status={status ?? 'scheduled'}
             isFuture={isFuture ?? false}
+            dentistId={dentistId}
             variant="icon"
             className="min-h-[32px] min-w-[32px] border-0"
             testId={`patient-contact-whatsapp-${p.id}`}

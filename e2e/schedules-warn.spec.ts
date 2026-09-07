@@ -10,7 +10,7 @@ async function login(page: Page) {
 }
 
 async function clearAllWindows(page: Page) {
-  await page.goto('/settings/schedules');
+  await page.goto('/profile?tab=times');
   const weekly = page.getByTestId('weekly-schedule');
   const trash = weekly.getByTestId('remove-window');
   // Windows are re-rendered (and removed mid-click) as each removal fires, so
@@ -68,7 +68,7 @@ test('editing a weekly schedule that orphans an appointment forces a decision', 
 
   // Adding a single Monday window flips the dentist onto an explicit schedule
   // that doesn't cover Wednesday, orphaning the appointment just created.
-  await page.goto('/settings/schedules');
+  await page.goto('/profile?tab=times');
   const weekly = page.getByTestId('weekly-schedule');
   await weekly
     .getByTestId('weekly-day-1')

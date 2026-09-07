@@ -17,6 +17,7 @@ import {
   type WhatsappTemplate,
 } from '@/lib/whatsapp';
 import { updatePatientPhoneInline } from '@/server/actions/whatsapp';
+import { useWhatsapp } from '@/components/whatsapp-provider';
 
 type AttendTemplateSheetProps = {
   open: boolean;
@@ -34,6 +35,8 @@ type AttendTemplateSheetProps = {
   isFuture: boolean;
   templates: WhatsappTemplate[];
   countryCode: string;
+  /** Resolve this dentist's per-user override when set. */
+  dentistId?: string | null;
   /** Called when WhatsApp opens (so the parent can also refresh). */
   onOpened?: (newPhone?: string) => void;
 };
@@ -56,6 +59,7 @@ export function AttendTemplateSheet({
   isFuture,
   templates,
   countryCode,
+  dentistId,
   onOpened,
 }: AttendTemplateSheetProps) {
   const locale = useLocale() as 'es' | 'en';
@@ -63,14 +67,21 @@ export function AttendTemplateSheet({
   const tCommon = useTranslations('common');
   const tErr = useTranslations('errors');
   const { push } = useToast();
+  const { forUser } = useWhatsapp();
   const [pending, startTransition] = useTransition();
   const [customBody, setCustomBody] = useState('');
   const [customMode, setCustomMode] = useState(false);
   const [missingOpen, setMissingOpen] = useState(false);
   const [typedPhone, setTypedPhone] = useState('');
 
+  // Prefer the dentist's per-user override when the appointment has one.
+  const effective =
+    dentistId !== undefined && dentistId !== null
+      ? forUser(dentistId)
+      : { templates, countryCode };
+
   const filtered = useMemo(() => {
-    const enabled = templates.filter((tpl) => Number(tpl.enabled) === 1);
+    const enabled = effective.templates.filter((tpl) => Number(tpl.enabled) === 1);
     // Match the auto-pick preference exactly: keep "any" templates plus
     // those whose `applies_to` matches the context, so the user is never
     // shown a confirmation template when the patient missed their turn.
@@ -79,11 +90,11 @@ export function AttendTemplateSheet({
       if (tpl.applies_to === 'any') return true;
       return past ? tpl.applies_to === 'past' : tpl.applies_to === 'upcoming';
     });
-  }, [templates, isFuture, status]);
+  }, [effective.templates, isFuture, status]);
 
   const auto = useMemo(
-    () => pickAutoTemplate(templates, status, isFuture),
-    [templates, status, isFuture],
+    () => pickAutoTemplate(effective.templates, status, isFuture),
+    [effective.templates, status, isFuture],
   );
 
   function fillBody(body: string): string {
@@ -97,7 +108,7 @@ export function AttendTemplateSheet({
   }
 
   function openWaMe(phone: string, body: string) {
-    const cleaned = waMePhone(phone, countryCode);
+    const cleaned = waMePhone(phone, effective.countryCode);
     if (!cleaned) return;
     const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(body)}`;
     window.open(url, '_blank', 'noopener,noreferrer');

@@ -49,6 +49,7 @@
     "settings": "Configuración",
     "insurers": "Obras sociales",
     "schedules": "Horarios",
+    "profile": "Perfil",
     "more": "Más"
   },
   "dashboard": {
@@ -433,7 +434,34 @@
     "whatsappPreview": "Vista previa",
     "whatsappPreviewName": "Marta López",
     "whatsappPreviewWeekday": "martes",
-    "whatsappPreviewTime": "16:45"
+    "whatsappPreviewTime": "16:45",
+    "whatsappSaveButton": "Guardar"
+  },
+  "profile": {
+    "title": "Perfil",
+    "times": "Horarios",
+    "messages": "Mensajes",
+    "communication": "Comunicación",
+    "account": "Cuenta",
+    "myMessages": "Mis mensajes",
+    "myMessagesHint": "Estos mensajes se usan al confirmar o hacer seguimiento de tus turnos. Si no los personalizás, se usan los mensajes generales de la clínica.",
+    "inheritClinic": "Usar los mensajes generales de la clínica",
+    "overrideMessages": "Personalizar mis mensajes",
+    "clinicDefault": "Mensajes generales de la clínica",
+    "clinicDefaultHint": "Mensajes por defecto de todos los turnos. Se pueden personalizar por odontólogo.",
+    "perDentist": "Por odontólogo",
+    "perDentistHint": "Elegí un odontólogo para personalizar sus mensajes.",
+    "inheriting": "Usa los mensajes de la clínica",
+    "customized": "Personalizados",
+    "resetToClinic": "Restablecer a los de la clínica",
+    "resetToClinicConfirm": "¿Restablecer los mensajes de este odontólogo a los de la clínica?",
+    "communicationHint": "Configurá los mensajes de WhatsApp a nivel clínica o por odontólogo.",
+    "accountHint": "Datos de tu cuenta.",
+    "role": "Rol",
+    "email": "Email",
+    "locale": "Idioma",
+    "name": "Nombre",
+    "backToProfile": "Volver al perfil"
   },
   "insurers": {
     "title": "Obras sociales y prepagas",

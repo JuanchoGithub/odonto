@@ -17,23 +17,32 @@ import {
   type WhatsappTemplate,
   type WhatsappTemplateKind,
 } from '@/lib/whatsapp';
-import { updateWhatsappSettings } from '@/server/actions/whatsapp';
 
-type WhatsappSettingsCardProps = {
-  initial: {
-    countryCode: string;
-    templates: WhatsappTemplate[];
-  };
+type WhatsappTemplatesEditorProps = {
+  initial: { countryCode: string; templates: WhatsappTemplate[] };
+  /** Save the edited templates + country code. Return an error string on failure. */
+  onSave: (
+    countryCode: string,
+    templates: WhatsappTemplate[],
+  ) => Promise<string | null>;
+  /** Optional small note shown under the heading (e.g. per-doctor context). */
+  note?: string;
+  testIdPrefix?: string;
 };
 
 /**
- * Admin UI for per-clinic WhatsApp configuration. Lets the admin:
- *   - pick a default country code (pre-populated + Custom)
- *   - edit the two built-in templates (label, body, applies_to, enabled)
- *   - add / edit / remove custom templates
- *   - preview the rendered message with sample data
+ * Reusable WhatsApp message-template editor: country code picker + template
+ * list (edit/add/remove) + live preview + submit. Used by the clinic-wide
+ * default editor (Communication tab) and by the per-user "my messages"
+ * editor (Profile). The parent supplies `onSave`, so this stays agnostic to
+ * whether it's writing to `clinics` or a `users` override.
  */
-export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
+export function WhatsappTemplatesEditor({
+  initial,
+  onSave,
+  note,
+  testIdPrefix = 'whatsapp',
+}: WhatsappTemplatesEditorProps) {
   const t = useTranslations('settings');
   const tAppt = useTranslations('appointments');
   const locale = useLocale() as 'es' | 'en';
@@ -69,12 +78,9 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
-      const res = await updateWhatsappSettings({
-        countryCode,
-        templates,
-      });
-      if ('error' in res) {
-        push({ title: 'Error', variant: 'destructive' });
+      const err = await onSave(countryCode, templates);
+      if (err) {
+        push({ title: err, variant: 'destructive' });
         return;
       }
       push({ title: tAppt('whatsappSaved'), variant: 'success' });
@@ -93,10 +99,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
   );
 
   const previewBody = fillTemplate(
-    templateBody(
-      pickPreview(templates, locale),
-      locale,
-    ),
+    templateBody(pickPreview(templates, locale), locale),
     {
       patientName: t('whatsappPreviewName'),
       weekday: t('whatsappPreviewWeekday'),
@@ -105,15 +108,19 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
   );
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6" data-testid="whatsapp-settings">
-      <div className="space-y-1">
-        <p className="text-sm text-muted-foreground">{t('whatsappHint')}</p>
-      </div>
+    <form onSubmit={onSubmit} className="space-y-6" data-testid={testIdPrefix}>
+      {note ? (
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">{note}</p>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="whatsapp-country-code">{t('whatsappCountryCode')}</Label>
+        <Label htmlFor={`${testIdPrefix}-country-code`}>
+          {t('whatsappCountryCode')}
+        </Label>
         <CountryCodeSelect
-          id="whatsapp-country-code"
+          id={`${testIdPrefix}-country-code`}
           value={countryCode}
           onChange={setCountryCode}
         />
@@ -130,7 +137,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
             variant="outline"
             size="sm"
             onClick={addTemplate}
-            data-testid="whatsapp-add-template"
+            data-testid={`${testIdPrefix}-add-template`}
             className="min-h-[40px]"
           >
             <Plus className="h-4 w-4" />
@@ -142,7 +149,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
           {templates.map((tpl) => (
             <li
               key={tpl.id}
-              data-testid={`whatsapp-tpl-${tpl.id}`}
+              data-testid={`${testIdPrefix}-tpl-${tpl.id}`}
               className="rounded-xl border p-3 space-y-2"
             >
               <div className="flex items-start justify-between gap-2">
@@ -168,7 +175,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
                     size="icon"
                     onClick={() => removeTemplate(tpl.id)}
                     aria-label={t('whatsappRemoveTemplate')}
-                    data-testid={`whatsapp-tpl-remove-${tpl.id}`}
+                    data-testid={`${testIdPrefix}-tpl-remove-${tpl.id}`}
                     className="shrink-0"
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -208,7 +215,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
                   }
                   rows={3}
                   className="mt-1"
-                  data-testid={`whatsapp-tpl-body-es-${tpl.id}`}
+                  data-testid={`${testIdPrefix}-tpl-body-es-${tpl.id}`}
                 />
               </div>
               <div>
@@ -220,7 +227,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
                   }
                   rows={3}
                   className="mt-1"
-                  data-testid={`whatsapp-tpl-body-en-${tpl.id}`}
+                  data-testid={`${testIdPrefix}-tpl-body-en-${tpl.id}`}
                 />
               </div>
 
@@ -235,7 +242,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
                       })
                     }
                     className="flex h-10 min-h-[40px] w-full rounded-md border border-input bg-background px-3 text-sm"
-                    data-testid={`whatsapp-tpl-applies-${tpl.id}`}
+                    data-testid={`${testIdPrefix}-tpl-applies-${tpl.id}`}
                   >
                     <option value="upcoming">{t('whatsappAppliesUpcoming')}</option>
                     <option value="past">{t('whatsappAppliesPast')}</option>
@@ -251,7 +258,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
                         enabled: e.target.checked ? 1 : 0,
                       })
                     }
-                    data-testid={`whatsapp-tpl-enabled-${tpl.id}`}
+                    data-testid={`${testIdPrefix}-tpl-enabled-${tpl.id}`}
                     className="h-4 w-4"
                   />
                   {Number(tpl.enabled) === 1
@@ -266,7 +273,7 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
 
       <div className="rounded-xl border bg-muted/30 p-3 space-y-2">
         <p className="text-sm font-semibold">{t('whatsappPreview')}</p>
-        <p className="text-sm whitespace-pre-wrap" data-testid="whatsapp-preview">
+        <p className="text-sm whitespace-pre-wrap" data-testid={`${testIdPrefix}-preview`}>
           {previewBody}
         </p>
         <p className="text-xs text-muted-foreground">{t('whatsappPlaceholders')}</p>
@@ -286,10 +293,10 @@ export function WhatsappSettingsCard({ initial }: WhatsappSettingsCardProps) {
         <Button
           type="submit"
           disabled={pending}
-          data-testid="whatsapp-save"
+          data-testid={`${testIdPrefix}-save`}
           className="min-h-[48px]"
         >
-          {pending ? '…' : tAppt('whatsappSaved').replace('WhatsApp ', '')}
+          {pending ? '…' : t('whatsappSaveButton')}
         </Button>
       </div>
     </form>

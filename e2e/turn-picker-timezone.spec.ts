@@ -35,7 +35,7 @@ test('turn-picker respects the clinic timezone when generating slots', async ({
   // dentists no explicit schedule (clinic-hours fallback), so wiping
   // restores the pristine state.
   async function clearSchedule() {
-    await page.goto('/settings/schedules');
+    await page.goto('/profile?tab=times');
     const weekly = page.getByTestId('weekly-schedule');
     for (let guard = 0; guard < 30; guard++) {
       const trash = weekly.getByTestId('remove-window');

@@ -94,6 +94,67 @@ export function serializeTemplates(templates: WhatsappTemplate[]): string {
 }
 
 /**
+ * A user's WhatsApp override. All fields nullable — a null means "inherit
+ * the clinic default" for that dimension.
+ */
+export type UserWhatsappOverride = {
+  /** Serialized JSON or null (inherit). */
+  templates: string | null;
+  /** Dial code or null (inherit). */
+  defaultCountryCode: string | null;
+};
+
+/**
+ * Resolve the effective templates + country code for a user given their
+ * override (nullable) and the clinic defaults. A user with a non-empty
+ * override wins over the clinic; otherwise the clinic default is used.
+ */
+export function resolveWhatsappForUser(
+  override: UserWhatsappOverride | null | undefined,
+  clinicTemplates: WhatsappTemplate[],
+  clinicCountryCode: string,
+): { templates: WhatsappTemplate[]; countryCode: string } {
+  const parsed = override?.templates
+    ? parseTemplates(override.templates)
+    : null;
+  const templates = parsed && parsed.length > 0 ? parsed : clinicTemplates;
+  const countryCode = override?.defaultCountryCode?.trim()
+    ? override.defaultCountryCode.trim()
+    : clinicCountryCode;
+  return { templates, countryCode };
+}
+
+/** Build a lookup of userId → resolved override given raw rows + clinic defaults. */
+export function buildUserWhatsappMap(
+  rows: {
+    id: string;
+    whatsapp_templates: string | null;
+    whatsapp_default_country_code: string | null;
+  }[],
+  clinicTemplates: WhatsappTemplate[],
+  clinicCountryCode: string,
+): Map<string, { templates: WhatsappTemplate[]; countryCode: string }> {
+  const map = new Map<
+    string,
+    { templates: WhatsappTemplate[]; countryCode: string }
+  >();
+  for (const r of rows) {
+    map.set(
+      r.id,
+      resolveWhatsappForUser(
+        {
+          templates: r.whatsapp_templates,
+          defaultCountryCode: r.whatsapp_default_country_code,
+        },
+        clinicTemplates,
+        clinicCountryCode,
+      ),
+    );
+  }
+  return map;
+}
+
+/**
  * Normalize a free-text phone to a wa.me-safe digit string (no `+`).
  * Returns the empty string when the input has no digits.
  */

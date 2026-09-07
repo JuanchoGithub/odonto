@@ -145,6 +145,7 @@ export function PanelApptCard({
           }}
           templates={templates}
           countryCode={countryCode}
+          dentistId={appt.dentist_id}
           status={appt.status}
           isFuture={isFuture}
           variant="icon"

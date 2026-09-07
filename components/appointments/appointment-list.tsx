@@ -184,6 +184,7 @@ export function AppointmentList({
                             }}
                             templates={templates}
                             countryCode={countryCode}
+                            dentistId={a.dentist_id}
                             status={a.status}
                             isFuture={Date.parse(a.starts_at) > Date.now()}
                             variant="icon"

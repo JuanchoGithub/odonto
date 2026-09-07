@@ -108,6 +108,10 @@ export async function PatientOverview({
         return { clinicDate: s.date, startHhmm: s.hhmm };
       })()
     : null;
+  // The WhatsApp message is tied to the appointment's dentist, so resolve
+  // that dentist's per-user template override.
+  const refTurn = data.nextUpcoming ?? data.lastPast;
+  const refDentistId = refTurn?.dentist_id ?? null;
   const age = patient.birth_date
     ? Math.floor(
         (Date.now() - new Date(patient.birth_date).getTime()) / (365.25 * 86400_000),
@@ -144,6 +148,7 @@ export async function PatientOverview({
                 startHhmm={next?.startHhmm ?? last?.startHhmm}
                 isFuture={!!next}
                 dentistName={next ? data.nextUpcoming?.dentist_name : data.lastPast?.dentist_name}
+                dentistId={refDentistId}
                 reason={next ? data.nextUpcoming?.reason : data.lastPast?.reason}
                 variant="block"
               />

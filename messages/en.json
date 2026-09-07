@@ -49,6 +49,7 @@
     "settings": "Settings",
     "insurers": "Insurers",
     "schedules": "Schedules",
+    "profile": "Profile",
     "more": "More"
   },
   "dashboard": {
@@ -433,7 +434,34 @@
     "whatsappPreview": "Preview",
     "whatsappPreviewName": "Marta López",
     "whatsappPreviewWeekday": "Tuesday",
-    "whatsappPreviewTime": "4:45 PM"
+    "whatsappPreviewTime": "4:45 PM",
+    "whatsappSaveButton": "Save"
+  },
+  "profile": {
+    "title": "Profile",
+    "times": "Schedule",
+    "messages": "Messages",
+    "communication": "Communication",
+    "account": "Account",
+    "myMessages": "My messages",
+    "myMessagesHint": "These messages are used when you confirm or follow up on your turns. If you don't customize them, the clinic-wide messages are used.",
+    "inheritClinic": "Use the clinic-wide messages",
+    "overrideMessages": "Customize my messages",
+    "clinicDefault": "Clinic-wide messages",
+    "clinicDefaultHint": "Default messages for all turns. They can be customized per dentist.",
+    "perDentist": "Per dentist",
+    "perDentistHint": "Pick a dentist to customize their messages.",
+    "inheriting": "Uses the clinic-wide messages",
+    "customized": "Customized",
+    "resetToClinic": "Reset to clinic defaults",
+    "resetToClinicConfirm": "Reset this dentist's messages to the clinic-wide ones?",
+    "communicationHint": "Configure WhatsApp messages clinic-wide or per dentist.",
+    "accountHint": "Your account details.",
+    "role": "Role",
+    "email": "Email",
+    "locale": "Locale",
+    "name": "Name",
+    "backToProfile": "Back to profile"
   },
   "insurers": {
     "title": "Insurers and health plans",

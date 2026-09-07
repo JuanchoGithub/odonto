@@ -7,6 +7,7 @@ import { Button } from './button';
 import { Input } from './input';
 import { Label } from './label';
 import { useToast } from './toaster';
+import { useWhatsapp } from '@/components/whatsapp-provider';
 import {
   fillTemplate,
   pickAutoTemplate,
@@ -41,6 +42,8 @@ type WhatsappButtonProps = {
   templates: WhatsappTemplate[];
   /** Default country code. */
   countryCode: string;
+  /** When set, resolve this dentist's per-user override (falls back to clinic). */
+  dentistId?: string | null;
   /** Appointment status (drives the auto-pick). */
   status: string;
   /** Whether the appointment is in the future (drives the auto-pick). */
@@ -71,6 +74,7 @@ export function WhatsappButton({
   context,
   templates,
   countryCode,
+  dentistId,
   status,
   isFuture,
   variant = 'icon',
@@ -83,12 +87,20 @@ export function WhatsappButton({
   const t = useTranslations('appointments');
   const tErr = useTranslations('errors');
   const { push } = useToast();
+  const { forUser } = useWhatsapp();
   const [pending, startTransition] = useTransition();
   const [missingOpen, setMissingOpen] = useState(false);
   const [typed, setTyped] = useState('');
 
+  // If a dentist is specified, prefer their per-user override (falls back to
+  // the clinic default). Otherwise use the clinic-wide config passed in.
+  const effective =
+    dentistId !== undefined && dentistId !== null
+      ? forUser(dentistId)
+      : { templates, countryCode };
+
   const { url, body } = useMemo(() => {
-    const tpl = pickAutoTemplate(templates, status, isFuture);
+    const tpl = pickAutoTemplate(effective.templates, status, isFuture);
     const filled = fillTemplate(templateBody(tpl, locale), {
       patientName: context.patientName,
       weekday: weekdayFromClinicDate(context.clinicDate, locale),
@@ -98,14 +110,14 @@ export function WhatsappButton({
     });
     return {
       body: filled,
-      url: waMeUrl(patientPhone, filled, countryCode),
+      url: waMeUrl(patientPhone, filled, effective.countryCode),
     };
   }, [
-    templates,
+    effective.templates,
+    effective.countryCode,
     status,
     isFuture,
     patientPhone,
-    countryCode,
     locale,
     context,
   ]);

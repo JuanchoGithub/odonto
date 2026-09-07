@@ -11,6 +11,7 @@ export type OverviewTurn = {
   status: string;
   reason: string | null;
   dentist_name: string;
+  dentist_id: string;
 } | null;
 
 export type OverviewTreatment = {
@@ -51,7 +52,7 @@ export async function getPatientOverview(patientId: string): Promise<PatientOver
         [patientId],
       ),
       queryOne<NonNullable<OverviewTurn>>(
-        `SELECT a.id, a.starts_at, a.ends_at, a.status, a.reason, u.name as dentist_name
+        `SELECT a.id, a.starts_at, a.ends_at, a.status, a.reason, u.name as dentist_name, u.id as dentist_id
          FROM appointments a JOIN users u ON u.id = a.dentist_id
          WHERE a.patient_id = ? AND datetime(a.starts_at) < datetime(?)
            AND a.status NOT IN ('cancelled', 'no_show')
@@ -59,7 +60,7 @@ export async function getPatientOverview(patientId: string): Promise<PatientOver
         [patientId, now],
       ),
       queryOne<NonNullable<OverviewTurn>>(
-        `SELECT a.id, a.starts_at, a.ends_at, a.status, a.reason, u.name as dentist_name
+        `SELECT a.id, a.starts_at, a.ends_at, a.status, a.reason, u.name as dentist_name, u.id as dentist_id
          FROM appointments a JOIN users u ON u.id = a.dentist_id
          WHERE a.patient_id = ? AND datetime(a.starts_at) >= datetime(?)
            AND a.status IN ('scheduled', 'arrived', 'in_chair')

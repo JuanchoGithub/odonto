@@ -32,6 +32,48 @@ async function run() {
     ],
   });
 
+  // WhatsApp message templates: migrations seed these only for clinics that
+  // exist at migration time; a fresh checkout runs migrations before seed,
+  // so the clinic doesn't exist yet and its column defaults to '[]'. Seed the
+  // two built-in templates so the profile/communication tabs have content.
+  await db.execute({
+    sql: `UPDATE clinics
+             SET whatsapp_templates = ?,
+                 updated_at = ?
+           WHERE id = ?
+             AND (whatsapp_templates IS NULL OR whatsapp_templates = '[]' OR length(whatsapp_templates) = 0)`,
+    args: [
+      JSON.stringify([
+        {
+          id: 'builtin_confirmation',
+          kind: 'confirmation',
+          label_es: 'Confirmación de turno',
+          label_en: 'Appointment confirmation',
+          body_es:
+            'Hola, {{name}}. Hoy {{weekday}} tiene turno a las {{time}}, confirme por favor.',
+          body_en:
+            'Hi {{name}}. Today {{weekday}} you have an appointment at {{time}}, please confirm.',
+          applies_to: 'upcoming',
+          enabled: 1,
+        },
+        {
+          id: 'builtin_no_show',
+          kind: 'no_show',
+          label_es: 'Recordatorio de inasistencia',
+          label_en: 'No-show follow-up',
+          body_es:
+            'Hola {{name}}, hoy {{weekday}} tenía un turno a las {{time}}, pero no se presentó, ¿podría confirmar si cancela el turno? Gracias.',
+          body_en:
+            'Hi {{name}}, today {{weekday}} you had an appointment at {{time}}, but you did not show up. Could you confirm whether you are cancelling the appointment? Thank you.',
+          applies_to: 'past',
+          enabled: 1,
+        },
+      ]),
+      now,
+      clinicId,
+    ],
+  });
+
   // Clinic business hours fallback (Mon–Fri 09:00–18:00). The 0003 migration
   // seeds these only for clinics that exist at migration time; a fresh
   // checkout runs migrations before seed, so the clinic doesn't exist yet.

@@ -18,6 +18,8 @@ type PatientContactActionsProps = {
    *  future → confirmation, past → no-show follow-up). */
   isFuture?: boolean;
   dentistName?: string | null;
+  /** Resolve this dentist's per-user WhatsApp override when set. */
+  dentistId?: string | null;
   reason?: string | null;
   onPhoneSaved?: () => void;
   variant?: 'inline' | 'block';
@@ -37,6 +39,7 @@ export function PatientContactActions({
   startHhmm,
   isFuture = false,
   dentistName,
+  dentistId,
   reason,
   onPhoneSaved,
   variant = 'inline',
@@ -81,6 +84,7 @@ export function PatientContactActions({
         }}
         templates={templates}
         countryCode={countryCode}
+        dentistId={dentistId}
         status="scheduled"
         isFuture={isFuture}
         variant="icon"
