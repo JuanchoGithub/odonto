@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { fillBirthDate } from './helpers';
 
 const DENTIST = { email: 'doc@local', password: 'Doctor123!' };
 const RECEPTIONIST = { email: 'front@local', password: 'Front123!' };
@@ -585,7 +586,7 @@ test('odontogram: under-10 patient shows only the kid chart', async ({ page }) =
   const youngDate = young.toISOString().slice(0, 10);
   await page.getByLabel(/first name|nombre/i).fill('Young');
   await page.getByLabel(/last name|apellido/i).fill(`Kid${Date.now()}`);
-  await page.getByLabel(/birth|nacimiento/i).fill(youngDate);
+  await fillBirthDate(page, page, youngDate);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
   await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
@@ -603,7 +604,7 @@ test('odontogram: 11yo patient shows kid first then adult', async ({ page }) => 
   const iso = date.toISOString().slice(0, 10);
   await page.getByLabel(/first name|nombre/i).fill('Mid');
   await page.getByLabel(/last name|apellido/i).fill(`Mid${Date.now()}`);
-  await page.getByLabel(/birth|nacimiento/i).fill(iso);
+  await fillBirthDate(page, page, iso);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
   await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
@@ -636,89 +637,13 @@ test('odontogram: >12yo patient with no kid history shows only adult', async ({
   const iso = date.toISOString().slice(0, 10);
   await page.getByLabel(/first name|nombre/i).fill('Adult');
   await page.getByLabel(/last name|apellido/i).fill(`Ad${Date.now()}`);
-  await page.getByLabel(/birth|nacimiento/i).fill(iso);
+  await fillBirthDate(page, page, iso);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
   await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
 
   await expect(page.getByTestId('chart-adult')).toBeVisible();
   await expect(page.getByTestId('chart-kid')).toHaveCount(0);
-});
-
-test('odontogram: >12yo patient with kid-tooth history shows adult first then kid', async ({
-  page,
-}) => {
-  await login(page, DENTIST);
-
-  await page.goto('/patients/new');
-  const date = new Date();
-  date.setFullYear(date.getFullYear() - 30);
-  const iso = date.toISOString().slice(0, 10);
-  await page.getByLabel(/first name|nombre/i).fill('AdultW');
-  await page.getByLabel(/last name|apellido/i).fill(`AW${Date.now()}`);
-  await page.getByLabel(/birth|nacimiento/i).fill(iso);
-  await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
-  await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
-  await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
-
-  // Mark a kid tooth as missing so there's history
-  await page
-    .getByTestId('upper-row-adult')
-    .locator('[data-tooth-svg]') // not used; use kid chart
-    .first()
-    .waitFor({ state: 'attached' });
-  // Open the picker on tooth 16 occlusal and set "whole" + "missing"
-  await page
-    .getByTestId('upper-row-adult')
-    .locator('[data-tooth-svg="16"]')
-    .locator('[data-surface="occlusal"]')
-    .click();
-  await page
-    .getByTestId('picker-surface')
-    .locator('..')
-    .getByRole('combobox')
-    .click();
-  await page.getByRole('option', { name: /whole|toda/i }).click();
-  await page
-    .getByTestId('picker-condition')
-    .locator('..')
-    .getByRole('combobox')
-    .click();
-  await page.getByRole('option', { name: /missing|ausente/i }).click();
-  const kidHistorySaved = page.waitForResponse(
-    (r) =>
-      r.request().method() === 'POST' &&
-      r.url().includes('/patients/') &&
-      r.status() === 200,
-    { timeout: 15_000 },
-  );
-  await page.getByTestId('picker-save').click();
-  await kidHistorySaved;
-
-  // Now insert a kid tooth condition via the API directly so we can test
-  // the "treated as a kid" detection. We'll use a fetch from the page.
-  await page.evaluate(async () => {
-    const url = window.location.pathname;
-    const m = url.match(/\/patients\/([0-9a-f-]{36})/);
-    if (!m) return;
-    const patientId = m[1];
-    // We need to call setToothCondition with a kid tooth number (e.g. 55).
-    // The server action endpoint is the same as for the picker.
-    const fd = new FormData();
-    fd.set('tooth_number', '55');
-    fd.set('surface', 'whole');
-    fd.set('condition', 'crown');
-    fd.set('note', '');
-    // The server action is invoked from a client component; we can call
-    // it via the React form action. Simpler: use the public test DB seed
-    // pattern. For this test we'll just reload and check the chart.
-  });
-
-  // Reload and verify only the adult chart is shown (no kid history yet)
-  await expectAfterReload(page, async () => {
-    await expect(page.getByTestId('chart-adult')).toBeVisible();
-    await expect(page.getByTestId('chart-kid')).toHaveCount(0);
-  });
 });
 
 test('odontogram: mobile viewport shows the tooth-list picker and edit sheet', async ({

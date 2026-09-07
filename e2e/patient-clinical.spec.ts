@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openManualCreate } from './helpers';
+import { openManualCreate, fillBirthDate } from './helpers';
 
 const ADMIN = { email: 'admin@local', password: 'Admin123!' };
 
@@ -108,7 +108,11 @@ test('inline new-patient dialog (from appointment) shows the full intake', async
   // The full form (general + clinical) must be present in one page
   await expect(newPatientDialog.locator('input[name="first_name"]')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="last_name"]')).toBeVisible();
-  await expect(newPatientDialog.locator('input[name="birth_date"]')).toBeVisible();
+  // Birth-date picker: desktop renders Year/Month/Day dropdowns (plus a
+  // hidden submit input), touch renders a native date input.
+  await expect(
+    newPatientDialog.getByText(/fecha de nacimiento|birth date/i),
+  ).toBeVisible();
   // Clinical section also present (TagTextarea renders a contentEditable
   // div with data-field, not a <textarea>)
   await expect(newPatientDialog.locator('[data-field="medical_history"]')).toBeVisible();
@@ -121,7 +125,7 @@ test('inline new-patient dialog (from appointment) shows the full intake', async
   await newPatientDialog.getByLabel(/nombre|first name/i).fill('Inline');
   const newPatLastName = `Full${Date.now()}`;
   await newPatientDialog.getByLabel(/apellido|last name/i).fill(newPatLastName);
-  await newPatientDialog.getByLabel(/fecha de nacimiento|birth date/i).fill('1990-05-05');
+  await fillBirthDate(page, newPatientDialog, '1990-05-05');
 
   // The form should use the inline create action (no redirect, no full-page nav)
   // Hitting Save should close the dialog and return to the appointment form

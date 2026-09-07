@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { InsurerPicker } from '@/components/insurers/insurer-picker';
+import { BirthDatePicker } from '@/components/patients/birth-date-picker';
 import { TagTextarea } from '@/components/patients/tag-textarea';
 import {
   createPatient,
@@ -170,13 +171,7 @@ export function PatientForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="birth_date">{t('birthDate')}</Label>
-            <Input
-              id="birth_date"
-              name="birth_date"
-              type="date"
-              autoComplete="bday"
-              defaultValue={patient?.birth_date ?? ''}
-            />
+            <BirthDatePicker defaultValue={patient?.birth_date ?? ''} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="gender">{t('gender')}</Label>

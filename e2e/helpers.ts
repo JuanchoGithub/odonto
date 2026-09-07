@@ -69,3 +69,39 @@ export async function pickPatient(dialog: Locator, name = 'García') {
   await dialog.getByTestId('appt-patient-input').fill(name);
   await dialog.getByTestId('appt-patient-option').first().click();
 }
+
+/**
+ * Fill the birth-date picker with a `YYYY-MM-DD` value.
+ * Desktop (fine pointer) renders Year/Month/Day dropdowns (Radix Select,
+ * options in a portal on `page`); touch renders a native date input.
+ * Option indexes are locale-independent: years descend from the current
+ * year, months are Jan–Dec, days are 1-based.
+ */
+export async function fillBirthDate(
+  page: Page,
+  scope: Page | Locator,
+  iso: string,
+) {
+  const yearTrigger = scope.getByTestId('birth-date-year');
+  if (await yearTrigger.isVisible().catch(() => false)) {
+    const [y, m, d] = iso.split('-');
+    const maxYear = Math.max(new Date().getFullYear(), Number(y));
+    await yearTrigger.click();
+    await page
+      .getByRole('option')
+      .nth(maxYear - Number(y))
+      .click();
+    await scope.getByTestId('birth-date-month').click();
+    await page
+      .getByRole('option')
+      .nth(Number(m) - 1)
+      .click();
+    await scope.getByTestId('birth-date-day').click();
+    await page
+      .getByRole('option')
+      .nth(Number(d) - 1)
+      .click();
+  } else {
+    await scope.locator('input[name="birth_date"]').fill(iso);
+  }
+}

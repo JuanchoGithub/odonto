@@ -24,7 +24,11 @@ test('inline new-patient from appointment dialog opens the full form', async ({ 
   // Full form must include all the important fields
   await expect(newPatientDialog.locator('input[name="first_name"]')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="last_name"]')).toBeVisible();
-  await expect(newPatientDialog.locator('input[name="birth_date"]')).toBeVisible();
+  // Birth-date picker: desktop renders Year/Month/Day dropdowns (plus a
+  // hidden submit input), touch renders a native date input.
+  await expect(
+    newPatientDialog.getByText(/fecha de nacimiento|birth date/i),
+  ).toBeVisible();
   await expect(newPatientDialog.locator('input[name="phone"]')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="email"]')).toBeVisible();
   // (TagTextarea renders contentEditable divs with data-field, not <textarea>)
