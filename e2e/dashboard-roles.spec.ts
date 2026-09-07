@@ -15,15 +15,15 @@ async function login(page: Page, who: { email: string; password: string }) {
   await page.waitForURL(/\/(es|en)\/dashboard/, { timeout: 15_000 });
 }
 
-test('doctor panel: next-hour queue + give-turn button', async ({ page }) => {
+test('doctor panel: next-hour queue + single add-turn button', async ({ page }) => {
   await login(page, DENTIST);
   await expect(page.getByTestId('doctor-panel')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: /próxima hora|next hour/i }),
   ).toBeVisible();
-  await expect(page.getByTestId('panel-give-turn')).toBeVisible();
   await expect(page.getByTestId('panel-add-turn')).toBeVisible();
-  // "Add turn" opens the full booking dialog (date/time + save).
+  // "Add turn" opens the unified dialog (patient + duration, then
+  // manual-expand or link — heading is the same "Nuevo turno").
   await page.getByTestId('panel-add-turn').click();
   await expect(
     page.getByRole('heading', { name: /nuevo turno|new appointment/i }),
@@ -44,7 +44,7 @@ test('doctor panel: next-hour queue + give-turn button', async ({ page }) => {
 test('secretary panel: today, follow-ups, payments', async ({ page }) => {
   await login(page, FRONT);
   await expect(page.getByTestId('secretary-panel')).toBeVisible();
-  await expect(page.getByTestId('panel-give-turn')).toBeVisible();
+  await expect(page.getByTestId('panel-add-turn')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: /^hoy|today$/i }).first(),
   ).toBeVisible();

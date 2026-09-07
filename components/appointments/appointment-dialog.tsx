@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/select';
 import { Link } from '@/lib/navigation';
 import {
-  createAppointment,
   updateAppointment,
   deleteAppointment,
   type ApptRow,
@@ -24,12 +23,9 @@ import {
 import { useToast } from '@/components/ui/toaster';
 import { useRouter } from '@/lib/navigation';
 import { format } from 'date-fns';
+import type { PatientRow } from '@/server/actions/patients';
 import { PatientForm } from '@/components/patients/patient-form';
-import { createPatientInline, type PatientRow } from '@/server/actions/patients';
-import type { PatientOption } from '@/lib/patient-options';
-import { PatientCombobox } from '@/components/patients/patient-combobox';
-import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
-import { Share2 } from 'lucide-react';
+import { createPatientInline } from '@/server/actions/patients';
 import type { Role } from '@/lib/schemas/common';
 
 const STATUS_OPTIONS = [
@@ -65,14 +61,13 @@ for (let h = 8; h < 19; h++) {
   }
 }
 
-export type CreatedVia = 'manual' | 'click' | 'drag';
-
+/**
+ * Edit-only appointment dialog. Creation lives in AddAppointmentDialog
+ * (single "add turn" entry: choice → manual-expand or link, inline).
+ */
 export function AppointmentDialog({
   open,
   onOpenChange,
-  defaultStart,
-  defaultEnd,
-  createdVia = 'manual',
   dentists,
   appointment,
   onCreated,
@@ -81,24 +76,16 @@ export function AppointmentDialog({
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
-  defaultStart: string | null;
-  /** Optional pre-selected end (e.g. drag-select on the grid). */
-  defaultEnd?: string | null;
-  /** How the user started this creation flow; recorded on the appointment. */
-  createdVia?: CreatedVia;
   dentists: { id: string; name: string; color?: string | null }[];
-  /** When set, the dialog edits this appointment instead of creating. */
-  appointment?: ApptRow | null;
+  appointment: ApptRow;
   onCreated?: () => void;
-  /** When viewer is a dentist, lock dentist_id to this and hide the picker. */
+  /** When viewer is a dentist, the dentist field stays hidden (fixed). */
   currentUserId?: string;
   viewerRole?: Role;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
   const tErr = useTranslations('errors');
-  const tPi = useTranslations('patientOnboarding');
-  const tTp = useTranslations('turnPicker');
   const router = useRouter();
   const { push } = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -106,26 +93,22 @@ export function AppointmentDialog({
   const [patients, setPatients] = useState<
     { id: string; name: string; phone: string | null; email: string | null }[]
   >([]);
-  const [patientId, setPatientId] = useState<string>('');
-  const [newPatientOpen, setNewPatientOpen] = useState(false);
-  const [dentistId, setDentistId] = useState<string>(
-    viewerRole === 'dentist' && currentUserId
-      ? currentUserId
-      : dentists[0]?.id ?? '',
-  );
-  const [status, setStatus] = useState<string>('scheduled');
+  const [patientId, setPatientId] = useState<string>(appointment.patient_id);
+  const [dentistId, setDentistId] = useState<string>(appointment.dentist_id);
+  const [status, setStatus] = useState<string>(appointment.status);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [cancelReason, setCancelReason] = useState<string>('patient_request');
+  const [cancelReason, setCancelReason] = useState<string>(
+    appointment.cancel_reason ?? 'patient_request',
+  );
   const [reopenArmed, setReopenArmed] = useState(false);
   const pendingFd = useRef<FormData | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
   const [dateVal, setDateVal] = useState('');
   const [timeVal, setTimeVal] = useState('');
   const [durVal, setDurVal] = useState('30');
 
-  const editing = appointment ?? null;
+  const editing = appointment;
 
-  // Load patients each time the dialog opens
+  // Patient display names for the locked header (contact info).
   useEffect(() => {
     if (!open) return;
     setError(null);
@@ -145,50 +128,27 @@ export function AppointmentDialog({
       .catch(() => setPatients([]));
   }, [open]);
 
-  // Reset form state when the dialog OPEN/CLOSE cycle changes — NOT when
-  // switching between edit/create while open (because the picker may have
-  // just chosen a patient).
-  const wasOpen = useRef(false);
+  // Reset form state whenever another appointment is opened for edit.
   const prevEditingId = useRef<string | null>(null);
   useEffect(() => {
-    const justOpened = open && !wasOpen.current;
-    const editSwap = open && (editing?.id ?? null) !== prevEditingId.current;
-    wasOpen.current = open;
-    prevEditingId.current = editing?.id ?? null;
     if (!open) return;
-    if (!justOpened && !editSwap) return;
+    if (prevEditingId.current === editing.id) return;
+    prevEditingId.current = editing.id;
     setReopenArmed(false);
     pendingFd.current = null;
-    if (editing) {
-      setPatientId(editing.patient_id);
-      setDentistId(editing.dentist_id);
-      setStatus(editing.status);
-      setCancelReason(editing.cancel_reason ?? 'patient_request');
-    } else {
-      setPatientId('');
-      setDentistId(
-        viewerRole === 'dentist' && currentUserId
-          ? currentUserId
-          : dentists[0]?.id ?? '',
-      );
-      setStatus('scheduled');
-      setCancelReason('patient_request');
-    }
-    const s = editing
-      ? new Date(editing.starts_at)
-      : defaultStart
-        ? new Date(defaultStart)
-        : new Date();
-    const e = editing
-      ? new Date(editing.ends_at)
-      : defaultEnd
-        ? new Date(defaultEnd)
-        : new Date(s.getTime() + 30 * 60000);
+    setPatientId(editing.patient_id);
+    setDentistId(editing.dentist_id);
+    setStatus(editing.status);
+    setCancelReason(editing.cancel_reason ?? 'patient_request');
+    const s = new Date(editing.starts_at);
+    const e = new Date(editing.ends_at);
     setDateVal(format(s, 'yyyy-MM-dd'));
     setTimeVal(format(s, 'HH:mm'));
     const dur = Math.max(15, Math.round((e.getTime() - s.getTime()) / 60000));
     setDurVal(DURATIONS.includes(dur) ? String(dur) : '30');
-  }, [open, editing, dentists, defaultStart, defaultEnd, viewerRole, currentUserId]);
+  }, [open, editing]);
+
+  void currentUserId;
 
   function buildFd(form: HTMLFormElement): FormData {
     const fd = new FormData(form);
@@ -198,20 +158,17 @@ export function AppointmentDialog({
     const endLocal = new Date(startLocal.getTime() + Number(durVal) * 60000);
     fd.set('starts_at', startLocal.toISOString());
     fd.set('ends_at', endLocal.toISOString());
-    fd.set('created_via', createdVia);
     fd.set('patient_id', patientId);
     fd.set('dentist_id', dentistId);
     fd.set('status', status);
     if (status === 'cancelled') fd.set('cancel_reason', cancelReason);
-    if (editing) fd.set('id', editing.id);
+    fd.set('id', editing.id);
     return fd;
   }
 
   async function submitFd(fd: FormData) {
     if (reopenArmed) fd.set('reopen', 'true');
-    const res = editing
-      ? await updateAppointment(fd)
-      : await createAppointment(fd);
+    const res = await updateAppointment(fd);
     if (res && 'error' in res && res.error === 'terminal') {
       // Terminal → active needs an explicit reopen confirmation.
       pendingFd.current = fd;
@@ -222,10 +179,6 @@ export function AppointmentDialog({
       setError(t('conflict'));
       return;
     }
-    if (res && 'error' in res && res.error === 'patient_not_found') {
-      setError(t('patientNotFound'));
-      return;
-    }
     if (res && 'error' in res && res.error === 'invalid') {
       setError(t('invalid'));
       return;
@@ -234,13 +187,7 @@ export function AppointmentDialog({
       setError(tErr('generic'));
       return;
     }
-    if (
-      editing &&
-      res &&
-      'ok' in res &&
-      'reprogrammed' in res &&
-      res.reprogrammed
-    ) {
+    if (res && 'ok' in res && 'reprogrammed' in res && res.reprogrammed) {
       push({ title: t('rescheduledToast'), variant: 'success' });
     }
     onOpenChange(false);
@@ -250,10 +197,6 @@ export function AppointmentDialog({
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!patientId) {
-      setError(t('patientNotFound'));
-      return;
-    }
     setError(null);
     setLoading(true);
     try {
@@ -281,7 +224,6 @@ export function AppointmentDialog({
   }
 
   async function onDelete() {
-    if (!editing) return;
     setLoading(true);
     setError(null);
     try {
@@ -297,48 +239,6 @@ export function AppointmentDialog({
     }
   }
 
-  async function onPatientCreated(p: PatientRow) {
-    setNewPatientOpen(false);
-    // Refetch the full patient so we have the real id (createPatientInline returns id)
-    if (p.id) {
-      setPatientId(p.id);
-      setPatients((list) => [
-        ...list,
-        {
-          id: p.id,
-          name: `${p.last_name}, ${p.first_name}`,
-          phone: p.phone,
-          email: p.email,
-        },
-      ]);
-      return;
-    }
-    // Fallback: search by name+lastname via the API
-    try {
-      const r = await fetch(
-        `/api/patients?q=${encodeURIComponent(p.last_name)}`,
-      );
-      const list: PatientRow[] = await r.json();
-      const match = list.find(
-        (x) => x.first_name === p.first_name && x.last_name === p.last_name,
-      );
-      if (match) {
-        setPatientId(match.id);
-        setPatients((prev) => [
-          ...prev,
-          {
-            id: match.id,
-            name: `${match.last_name}, ${match.first_name}`,
-            phone: match.phone,
-            email: match.email,
-          },
-        ]);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -347,7 +247,7 @@ export function AppointmentDialog({
           <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">
-              {editing ? t('edit') : t('new')}
+              {t('edit')}
             </Dialog.Title>
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon">
@@ -359,62 +259,28 @@ export function AppointmentDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>{t('patient')}</Label>
-                {editing ? (
-                  <Link
-                    href={`/patients/${editing.patient_id}`}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    {t('viewPatient')}
-                  </Link>
-                ) : null}
-              </div>
-              {editing ? (
-                <div
-                  data-testid="appt-patient-locked"
-                  className="flex min-h-[48px] w-full items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-base sm:text-sm"
+                <Link
+                  href={`/patients/${editing.patient_id}`}
+                  className="text-xs text-primary hover:underline"
                 >
-                  <span className="truncate">
-                    {patients.find((p) => p.id === patientId)?.name ??
-                      editing.patient_name}
-                  </span>
-                </div>
-              ) : (
-                <PatientPicker
-                  patients={patients}
-                  value={patientId}
-                  onChange={(id, opt) => {
-                    setPatientId(id);
-                    // Keep the picked patient's contact info available even if
-                    // it isn't part of the prefetched list (e.g. found by phone).
-                    if (opt) {
-                      setPatients((list) =>
-                        list.some((x) => x.id === id) ? list : [...list, opt],
-                      );
-                    }
-                  }}
-                  onCreateNew={() => setNewPatientOpen(true)}
-                />
-              )}
+                  {t('viewPatient')}
+                </Link>
+              </div>
+              <div
+                data-testid="appt-patient-locked"
+                className="flex min-h-[48px] w-full items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-base sm:text-sm"
+              >
+                <span className="truncate">
+                  {patients.find((p) => p.id === patientId)?.name ??
+                    editing.patient_name}
+                </span>
+              </div>
               {patientId ? <PatientContact patients={patients} patientId={patientId} /> : null}
             </div>
-            {/* Dentists always book as themselves — the field is hidden
-                entirely to save screen space (dentistId defaults to them). */}
+            {/* Dentists never change the professional on edit — hidden entirely. */}
             {viewerRole === 'dentist' ? null : (
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="dentist_id">{t('dentist')}</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={!patientId}
-                    onClick={() => setShareOpen(true)}
-                    title={tTp('shareButton')}
-                  >
-                    <Share2 className="h-3.5 w-3.5" />
-                    {tTp('shareButton')}
-                  </Button>
-                </div>
+                <Label htmlFor="dentist_id">{t('dentist')}</Label>
                 <Select
                   name="dentist_id"
                   value={dentistId}
@@ -433,80 +299,76 @@ export function AppointmentDialog({
                 </Select>
               </div>
             )}
-            {editing ? (
-              <div
-                className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5"
-                data-testid="appt-origin"
-              >
-                <div>
-                  <span className="text-muted-foreground">{t('addedBy')}: </span>
-                  {editing.creator_name ?? '—'}
-                  <span className="text-muted-foreground">
-                    {' '}
-                    · {t('methodTitle')}:{' '}
+            <div
+              className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5"
+              data-testid="appt-origin"
+            >
+              <div>
+                <span className="text-muted-foreground">{t('addedBy')}: </span>
+                {editing.creator_name ?? '—'}
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {t('methodTitle')}:{' '}
+                </span>
+                {editing.created_via
+                  ? (t.has(`method.${editing.created_via}`)
+                      ? t(`method.${editing.created_via}`)
+                      : editing.created_via)
+                  : '—'}
+              </div>
+              {(editing.reprogram_count ?? 0) > 0 ? (
+                <div data-testid="appt-reprogram">
+                  <span className="font-medium">
+                    {t('reprogrammed', { count: editing.reprogram_count })}
                   </span>
-                  {editing.created_via
-                    ? (t.has(`method.${editing.created_via}`)
-                        ? t(`method.${editing.created_via}`)
-                        : editing.created_via)
-                    : '—'}
-                </div>
-                {(editing.reprogram_count ?? 0) > 0 ? (
-                  <div data-testid="appt-reprogram">
-                    <span className="font-medium">
-                      {t('reprogrammed', { count: editing.reprogram_count })}
+                  {editing.original_starts_at ? (
+                    <span className="text-muted-foreground">
+                      {' '}
+                      · {t('originalDate', {
+                        date: format(new Date(editing.original_starts_at), 'Pp'),
+                      })}
                     </span>
-                    {editing.original_starts_at ? (
-                      <span className="text-muted-foreground">
-                        {' '}
-                        · {t('originalDate', {
-                          date: format(new Date(editing.original_starts_at), 'Pp'),
-                        })}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {editing ? (
-              <div className="space-y-2">
-                <Label>{tCommon('status')}</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger data-testid="appt-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {t(`status.${s}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {status === 'cancelled' ? (
-                  <div className="space-y-1">
-                    <Label htmlFor="cancel_reason">{t('cancelReasonLabel')}</Label>
-                    <Select value={cancelReason} onValueChange={setCancelReason}>
-                      <SelectTrigger data-testid="appt-cancel-reason">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CANCEL_REASONS.map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {t(`cancelReason.${r}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-                {isTerminal(editing.status) && !isTerminal(status) ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-300" data-testid="reopen-notice">
-                    {t('reopenNotice', { status: t(`status.${editing.status}`) })}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label>{tCommon('status')}</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger data-testid="appt-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {t(`status.${s}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {status === 'cancelled' ? (
+                <div className="space-y-1">
+                  <Label htmlFor="cancel_reason">{t('cancelReasonLabel')}</Label>
+                  <Select value={cancelReason} onValueChange={setCancelReason}>
+                    <SelectTrigger data-testid="appt-cancel-reason">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CANCEL_REASONS.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {t(`cancelReason.${r}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {isTerminal(editing.status) && !isTerminal(status) ? (
+                <p className="text-xs text-amber-700 dark:text-amber-300" data-testid="reopen-notice">
+                  {t('reopenNotice', { status: t(`status.${editing.status}`) })}
+                </p>
+              ) : null}
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2">
               <div className="space-y-2">
                 <Label htmlFor="appt_date">{tCommon('date')}</Label>
@@ -552,11 +414,11 @@ export function AppointmentDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="reason">{t('reason')}</Label>
-              <Input id="reason" name="reason" defaultValue={editing?.reason ?? ''} />
+              <Input id="reason" name="reason" defaultValue={editing.reason ?? ''} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">{tCommon('notes')}</Label>
-              <Textarea id="notes" name="notes" rows={2} defaultValue={editing?.notes ?? ''} />
+              <Textarea id="notes" name="notes" rows={2} defaultValue={editing.notes ?? ''} />
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             {reopenArmed ? (
@@ -566,7 +428,7 @@ export function AppointmentDialog({
               >
                 <span className="flex-1 text-xs text-amber-800 dark:text-amber-200">
                   {t('reopenNotice', {
-                    status: editing ? t(`status.${editing.status}`) : '',
+                    status: t(`status.${editing.status}`),
                   })}
                 </span>
                 <Button
@@ -592,99 +454,77 @@ export function AppointmentDialog({
               </div>
             ) : null}
             <div className="flex items-center gap-2">
-              {editing ? (
-                <div className="flex-1 flex items-center gap-2">
-                  {confirmDelete ? (
-                    <>
-                      <Select
-                        value={cancelReason}
-                        onValueChange={setCancelReason}
+              <div className="flex-1 flex items-center gap-2">
+                {confirmDelete ? (
+                  <>
+                    <Select
+                      value={cancelReason}
+                      onValueChange={setCancelReason}
+                    >
+                      <SelectTrigger
+                        data-testid="appt-delete-reason"
+                        className="h-9 w-full max-w-[180px]"
+                        title={t('cancelReasonLabel')}
                       >
-                        <SelectTrigger
-                          data-testid="appt-delete-reason"
-                          className="h-9 w-full max-w-[180px]"
-                          title={t('cancelReasonLabel')}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CANCEL_REASONS.map((r) => (
-                            <SelectItem key={r} value={r}>
-                              {t(`cancelReason.${r}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={onDelete}
-                        disabled={loading}
-                        data-testid="appt-delete-confirm"
-                      >
-                        {tCommon('delete')}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConfirmDelete(false)}
-                      >
-                        {tCommon('cancel')}
-                      </Button>
-                    </>
-                  ) : (
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CANCEL_REASONS.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {t(`cancelReason.${r}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={onDelete}
+                      disabled={loading}
+                      data-testid="appt-delete-confirm"
+                    >
+                      {tCommon('delete')}
+                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
-                      disabled={loading}
-                      onClick={() => setConfirmDelete(true)}
-                      title={tCommon('delete')}
+                      size="sm"
+                      onClick={() => setConfirmDelete(false)}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      {tCommon('cancel')}
                     </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="flex-1" />
-              )}
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={loading}
+                    onClick={() => setConfirmDelete(true)}
+                    title={tCommon('delete')}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
               <Dialog.Close asChild>
                 <Button type="button" variant="outline">
                   {tCommon('cancel')}
                 </Button>
               </Dialog.Close>
-              <Button type="submit" disabled={loading || !patientId}>
+              <Button type="submit" disabled={loading}>
                 {loading ? tCommon('loading') : tCommon('save')}
               </Button>
             </div>
           </form>
         </Dialog.Content>
       </Dialog.Portal>
-
-      <NewPatientFullDialog
-        open={newPatientOpen}
-        onOpenChange={setNewPatientOpen}
-        onCreated={onPatientCreated}
-      />
-
-      {patientId ? (
-        <GenerateTurnLinkDialog
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-          patientId={patientId}
-          dentists={dentists}
-          defaultDentistId={dentistId}
-          currentUserId={currentUserId}
-          viewerRole={viewerRole}
-        />
-      ) : null}
     </Dialog.Root>
   );
 }
 
-function PatientContact({
+export function PatientContact({
   patients,
   patientId,
 }: {
@@ -704,35 +544,8 @@ function PatientContact({
   );
 }
 
-function PatientPicker({
-  patients,
-  value,
-  onChange,
-  onCreateNew,
-}: {
-  patients: PatientOption[];
-  value: string;
-  onChange: (id: string, opt?: PatientOption) => void;
-  onCreateNew: () => void;
-}) {
-  // The selected patient may not be in the current result page, so fall
-  // back to the parent's prefetched list for the display name.
-  const selectedName = patients.find((p) => p.id === value)?.name ?? null;
-
-  return (
-    <PatientCombobox
-      value={value}
-      onChange={onChange}
-      onCreateNew={onCreateNew}
-      selectedName={selectedName}
-      inputTestId="appt-patient-input"
-      listTestId="appt-patient-list"
-      optionTestId="appt-patient-option"
-    />
-  );
-}
-
-function NewPatientFullDialog({
+/** Shared inline "new patient" intake (full form, no redirect). */
+export function NewPatientFullDialog({
   open,
   onOpenChange,
   onCreated,
@@ -762,9 +575,6 @@ function NewPatientFullDialog({
             </Dialog.Close>
           </div>
           <PatientForm
-            // mode="full": the inline flow shows ALL sections (general +
-            // medical) as one stacked form. The patient gets a complete
-            // intake without having to switch tabs.
             mode="full"
             action={async (_prev, fd) => {
               const res = await createPatientInline({}, fd);

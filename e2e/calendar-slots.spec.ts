@@ -184,8 +184,7 @@ test('drag-select on empty grid pre-fills a range and records the method', async
     page.getByTestId('appt-badge').filter({ hasText: startText }).first(),
   ).toBeVisible();
 
-  // …and the list view shows the appointment with contact info;
-  // who/how it was created lives in the edit dialog.
+  // …and the list view shows the appointment with contact info.
   await page.getByTestId('view-list').click();
   const row = page
     .locator('[data-testid="appt-list-row"]:visible')
@@ -194,7 +193,18 @@ test('drag-select on empty grid pre-fills a range and records the method', async
   await expect(row).toBeVisible();
   await expect(row).toContainText('Dr. Demo'); // dentist column
   await expect(row).toContainText(/\+54/); // patient contact (phone)
-  await row.click();
+
+  // Who/how it was created lives in the edit dialog. Open it from the
+  // Wednesday calendar badge scoped to its day column: same-time rows
+  // from other days/tests would match the bare time text.
+  await page.getByTestId('view-calendar').click();
+  const badge = page
+    .getByTestId('day-col-2')
+    .getByTestId('appt-badge')
+    .filter({ hasText: startText })
+    .first();
+  await expect(badge).toBeVisible({ timeout: 10_000 });
+  await badge.click();
   const edit = page.getByRole('dialog');
   const origin = edit.getByTestId('appt-origin');
   await expect(origin).toBeVisible();

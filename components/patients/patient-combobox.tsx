@@ -52,6 +52,10 @@ export function PatientCombobox({
   const [selectedOpt, setSelectedOpt] = useState<PatientOption | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  // True while the user is actively typing (set on keystroke, cleared on
+  // pick/clear/blur). Used to never clobber in-progress typing when the
+  // parent value changes.
+  const typingRef = useRef(false);
 
   const fetchPatients = useCallback(
     (q: string, signal: AbortSignal) => fetchPatientOptions(q, signal),
@@ -62,23 +66,33 @@ export function PatientCombobox({
     enabled: open,
   });
 
-  const knownName = selectedOpt?.name ?? selectedName ?? '';
   const showClear = display.length > 0;
 
   // Sync display when the parent sets/clears the value externally
-  // (e.g. inline "new patient" creation). Never clobber while typing.
+  // (e.g. inline "new patient" creation, where focus returns to this
+  // input on sub-dialog close). Never clobber while the user is typing.
+  // A stale internal pick must not shadow the parent: when the value
+  // moved elsewhere, drop it and sync from the parent's selectedName.
   useEffect(() => {
-    if (document.activeElement === inputRef.current) return;
+    if (typingRef.current) return;
     if (!value) {
-      if (display !== '') setDisplay('');
-      setSelectedOpt(null);
+      if (document.activeElement !== inputRef.current) {
+        if (display !== '') setDisplay('');
+        setSelectedOpt(null);
+      }
       return;
     }
-    if (knownName && display !== knownName) setDisplay(knownName);
+    if (selectedOpt && selectedOpt.id !== value) setSelectedOpt(null);
+    const name =
+      selectedOpt && selectedOpt.id === value
+        ? selectedOpt.name
+        : (selectedName ?? '');
+    if (name && display !== name) setDisplay(name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, selectedName]);
 
   function pick(p: PatientOption) {
+    typingRef.current = false;
     setSelectedOpt(p);
     setDisplay(p.name);
     setQuery('');
@@ -89,6 +103,7 @@ export function PatientCombobox({
   }
 
   function clear() {
+    typingRef.current = false;
     setSelectedOpt(null);
     setDisplay('');
     setQuery('');
@@ -142,6 +157,7 @@ export function PatientCombobox({
           value={display}
           onChange={(e) => {
             const v = e.target.value;
+            typingRef.current = true;
             setDisplay(v);
             setQuery(v);
             setActive(-1);
@@ -155,6 +171,9 @@ export function PatientCombobox({
           onFocus={() => {
             setOpen(true);
             setActive(-1);
+          }}
+          onBlur={() => {
+            typingRef.current = false;
           }}
           onKeyDown={onKeyDown}
           placeholder={placeholder ?? tCommon('search') + '…'}

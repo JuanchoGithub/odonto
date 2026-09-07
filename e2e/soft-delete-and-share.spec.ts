@@ -44,37 +44,34 @@ test('share button on appointments page', async ({ page }) => {
   await page.waitForURL(/\/(es|en)\/dashboard/, { timeout: 15000 });
 
   await page.goto('/appointments');
-  // Unified entry: "+ Nuevo turno" → chooser → generate-link option.
+  // Unified entry: "+ Nuevo turno" opens the single add-turn dialog.
   await page
     .getByRole('button', { name: /nuevo turno|new appointment/i })
     .click();
-  await page.getByTestId('add-turn-link').click();
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
 
-  // Generate button disabled until a patient is chosen
-  const genBtn = dialog.getByRole('button', { name: /generate|generar/i });
-  await expect(genBtn).toBeDisabled();
-
-  // Pick a patient (single-input combobox: focus opens the full
+  // Pick a patient first (single-input combobox: focus opens the full
   // patient list; typing narrows it).
-  await dialog.getByTestId('tp-patient-input').click();
-  const list = dialog.getByTestId('tp-patient-list');
+  await dialog.getByTestId('appt-patient-input').click();
+  const list = dialog.getByTestId('appt-patient-list');
   await expect(list).toBeVisible();
-  const options = dialog.getByTestId('tp-patient-option');
+  const options = dialog.getByTestId('appt-patient-option');
   // The list is server-driven (debounced fetch) — wait for it to populate.
   await expect(options.first()).toBeVisible({ timeout: 10_000 });
   const fullCount = await options.count();
   expect(fullCount).toBeGreaterThan(1);
-  await dialog.getByTestId('tp-patient-input').fill('García');
+  await dialog.getByTestId('appt-patient-input').fill('García');
   await expect(options).toHaveCount(1);
   await options.first().click();
 
-  // Generate link
-  await expect(genBtn).toBeEnabled();
-  await genBtn.click();
-  const input = dialog.locator('#tp-url');
+  // Generate-link action is disabled until a patient is chosen;
+  // picking one enables it.
+  const linkBtn = dialog.getByTestId('add-appt-link');
+  await expect(linkBtn).toBeEnabled();
+  await linkBtn.click();
+  const input = dialog.locator('#add-appt-url');
   await expect(input).toBeVisible({ timeout: 10_000 });
   const url = await input.inputValue();
   expect(url).toContain('/pick-turn/');

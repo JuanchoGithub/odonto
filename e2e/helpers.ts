@@ -49,13 +49,19 @@ export async function fillWhen(
 
 /**
  * Open the manual appointment form via the unified "add turn" entry:
- * header "Nuevo turno" button → chooser → "add manually" option.
+ * header "Nuevo turno" button → pick patient → "add manually" expands
+ * the view inline. (The manual/link actions unlock after a patient is
+ * picked, so the helper pre-picks one; callers may re-pick afterwards —
+ * typing in the shared picker clears and re-searches.)
  */
-export async function openManualCreate(page: Page) {
+export async function openManualCreate(page: Page, name = 'García') {
   await page
     .getByRole('button', { name: /nuevo turno|new appointment/i })
     .click();
-  await page.getByTestId('add-turn-manual').click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByTestId('appt-patient-input').fill(name);
+  await dialog.getByTestId('appt-patient-option').first().click();
+  await page.getByTestId('add-appt-manual').click();
 }
 
 /** Pick the patient matching `name` in the dialog's patient combobox (single input). */

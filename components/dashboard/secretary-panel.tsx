@@ -1,13 +1,13 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Link2 } from 'lucide-react';
+import { CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from '@/lib/navigation';
 import { formatMoney } from '@/lib/format';
 import type { Currency, AppLocale } from '@/lib/schemas/common';
 import { AttendSheet } from '@/components/appointments/attend-sheet';
-import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
+import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
 import { updateAppointmentStatus } from '@/server/actions/appointments';
 import {
   listSecretarySchedule,
@@ -56,7 +56,7 @@ export function SecretaryPanel({
   const [unpaid, setUnpaid] = useState<PanelUnpaidInvoice[]>([]);
   const [recentPayments, setRecentPayments] = useState<PanelPayment[]>([]);
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
   const [armingComplete, setArmingComplete] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -130,12 +130,12 @@ export function SecretaryPanel({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="lg"
-          onClick={() => setShareOpen(true)}
+          onClick={() => setAddOpen(true)}
           className="min-h-[48px]"
-          data-testid="panel-give-turn"
+          data-testid="panel-add-turn"
         >
-          <Link2 className="mr-2 h-5 w-5" />
-          {t('giveTurn')}
+          <CalendarPlus className="mr-2 h-5 w-5" />
+          {t('addTurn')}
         </Button>
       </div>
 
@@ -324,10 +324,12 @@ export function SecretaryPanel({
         }}
         onAdvanced={load}
       />
-      <GenerateTurnLinkDialog
-        open={shareOpen}
-        onOpenChange={setShareOpen}
+      <AddAppointmentDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        defaultStart={null}
         dentists={dentists}
+        onCreated={load}
       />
     </div>
   );

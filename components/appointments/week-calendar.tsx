@@ -11,13 +11,12 @@ import {
   type ApptRow,
   type PendingLinkRow,
 } from '@/server/actions/appointments';
+import { AppointmentDialog } from './appointment-dialog';
 import {
-  AppointmentDialog,
+  AddAppointmentDialog,
   type CreatedVia,
-} from './appointment-dialog';
-import { AddTurnDialog } from './add-turn-dialog';
+} from './add-appointment-dialog';
 import { AttendSheet } from './attend-sheet';
-import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import { TimeGrid, type WorkingWindow } from './time-grid';
 import { AppointmentList } from './appointment-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -75,8 +74,7 @@ export function WeekCalendar({
   const [dialogMethod, setDialogMethod] = useState<CreatedVia>('manual');
   const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
   const [attendAppt, setAttendAppt] = useState<ApptRow | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   // Mobile-first: day agenda (list) is the default on small screens, where the
   // 7-day grid (~962px min-width) is unusable. Desktop keeps the calendar.
   const [view, setView] = useState<'calendar' | 'list'>(() => {
@@ -142,7 +140,7 @@ export function WeekCalendar({
 
   function openEdit(a: ApptRow) {
     setEditingAppt(a);
-    setDialogOpen(true);
+    setEditOpen(true);
   }
 
   // Called after a drag (move) or resize (extend) on the grid.
@@ -237,7 +235,7 @@ export function WeekCalendar({
                 {t('viewList')}
               </TabsTrigger>
             </TabsList>
-            <Button onClick={() => setAddOpen(true)}>
+            <Button onClick={() => openCreate(null, null, 'manual')}>
               <Plus className="h-4 w-4" />
               {t('new')}
             </Button>
@@ -289,40 +287,29 @@ export function WeekCalendar({
           />
         </TabsContent>
         </Tabs>
-        <AppointmentDialog
+        <AddAppointmentDialog
           open={dialogOpen}
-          onOpenChange={(o) => {
-            setDialogOpen(o);
-            if (!o) setEditingAppt(null);
-          }}
+          onOpenChange={setDialogOpen}
           defaultStart={dialogStart}
           defaultEnd={dialogEnd}
+          startExpanded={dialogStart !== null || dialogEnd !== null}
           createdVia={dialogMethod}
           dentists={dentists}
-          appointment={editingAppt}
           onCreated={refresh}
           currentUserId={viewer?.id}
           viewerRole={viewer?.role as any}
         />
-        <AddTurnDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          onManual={() => {
-            setAddOpen(false);
-            openCreate(null, null, 'manual');
-          }}
-          onLink={() => {
-            setAddOpen(false);
-            setShareOpen(true);
-          }}
-        />
-        <GenerateTurnLinkDialog
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-          dentists={dentists}
-          currentUserId={viewer?.id}
-          viewerRole={viewer?.role as any}
-        />
+        {editingAppt ? (
+          <AppointmentDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            dentists={dentists}
+            appointment={editingAppt}
+            onCreated={refresh}
+            currentUserId={viewer?.id}
+            viewerRole={viewer?.role as any}
+          />
+        ) : null}
         <AttendSheet
           appointment={attendAppt}
           open={attendAppt !== null}

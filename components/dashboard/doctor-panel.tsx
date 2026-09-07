@@ -1,11 +1,10 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Link2, CalendarPlus } from 'lucide-react';
+import { CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AttendSheet } from '@/components/appointments/attend-sheet';
-import { AppointmentDialog } from '@/components/appointments/appointment-dialog';
-import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
+import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
 import {
   listDoctorQueue,
   listDoctorAttendedToday,
@@ -20,7 +19,6 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
   const [items, setItems] = useState<PanelAppt[]>([]);
   const [attended, setAttended] = useState<PanelAppt[]>([]);
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -57,16 +55,6 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="lg"
-          onClick={() => setShareOpen(true)}
-          className="min-h-[48px]"
-          data-testid="panel-give-turn"
-        >
-          <Link2 className="mr-2 h-5 w-5" />
-          {t('giveTurn')}
-        </Button>
-        <Button
-          size="lg"
-          variant="outline"
           onClick={() => setAddOpen(true)}
           className="min-h-[48px]"
           data-testid="panel-add-turn"
@@ -129,15 +117,7 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
         }}
         onAdvanced={load}
       />
-      <GenerateTurnLinkDialog
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-        dentists={[dentist]}
-        defaultDentistId={dentist.id}
-        currentUserId={dentist.id}
-        viewerRole="dentist"
-      />
-      <AppointmentDialog
+      <AddAppointmentDialog
         open={addOpen}
         onOpenChange={setAddOpen}
         defaultStart={null}

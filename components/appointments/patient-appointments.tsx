@@ -241,21 +241,20 @@ export function PatientAppointments({
           </>
         )}
 
-        <AppointmentDialog
-          open={dialogOpen}
-          onOpenChange={(o) => {
-            setDialogOpen(o);
-            if (!o) setEditing(null);
-          }}
-          defaultStart={null}
-          defaultEnd={null}
-          createdVia="manual"
-          dentists={dentists}
-          appointment={editing}
-          onCreated={refresh}
-          currentUserId={currentUserId}
-          viewerRole={viewerRole}
-        />
+        {editing ? (
+          <AppointmentDialog
+            open={dialogOpen}
+            onOpenChange={(o) => {
+              setDialogOpen(o);
+              if (!o) setEditing(null);
+            }}
+            dentists={dentists}
+            appointment={editing}
+            onCreated={refresh}
+            currentUserId={currentUserId}
+            viewerRole={viewerRole}
+          />
+        ) : null}
       </CardContent>
     </Card>
   );

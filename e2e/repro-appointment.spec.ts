@@ -13,8 +13,10 @@ test('appointment dialog is a searchable combobox, not a free-text id field', as
   await page.goto('/appointments');
   await expect(page.getByRole('heading', { name: /turnos|appointments/i })).toBeVisible();
 
-  // Open the manual form via "+ Nuevo turno" → chooser → manual
-  await openManualCreate(page);
+  // Open the unified dialog via "+ Nuevo turno" (choice phase).
+  await page
+    .getByRole('button', { name: /nuevo turno|new appointment/i })
+    .click();
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
@@ -23,20 +25,27 @@ test('appointment dialog is a searchable combobox, not a free-text id field', as
   const freeTextPatient = dialog.locator('input[name="patient_id"]');
   await expect(freeTextPatient).toHaveCount(0);
 
-  // The Save button must be disabled until a patient is selected.
-  const saveBtn = dialog.getByRole('button', { name: /^guardar|^save$/i });
-  await expect(saveBtn).toBeDisabled();
+  // Both actions unlock only after a patient is selected.
+  const manualBtn = dialog.getByTestId('add-appt-manual');
+  const linkBtn = dialog.getByTestId('add-appt-link');
+  await expect(manualBtn).toBeDisabled();
+  await expect(linkBtn).toBeDisabled();
 
   // Type directly in the single-input patient picker
   await dialog.getByTestId('appt-patient-input').fill('García');
 
   // Pick the first result
   await dialog.getByTestId('appt-patient-option').first().click();
+  await expect(manualBtn).toBeEnabled();
+
+  // Expand the manual form inline
+  await manualBtn.click();
 
   // Pick a far-future time
   await fillWhen(dialog, page, new Date(2030, 3, 12, 9, 0), 30);
 
   // Save should now be enabled
+  const saveBtn = dialog.getByRole('button', { name: /^guardar|^save$/i });
   await expect(saveBtn).toBeEnabled();
 
   // Click Save
