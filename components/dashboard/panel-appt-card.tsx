@@ -1,9 +1,18 @@
 'use client';
+import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Phone, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { dentistColor } from '@/lib/colors';
 import type { PanelAppt } from '@/server/actions/dashboard';
+
+/** True on touch devices (coarse pointer): tap gestures, no hover. */
+function useCoarsePointer(): boolean {
+  return useMemo(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(pointer: coarse)').matches;
+  }, []);
+}
 
 /** Status accent colors for the left bar / dot when `statusAccent` is on. */
 export function statusAccentBar(status: string): string {
@@ -42,14 +51,31 @@ export function PanelApptCard({
   statusAccent?: boolean;
 }) {
   const t = useTranslations('appointments');
+  const coarse = useCoarsePointer();
   const active =
     appt.status === 'scheduled' ||
     appt.status === 'arrived' ||
     appt.status === 'in_chair';
+  const tappable = coarse && active;
   return (
     <li
       data-testid="panel-appt-row"
-      className="flex min-h-[64px] items-center gap-3 rounded-xl border bg-card p-3"
+      onClick={tappable ? () => onAttend(appt) : undefined}
+      onKeyDown={
+        tappable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onAttend(appt);
+              }
+            }
+          : undefined
+      }
+      role={tappable ? 'button' : undefined}
+      tabIndex={tappable ? 0 : undefined}
+      className={`flex min-h-[64px] items-center gap-3 rounded-xl border bg-card p-3 ${
+        tappable ? 'cursor-pointer active:bg-accent' : ''
+      }`}
     >
       <span
         aria-hidden
@@ -97,7 +123,7 @@ export function PanelApptCard({
             <Phone className="h-5 w-5" />
           </a>
         ) : null}
-        {active ? (
+        {active && !coarse ? (
           <Button
             size="sm"
             variant="outline"
