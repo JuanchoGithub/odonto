@@ -65,13 +65,14 @@ export async function listDoctorQueue(dentistId?: string) {
 }
 
 /**
- * Who the dentist already attended today: completed appointments on the
- * current clinic-local day, most recent first.
+ * Every appointment the dentist has today (clinic-local day), non-cancelled,
+ * chronological. Includes not-yet-attended turns so the panel is a one-tap
+ * place to call, attend, or mark a no-show for the whole day.
  */
-export async function listDoctorAttendedToday(dentistId?: string) {
+export async function listDoctorToday(dentistId?: string) {
   const user = await requireUser();
   if (!can(user.role, 'appointments:read')) return forbidden();
-  // Dentists only ever see their own history; admins may pass an id.
+  // Dentists only ever see their own schedule; admins may pass an id.
   const id = user.role === 'dentist' ? user.id : (dentistId ?? '');
   if (!id) return forbidden();
   const tz = await getClinicTimezone();
@@ -80,16 +81,84 @@ export async function listDoctorAttendedToday(dentistId?: string) {
   const rows = await query<ApptRow>(
     `${APPT_SELECT}
      WHERE a.dentist_id = ?
-       AND a.status = 'completed'
+       AND a.status != 'cancelled'
        AND datetime(a.starts_at) >= datetime(?, '-24 hours')
        AND datetime(a.starts_at) <= datetime(?)
-     ORDER BY a.ends_at DESC`,
+     ORDER BY a.starts_at`,
     [id, nowIso, nowIso],
   );
   const items = withClinicClock(rows, tz).filter(
     (r) => r.clinic_date === todayDate,
   );
   return { ok: true as const, items };
+}
+
+/** Monday-start key for a clinic-local date, used to bucket weeks. */
+function mondayOf(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const day = (d.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+  d.setUTCDate(d.getUTCDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+
+export type NextUpcoming = {
+  appt: PanelAppt;
+  /** Real elapsed minutes from now to start (>= 60 here). */
+  minutes_until: number;
+  /** Clinic calendar-day delta (0=today, 1=tomorrow, …). */
+  days_until: number;
+  /** 0 = same clinic week, 1 = next week, >= 2 = later. Monday-based. */
+  week_delta: number;
+  /** Clinic day-of-week of the appointment (0-6, Sun=0). */
+  weekday: number;
+};
+
+/**
+ * The next few active appointments for a dentist, used to render a smart
+ * empty state on the panel ("no turns this hour, but your next is…").
+ * Returns up to `limit` (default 3). `null` when there are none.
+ */
+export async function listDoctorNextUpcoming(dentistId?: string, limit = 3) {
+  const user = await requireUser();
+  if (!can(user.role, 'appointments:read')) return forbidden();
+  const id = user.role === 'dentist' ? user.id : (dentistId ?? '');
+  if (!id) return forbidden();
+  const n = Math.max(1, Math.min(10, Math.floor(limit)));
+  const tz = await getClinicTimezone();
+  const nowIso = new Date().toISOString();
+  const rows = await query<ApptRow>(
+    `${APPT_SELECT}
+     WHERE a.dentist_id = ?
+       AND a.status IN ('scheduled', 'arrived', 'in_chair')
+       AND datetime(a.starts_at) >= datetime(?)
+     ORDER BY a.starts_at
+     LIMIT ?`,
+    [id, nowIso, n],
+  );
+  if (rows.length === 0) return { ok: true as const, next: null };
+  const nowWall = wallClockInTz(nowIso, tz);
+  const nowWeek = mondayOf(nowWall.date);
+  const next: NextUpcoming[] = withClinicClock(rows, tz).map((appt) => {
+    const startWall = wallClockInTz(appt.starts_at, tz);
+    const daysUntil = Math.round(
+      (Date.parse(startWall.date) - Date.parse(nowWall.date)) / 86400_000,
+    );
+    const weekDelta = Math.round(
+      (Date.parse(mondayOf(startWall.date)) - Date.parse(nowWeek)) / (7 * 86400_000),
+    );
+    const minutesUntil = Math.max(
+      0,
+      Math.round((Date.parse(appt.starts_at) - Date.parse(nowIso)) / 60_000),
+    );
+    return {
+      appt,
+      minutes_until: minutesUntil,
+      days_until: daysUntil,
+      week_delta: weekDelta,
+      weekday: startWall.dayOfWeek,
+    };
+  });
+  return { ok: true as const, next };
 }
 
 export type SecretarySchedule = {

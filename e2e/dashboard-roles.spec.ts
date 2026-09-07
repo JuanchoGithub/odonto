@@ -30,15 +30,18 @@ test('doctor panel: next-hour queue + single add-turn button', async ({ page }) 
   ).toBeVisible({ timeout: 15_000 });
   // Close it again: an open Radix modal aria-hides the page behind it.
   await page.keyboard.press('Escape');
-  // Queue is either rows or the empty state — both prove the panel loaded.
+  // Queue is either rows or the empty state (or a smart empty state that
+  // shows both) — any of them proves the panel loaded.
   await expect(
-    page.getByTestId('panel-appt-row').first().or(page.getByTestId('panel-empty').first()),
+    page
+      .locator('[data-testid="panel-appt-row"], [data-testid="panel-empty"]')
+      .first(),
   ).toBeVisible({ timeout: 15_000 });
-  // Attended-today history section (most recent first).
+  // Today's full schedule (attended + not-yet-attended turns).
   await expect(
-    page.getByRole('heading', { name: /atendidos hoy|seen today/i }),
+    page.getByRole('heading', { name: /^hoy|today$/i }).first(),
   ).toBeVisible();
-  await expect(page.getByTestId('panel-attended')).toBeVisible();
+  await expect(page.getByTestId('panel-today')).toBeVisible();
 });
 
 test('secretary panel: today, follow-ups, payments', async ({ page }) => {
