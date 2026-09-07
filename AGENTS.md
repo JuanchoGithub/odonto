@@ -361,7 +361,9 @@ git commit --allow-empty -m "chore: trigger redeploy" && git push
 
 ## 11. Deploy
 
-The `midentista` project is on Vercel with the **Git integration** connected: every push to `main` builds and promotes to production automatically. No CLI, no hook, no token. There is exactly one deploy path — do not add another trigger or you'll double-build.
+The **`odonto`** project on Vercel (production URL `https://midentista.vercel.app`) has the **Git integration** connected: every push to `main` builds and promotes to production automatically. No CLI, no hook, no token. There is exactly one deploy path — do not add another trigger or you'll double-build.
+
+> **Project name is `odonto`, not `midentista`.** The Vercel *project* is named `odonto`; `midentista.vercel.app` is just its production URL/alias. When adding env vars (e.g. `CRON_SECRET`) use the **`odonto`** project's Environment Variables, or serverless functions won't see them.
 
 **Live URL**: `https://midentista.vercel.app`
 
@@ -374,14 +376,14 @@ export VERCEL_TOKEN='<vercel-token>'            # https://vercel.com/account/tok
 export TURSO_URL='libsql://<db>-<org>.turso.io'
 export TURSO_TOKEN='<turso-platform-token>'
 
-# Optional: if you have a pre-existing Vercel project with a different name
-export VERCEL_PROJECT='midentista'
+# Optional: only set if the Vercel project name differs from the package name ("odonto")
+export VERCEL_PROJECT='odonto'
 
 node scripts/vercel-setup.mjs
 ```
 
 The script will:
-1. Look up (or create) the Vercel project named `VERCEL_PROJECT` (default: `midentista`).
+1. Look up (or create) the Vercel project named `VERCEL_PROJECT` (default: the package name `odonto`).
 2. Create a Vercel Blob store named `odonto` if one doesn't exist, and capture its `BLOB_READ_WRITE_TOKEN`.
 3. Push `TURSO_URL`, `TURSO_TOKEN`, `AUTH_SECRET` (random 32-byte), `AUTH_URL`, `BLOB_READ_WRITE_TOKEN`, `CRON_SECRET` (random 32-byte) to Vercel for all three env targets.
 4. Run `npm run migrate` against the production Turso DB.
@@ -395,7 +397,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/es/login
 ```
 
 ### Rollback
-Vercel dashboard → midentista → Deployments → click a previous successful deployment → Promote to Production.
+Vercel dashboard → `odonto` → Deployments → click a previous successful deployment → Promote to Production.
 
 ### Why not the Vercel CLI?
 The current `VERCEL_TOKEN` GitHub secret is a `vcp_` personal access token, which the Vercel CLI rejects with "token is not valid" (the CLI expects the older 24-char format). Deploy hooks sidestep this entirely: the URL is the credential, no CLI binary, no token validation.
