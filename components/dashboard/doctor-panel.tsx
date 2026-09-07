@@ -183,6 +183,7 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
       key={a.id}
       appt={a}
       onAttend={setAttendAppt}
+      onPhoneUpdated={load}
       statusAccent
       extra={
         activeOverdue(a) ? (
@@ -235,15 +236,16 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
                     <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {g.label}
                     </span>
-                    <ul className="space-y-2">
-                      {g.items.map((u) => (
-                        <PanelApptCard
-                          key={u.appt.id}
-                          appt={u.appt}
-                          onAttend={setAttendAppt}
-                        />
-                      ))}
-                    </ul>
+                <ul className="space-y-2">
+                  {g.items.map((u) => (
+                    <PanelApptCard
+                      key={u.appt.id}
+                      appt={u.appt}
+                      onAttend={setAttendAppt}
+                      onPhoneUpdated={load}
+                    />
+                  ))}
+                </ul>
                   </li>
                 ))}
               </ul>
@@ -270,6 +272,7 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
                 key={a.id}
                 appt={a}
                 onAttend={setAttendAppt}
+                onPhoneUpdated={load}
               />
             ))}
           </ul>
@@ -320,6 +323,9 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
           if (!b) setAttendAppt(null);
         }}
         onAdvanced={load}
+        clinicDate={attendAppt?.clinic_date}
+        startHhmm={attendAppt?.start_hhmm}
+        onRefresh={load}
       />
       <AddAppointmentDialog
         open={addOpen}

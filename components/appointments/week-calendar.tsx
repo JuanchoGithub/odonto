@@ -321,6 +321,7 @@ export function WeekCalendar({
             if (!o) setAttendAppt(null);
           }}
           onAdvanced={refresh}
+          onRefresh={refresh}
         />
       </CardContent>
     </Card>

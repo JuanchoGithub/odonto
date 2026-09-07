@@ -1,9 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
 import { format } from 'date-fns';
-import { X, Phone, FileText, ChevronRight } from 'lucide-react';
+import { X, Phone, FileText, ChevronRight, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from '@/lib/navigation';
@@ -13,6 +13,8 @@ import {
   type ApptRow,
 } from '@/server/actions/appointments';
 import { useToast } from '@/components/ui/toaster';
+import { AttendTemplateSheet } from './attend-template-sheet';
+import { useWhatsapp } from '@/components/whatsapp-provider';
 
 const FLOW = ['scheduled', 'arrived', 'in_chair', 'completed'] as const;
 
@@ -21,18 +23,46 @@ export function AttendSheet({
   open,
   onOpenChange,
   onAdvanced,
+  clinicDate,
+  startHhmm,
+  onRefresh,
 }: {
   appointment: ApptRow | null;
   open: boolean;
   onOpenChange: (b: boolean) => void;
   onAdvanced?: () => void;
+  /** Clinic-local YYYY-MM-DD. Required for WhatsApp template rendering. */
+  clinicDate?: string;
+  /** Clinic-local HH:MM. Required for WhatsApp template rendering. */
+  startHhmm?: string;
+  /** Optional callback when WhatsApp updated the patient phone so the parent can refresh. */
+  onRefresh?: () => void;
 }) {
   const t = useTranslations('appointments');
   const tPatients = useTranslations('patients');
   const tCommon = useTranslations('common');
   const tErr = useTranslations('errors');
   const { push } = useToast();
+  const { countryCode, templates } = useWhatsapp();
   const [saving, setSaving] = useState(false);
+  const [waOpen, setWaOpen] = useState(false);
+
+  const effectiveClinicDate = useMemo(() => {
+    if (clinicDate) return clinicDate;
+    if (!appointment) return '';
+    // Fallback: derive from ISO date portion (UTC slice — only used when
+    // the caller didn't supply clinic-local fields).
+    return appointment.starts_at.slice(0, 10);
+  }, [clinicDate, appointment]);
+  const effectiveStartHhmm = useMemo(() => {
+    if (startHhmm) return startHhmm;
+    if (!appointment) return '';
+    return appointment.starts_at.slice(11, 16);
+  }, [startHhmm, appointment]);
+  const isFuture = useMemo(
+    () => (appointment ? Date.parse(appointment.starts_at) > Date.now() : false),
+    [appointment],
+  );
 
   if (!appointment) return null;
   const start = new Date(appointment.starts_at);
@@ -117,6 +147,16 @@ export function AttendSheet({
             </a>
           ) : null}
 
+          <button
+            type="button"
+            onClick={() => setWaOpen(true)}
+            data-testid="attend-whatsapp"
+            className="mt-2 flex w-full min-h-[48px] items-center gap-2 rounded-xl border px-3 text-base font-medium text-emerald-600 active:bg-accent"
+          >
+            <MessageCircle className="h-5 w-5" />
+            {t('whatsapp')}
+          </button>
+
           {next ? (
             <Button
               size="lg"
@@ -153,6 +193,24 @@ export function AttendSheet({
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+      <AttendTemplateSheet
+        open={waOpen}
+        onOpenChange={setWaOpen}
+        patientId={appointment.patient_id}
+        patientName={appointment.patient_name}
+        patientPhone={appointment.patient_phone}
+        context={{
+          clinicDate: effectiveClinicDate,
+          startHhmm: effectiveStartHhmm,
+          dentistName: appointment.dentist_name,
+          reason: appointment.reason,
+        }}
+        status={appointment.status}
+        isFuture={isFuture}
+        templates={templates}
+        countryCode={countryCode}
+        onOpened={onRefresh}
+      />
     </Dialog.Root>
   );
 }

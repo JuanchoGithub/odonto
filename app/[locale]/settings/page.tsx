@@ -6,8 +6,10 @@ import { ClinicForm } from '@/components/settings/clinic-form';
 import { UserForm } from '@/components/settings/user-form';
 import { UserColorCell } from '@/components/settings/user-color-cell';
 import { MedicalTagsManager } from '@/components/settings/medical-tags-manager';
+import { WhatsappSettingsCard } from '@/components/settings/whatsapp-settings-card';
 import { Badge } from '@/components/ui/badge';
 import { listAllMedicalTags } from '@/server/actions/medical-tags';
+import { getWhatsappSettings } from '@/server/actions/whatsapp';
 
 type Clinic = {
   id: string;
@@ -44,10 +46,11 @@ export default async function SettingsPage({
   const t = await getTranslations('settings');
   const tCommon = await getTranslations('common');
   const sp = await searchParams;
-  const [clinic, users, medicalTags] = await Promise.all([
+  const [clinic, users, medicalTags, whatsapp] = await Promise.all([
     queryOne<Clinic>('SELECT * FROM clinics LIMIT 1'),
     query<User>('SELECT id, email, name, role, locale, created_at, color FROM users ORDER BY created_at'),
     listAllMedicalTags(),
+    getWhatsappSettings(),
   ]);
 
   return (
@@ -139,6 +142,14 @@ export default async function SettingsPage({
         </CardHeader>
         <CardContent>
           <MedicalTagsManager initial={medicalTags} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('whatsappSection')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WhatsappSettingsCard initial={whatsapp} />
         </CardContent>
       </Card>
     </div>

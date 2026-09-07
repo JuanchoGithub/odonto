@@ -160,6 +160,7 @@ export function SecretaryPanel({
                 appt={a}
                 showDentist
                 onAttend={setAttendAppt}
+                onPhoneUpdated={load}
               />
             ))}
           </ul>
@@ -175,16 +176,17 @@ export function SecretaryPanel({
                 <h3 className="mb-1 text-sm font-medium text-muted-foreground">
                   {dayLabel(g.date)}
                 </h3>
-                <ul className="space-y-2">
-                  {g.items.map((a) => (
-                    <PanelApptCard
-                      key={a.id}
-                      appt={a}
-                      showDentist
-                      onAttend={setAttendAppt}
-                    />
-                  ))}
-                </ul>
+                  <ul className="space-y-2">
+                    {g.items.map((a) => (
+                      <PanelApptCard
+                        key={a.id}
+                        appt={a}
+                        showDentist
+                        onAttend={setAttendAppt}
+                        onPhoneUpdated={load}
+                      />
+                    ))}
+                  </ul>
               </div>
             ))}
           </div>
@@ -201,6 +203,7 @@ export function SecretaryPanel({
               empty={t('emptyFollowUp')}
               items={followUps.late}
               onAttend={setAttendAppt}
+              onRefresh={load}
             />
             <FollowUpGroup
               title={t('noShow')}
@@ -208,6 +211,7 @@ export function SecretaryPanel({
               empty={t('emptyFollowUp')}
               items={followUps.noShow}
               onAttend={setAttendAppt}
+              onRefresh={load}
               extra={(a) => (
                 <div className="mt-1">
                   <Button
@@ -228,6 +232,7 @@ export function SecretaryPanel({
               empty={t('emptyFollowUp')}
               items={followUps.notCompleted}
               onAttend={setAttendAppt}
+              onRefresh={load}
               extra={(a) => (
                 <div className="mt-1">
                   <Button
@@ -325,6 +330,9 @@ export function SecretaryPanel({
           if (!b) setAttendAppt(null);
         }}
         onAdvanced={load}
+        clinicDate={attendAppt?.clinic_date}
+        startHhmm={attendAppt?.start_hhmm}
+        onRefresh={load}
       />
       <AddAppointmentDialog
         open={addOpen}
@@ -344,6 +352,7 @@ function FollowUpGroup({
   empty,
   items,
   onAttend,
+  onRefresh,
   extra,
 }: {
   title: string;
@@ -351,6 +360,7 @@ function FollowUpGroup({
   empty: string;
   items: PanelAppt[];
   onAttend: (a: PanelAppt) => void;
+  onRefresh?: () => void;
   extra?: (a: PanelAppt) => React.ReactNode;
 }) {
   return (
@@ -358,23 +368,24 @@ function FollowUpGroup({
       <h3 className="mb-1 text-sm font-medium">
         {title} · {items.length}
       </h3>
-      {items.length === 0 ? (
-        <p className="rounded-xl border p-3 text-sm text-muted-foreground">
-          {empty}
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {items.map((a) => (
-            <PanelApptCard
-              key={a.id}
-              appt={a}
-              showDentist
-              onAttend={onAttend}
-              extra={extra ? extra(a) : undefined}
-            />
-          ))}
-        </ul>
-      )}
+          {items.length === 0 ? (
+            <p className="rounded-xl border p-3 text-sm text-muted-foreground">
+              {empty}
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((a) => (
+                <PanelApptCard
+                  key={a.id}
+                  appt={a}
+                  showDentist
+                  onAttend={onAttend}
+                  onPhoneUpdated={onRefresh}
+                  extra={extra ? extra(a) : undefined}
+                />
+              ))}
+            </ul>
+          )}
     </div>
   );
 }

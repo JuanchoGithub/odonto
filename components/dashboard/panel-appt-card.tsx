@@ -3,6 +3,8 @@ import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Phone, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { WhatsappButton } from '@/components/ui/whatsapp-button';
+import { useWhatsapp } from '@/components/whatsapp-provider';
 import { dentistColor } from '@/lib/colors';
 import type { PanelAppt } from '@/server/actions/dashboard';
 
@@ -39,24 +41,32 @@ export function PanelApptCard({
   appt,
   showDentist = false,
   onAttend,
+  onPhoneUpdated,
   extra,
   statusAccent = false,
 }: {
   appt: PanelAppt;
   showDentist?: boolean;
   onAttend: (a: PanelAppt) => void;
+  /** Called after a missing-phone capture so the parent can refresh. */
+  onPhoneUpdated?: () => void;
   /** Optional extra action row (e.g. no-show confirm). */
   extra?: React.ReactNode;
   /** Color the left bar by status instead of by dentist. */
   statusAccent?: boolean;
 }) {
   const t = useTranslations('appointments');
+  const { countryCode, templates } = useWhatsapp();
   const coarse = useCoarsePointer();
   const active =
     appt.status === 'scheduled' ||
     appt.status === 'arrived' ||
     appt.status === 'in_chair';
   const tappable = coarse && active;
+  const isFuture = useMemo(
+    () => Date.parse(appt.starts_at) > Date.now(),
+    [appt.starts_at],
+  );
   return (
     <li
       data-testid="panel-appt-row"
@@ -123,6 +133,25 @@ export function PanelApptCard({
             <Phone className="h-5 w-5" />
           </a>
         ) : null}
+        <WhatsappButton
+          patientId={appt.patient_id}
+          patientPhone={appt.patient_phone}
+          context={{
+            patientName: appt.patient_name,
+            clinicDate: appt.clinic_date,
+            startHhmm: appt.start_hhmm,
+            dentistName: appt.dentist_name,
+            reason: appt.reason,
+          }}
+          templates={templates}
+          countryCode={countryCode}
+          status={appt.status}
+          isFuture={isFuture}
+          variant="icon"
+          stopPropagation
+          onPhoneSaved={onPhoneUpdated}
+          testId={`panel-whatsapp-${appt.id}`}
+        />
         {active && !coarse ? (
           <Button
             size="sm"

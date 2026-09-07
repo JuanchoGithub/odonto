@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Phone, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,8 @@ import type { PatientRow } from '@/server/actions/patients';
 import { PatientForm } from '@/components/patients/patient-form';
 import { createPatientInline } from '@/server/actions/patients';
 import type { Role } from '@/lib/schemas/common';
+import { WhatsappButton } from '@/components/ui/whatsapp-button';
+import { useWhatsapp } from '@/components/whatsapp-provider';
 
 const STATUS_OPTIONS = [
   'scheduled',
@@ -275,7 +277,17 @@ export function AppointmentDialog({
                     editing.patient_name}
                 </span>
               </div>
-              {patientId ? <PatientContact patients={patients} patientId={patientId} /> : null}
+              {patientId ? (
+                <PatientContact
+                  patients={patients}
+                  patientId={patientId}
+                  clinicDate={editing.clinic_date}
+                  startHhmm={editing.start_hhmm}
+                  status={editing.status}
+                  dentistName={editing.dentist_name}
+                  reason={editing.reason}
+                />
+              ) : null}
             </div>
             {/* Dentists never change the professional on edit — hidden entirely. */}
             {viewerRole === 'dentist' ? null : (
@@ -527,19 +539,70 @@ export function AppointmentDialog({
 export function PatientContact({
   patients,
   patientId,
+  clinicDate,
+  startHhmm,
+  status,
+  dentistName,
+  reason,
 }: {
   patients: { id: string; name: string; phone: string | null; email: string | null }[];
   patientId: string;
+  clinicDate?: string;
+  startHhmm?: string;
+  status?: string;
+  dentistName?: string | null;
+  reason?: string | null;
 }) {
+  const { countryCode, templates } = useWhatsapp();
   const p = patients.find((x) => x.id === patientId);
   if (!p || (!p.phone && !p.email)) return null;
   return (
     <div
       data-testid="patient-contact"
-      className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5"
+      className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-1.5"
     >
-      {p.phone ? <div>{p.phone}</div> : null}
-      {p.email ? <div className="text-muted-foreground">{p.email}</div> : null}
+      <div className="flex flex-wrap items-center gap-2">
+        {p.phone ? (
+          <a
+            href={`tel:${p.phone}`}
+            className="inline-flex items-center gap-1 text-primary hover:underline"
+            data-testid="patient-contact-call"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            {p.phone}
+          </a>
+        ) : null}
+        {p.email ? (
+          <a
+            href={`mailto:${p.email}`}
+            className="inline-flex items-center gap-1 text-muted-foreground hover:underline"
+            data-testid="patient-contact-mail"
+          >
+            <Mail className="h-3.5 w-3.5" />
+            {p.email}
+          </a>
+        ) : null}
+        {clinicDate && startHhmm ? (
+          <WhatsappButton
+            patientId={p.id}
+            patientPhone={p.phone}
+            context={{
+              patientName: p.name,
+              clinicDate,
+              startHhmm,
+              dentistName,
+              reason,
+            }}
+            templates={templates}
+            countryCode={countryCode}
+            status={status ?? 'scheduled'}
+            isFuture={false}
+            variant="icon"
+            className="min-h-[32px] min-w-[32px] border-0"
+            testId={`patient-contact-whatsapp-${p.id}`}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

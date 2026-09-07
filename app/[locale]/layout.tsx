@@ -9,6 +9,8 @@ import { BottomNav } from '@/components/nav/bottom-nav';
 import { AuthProvider } from '@/components/auth/session-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme/theme-provider';
+import { WhatsappProvider } from '@/components/whatsapp-provider';
+import { getWhatsappSettings } from '@/server/actions/whatsapp';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -37,6 +39,7 @@ export default async function LocaleLayout({
   const clinic = await queryOne<Clinic>(
     'SELECT id, name, currency, locale FROM clinics LIMIT 1',
   );
+  const whatsapp = await getWhatsappSettings();
 
   // Block app until clinic is configured
   const strippedPath = '';
@@ -48,25 +51,32 @@ export default async function LocaleLayout({
   return (
     <AuthProvider>
       <NextIntlClientProvider messages={messages} locale={locale}>
-        <Toaster>
-          <ThemeProvider>
-          <div className="min-h-dvh flex flex-col">
-            {session?.user ? (
-              <TopNav
-                user={{
-                  name: session.user.name ?? '',
-                  email: session.user.email ?? '',
-                  role: session.user.role,
-                }}
-                clinicName={clinic?.name ?? null}
-                currency={clinic?.currency ?? null}
-              />
-            ) : null}
-            <main className="flex-1 pb-20 md:pb-0">{children}</main>
-            {session?.user ? <BottomNav role={session.user.role} /> : null}
-          </div>
-          </ThemeProvider>
-        </Toaster>
+        <WhatsappProvider
+          value={{
+            countryCode: whatsapp.countryCode,
+            templates: whatsapp.templates,
+          }}
+        >
+          <Toaster>
+            <ThemeProvider>
+            <div className="min-h-dvh flex flex-col">
+              {session?.user ? (
+                <TopNav
+                  user={{
+                    name: session.user.name ?? '',
+                    email: session.user.email ?? '',
+                    role: session.user.role,
+                  }}
+                  clinicName={clinic?.name ?? null}
+                  currency={clinic?.currency ?? null}
+                />
+              ) : null}
+              <main className="flex-1 pb-20 md:pb-0">{children}</main>
+              {session?.user ? <BottomNav role={session.user.role} /> : null}
+            </div>
+            </ThemeProvider>
+          </Toaster>
+        </WhatsappProvider>
       </NextIntlClientProvider>
     </AuthProvider>
   );

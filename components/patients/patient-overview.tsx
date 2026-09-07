@@ -11,6 +11,8 @@ import type { AppLocale, Currency, Role } from '@/lib/schemas/common';
 import { getPatientOverview, type OverviewTurn } from '@/server/actions/overview';
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import { Odontogram } from '@/components/odontogram/odontogram';
+import { PatientContactActions } from '@/components/patients/patient-contact-actions';
+import { getClinicTimezone, wallClockInTz } from '@/lib/availability';
 
 function apptVariant(s: string) {
   return s === 'completed'
@@ -93,6 +95,19 @@ export async function PatientOverview({
     getTranslations('billing'),
   ]);
   const data = await getPatientOverview(patient.id);
+  const tz = await getClinicTimezone();
+  const next = data.nextUpcoming
+    ? (() => {
+        const s = wallClockInTz(data.nextUpcoming.starts_at, tz);
+        return { clinicDate: s.date, startHhmm: s.hhmm };
+      })()
+    : null;
+  const last = data.lastPast
+    ? (() => {
+        const s = wallClockInTz(data.lastPast.starts_at, tz);
+        return { clinicDate: s.date, startHhmm: s.hhmm };
+      })()
+    : null;
   const age = patient.birth_date
     ? Math.floor(
         (Date.now() - new Date(patient.birth_date).getTime()) / (365.25 * 86400_000),
@@ -119,14 +134,19 @@ export async function PatientOverview({
                 ? `${formatDate(patient.birth_date, locale)} (${t('overview.ageYears', { age: age ?? 0 })})`
                 : '—'}
             </p>
-            {patient.phone ? (
-              <p>
-                <a href={`tel:${patient.phone}`} className="text-primary hover:underline">
-                  {patient.phone}
-                </a>
-              </p>
+            {patient.phone || patient.email ? (
+              <PatientContactActions
+                patientId={patient.id}
+                patientName={`${patient.first_name} ${patient.last_name}`.trim()}
+                phone={patient.phone}
+                email={patient.email}
+                clinicDate={next?.clinicDate ?? last?.clinicDate}
+                startHhmm={next?.startHhmm ?? last?.startHhmm}
+                dentistName={next ? data.nextUpcoming?.dentist_name : data.lastPast?.dentist_name}
+                reason={next ? data.nextUpcoming?.reason : data.lastPast?.reason}
+                variant="block"
+              />
             ) : null}
-            {patient.email ? <p className="break-words">{patient.email}</p> : null}
             {patient.address ? (
               <p className="text-muted-foreground">{patient.address}</p>
             ) : null}

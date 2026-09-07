@@ -10,6 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { WhatsappButton } from '@/components/ui/whatsapp-button';
+import { useWhatsapp } from '@/components/whatsapp-provider';
 import { dentistColor } from '@/lib/colors';
 import type { ApptRow, PendingLinkRow } from '@/server/actions/appointments';
 
@@ -108,6 +110,7 @@ export function AppointmentList({
   onAttend?: (a: ApptRow) => void;
   attendLabel?: string;
 }) {
+  const { countryCode, templates } = useWhatsapp();
   const sorted = [...appts].sort(
     (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
   );
@@ -167,6 +170,27 @@ export function AppointmentList({
                           >
                             {a.patient_phone}
                           </a>
+                        ) : null}
+                        {a.clinic_date && a.start_hhmm ? (
+                          <WhatsappButton
+                            patientId={a.patient_id}
+                            patientPhone={a.patient_phone}
+                            context={{
+                              patientName: a.patient_name,
+                              clinicDate: a.clinic_date,
+                              startHhmm: a.start_hhmm,
+                              dentistName: a.dentist_name,
+                              reason: a.reason,
+                            }}
+                            templates={templates}
+                            countryCode={countryCode}
+                            status={a.status}
+                            isFuture={Date.parse(a.starts_at) > Date.now()}
+                            variant="icon"
+                            stopPropagation
+                            className="min-h-[36px] min-w-[36px] border-0"
+                            testId={`list-whatsapp-${a.id}`}
+                          />
                         ) : null}
                       </span>
                     </span>

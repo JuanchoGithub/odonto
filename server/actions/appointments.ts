@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
-import { isWithinWorkingHours, getWeekWindows, type DayWindows } from '@/lib/availability';
+import { isWithinWorkingHours, getWeekWindows, getClinicTimezone, wallClockInTz, type DayWindows } from '@/lib/availability';
 import { effectiveExpiryMs } from '@/lib/turn-picker';
 
 const ApptStatusSchema = z.enum(['scheduled', 'arrived', 'in_chair', 'completed', 'cancelled', 'no_show']);
@@ -351,6 +351,13 @@ export type ApptRow = {
   creator_name: string | null;
   patient_phone: string | null;
   patient_email: string | null;
+  /** Clinic-local YYYY-MM-DD. Set by callers that run the rows through
+   *  `withClinicClock`; absent on raw rows. Client-side fallbacks slice
+   *  the ISO date when missing. */
+  clinic_date?: string;
+  /** Clinic-local HH:MM. Same caveat as `clinic_date`. */
+  start_hhmm?: string;
+  end_hhmm?: string;
 };
 
 export type AppointmentHistoryEntry = {
@@ -483,7 +490,7 @@ export async function runAutoNoShowSweep(graceMin = 60) {
 
 export async function listAppointmentsForWeek(startIso: string) {
   const end = new Date(new Date(startIso).getTime() + 7 * 86400_000).toISOString();
-  return query<ApptRow>(
+  const rows = await query<ApptRow>(
     `SELECT a.*, p.first_name || ' ' || p.last_name as patient_name,
             p.phone as patient_phone, p.email as patient_email,
             u.name as dentist_name, u.color as dentist_color,
@@ -496,6 +503,15 @@ export async function listAppointmentsForWeek(startIso: string) {
      ORDER BY a.starts_at`,
     [startIso, end],
   );
+  // Decorate with clinic-local wall-clock so the list / cards can render
+  // the time and use it for the WhatsApp template without trusting the
+  // browser timezone (per AGENTS §12.9).
+  const tz = await getClinicTimezone();
+  return rows.map((r) => {
+    const s = wallClockInTz(r.starts_at, tz);
+    const e = wallClockInTz(r.ends_at, tz);
+    return { ...r, clinic_date: s.date, start_hhmm: s.hhmm, end_hhmm: e.hhmm };
+  });
 }
 
 /** Full appointment history for a single patient (all statuses, most recent first). */
