@@ -47,16 +47,12 @@ test('appointment patient picker searches the server (phone match)', async ({
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
 
-  // Open the picker and search by PHONE — impossible with the old
-  // client-side name-only filter.
-  await dialog.getByRole('button', { name: /buscar|search/i }).first().click();
-  await dialog.getByPlaceholder(/buscar|search/i).first().fill(stamp);
+  // Type directly in the single-input picker and search by PHONE.
+  await dialog.getByTestId('appt-patient-input').fill(stamp);
 
-  const option = dialog
-    .locator('button')
-    .filter({ hasText: new RegExp(lastName) })
-    .first();
+  const option = dialog.getByTestId('appt-patient-option').first();
   await expect(option).toBeVisible({ timeout: 10_000 });
+  await expect(option).toContainText(new RegExp(lastName));
   await option.click();
 
   // Selection sticks and unlocks Save.

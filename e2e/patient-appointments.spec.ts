@@ -26,19 +26,8 @@ test('patient detail shows full appointment history in the appointments tab', as
       .getByRole('button', { name: /nuevo turno|new appointment/i })
       .click();
     const dialog = page.getByRole('dialog');
-    await dialog
-      .getByRole('button', { name: /buscar|search/i })
-      .first()
-      .click();
-    await dialog
-      .getByPlaceholder(/buscar|search/i)
-      .first()
-      .fill(PATIENT);
-    await dialog
-      .locator('button')
-      .filter({ hasText: new RegExp(PATIENT, 'i') })
-      .first()
-      .click();
+    await dialog.getByTestId('appt-patient-input').fill(PATIENT);
+    await dialog.getByTestId('appt-patient-option').first().click();
     await fillWhen(dialog, page, start, 15);
     await dialog
       .getByRole('button', { name: /^guardar$|^save$/i })

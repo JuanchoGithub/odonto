@@ -13,9 +13,8 @@ test('inline new-patient from appointment dialog opens the full form', async ({ 
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
 
-  // Open the patient picker and click "+ Nuevo paciente"
-  const patientTrigger = apptDialog.getByRole('button', { name: /buscar|search/i }).first();
-  await patientTrigger.click();
+  // Focus the patient picker and click "+ Nuevo paciente"
+  await apptDialog.getByTestId('appt-patient-input').click();
   await apptDialog.getByRole('button', { name: /nuevo paciente|new patient/i }).click();
 
   // The new-patient sub-dialog opens with the FULL form

@@ -28,17 +28,11 @@ test('appointment dialog is a searchable combobox, not a free-text id field', as
   const saveBtn = dialog.getByRole('button', { name: /^guardar|^save$/i });
   await expect(saveBtn).toBeDisabled();
 
-  // Open the patient picker
-  const patientTrigger = dialog.getByRole('button', { name: /buscar|search/i }).first();
-  await patientTrigger.click();
-
-  // Type a search query
-  const searchInput = dialog.getByPlaceholder(/buscar|search/i).first();
-  await searchInput.fill('García');
+  // Type directly in the single-input patient picker
+  await dialog.getByTestId('appt-patient-input').fill('García');
 
   // Pick the first result
-  const firstResult = dialog.locator('button:has-text("García")').first();
-  await firstResult.click();
+  await dialog.getByTestId('appt-patient-option').first().click();
 
   // Pick a far-future time
   await fillWhen(dialog, page, new Date(2030, 3, 12, 9, 0), 30);
@@ -69,11 +63,9 @@ test('inline "create new patient" from appointment dialog', async ({
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
 
-  // Open patient picker
-  const patientTrigger = dialog.getByRole('button', { name: /buscar|search/i }).first();
-  await patientTrigger.click();
-
-  // Click "+ Nuevo paciente" inline link
+  // Focus the single-input picker to open the dropdown, then
+  // click "+ Nuevo paciente" inline link
+  await dialog.getByTestId('appt-patient-input').click();
   const newPatientLink = dialog.getByRole('button', { name: /nuevo paciente|new patient/i });
   await newPatientLink.click();
 

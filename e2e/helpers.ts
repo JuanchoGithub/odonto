@@ -47,19 +47,8 @@ export async function fillWhen(
     .click();
 }
 
-/** Pick the patient matching `name` in the dialog's patient combobox. */
+/** Pick the patient matching `name` in the dialog's patient combobox (single input). */
 export async function pickPatient(dialog: Locator, name = 'García') {
-  await dialog
-    .getByRole('button', { name: /buscar|search/i })
-    .first()
-    .click();
-  await dialog
-    .getByPlaceholder(/buscar|search/i)
-    .first()
-    .fill(name);
-  await dialog
-    .locator('button')
-    .filter({ hasText: new RegExp(name, 'i') })
-    .first()
-    .click();
+  await dialog.getByTestId('appt-patient-input').fill(name);
+  await dialog.getByTestId('appt-patient-option').first().click();
 }

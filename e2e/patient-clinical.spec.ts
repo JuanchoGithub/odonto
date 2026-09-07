@@ -98,8 +98,7 @@ test('inline new-patient dialog (from appointment) shows the full intake', async
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
 
-  const patientTrigger = apptDialog.getByRole('button', { name: /buscar|search/i }).first();
-  await patientTrigger.click();
+  await apptDialog.getByTestId('appt-patient-input').click();
   await apptDialog.getByRole('button', { name: /nuevo paciente|new patient/i }).click();
 
   const newPatientDialog = page.getByRole('dialog').last();
@@ -131,6 +130,9 @@ test('inline new-patient dialog (from appointment) shows the full intake', async
   await expect(page.getByRole('dialog')).toHaveCount(1, { timeout: 10_000 });
 
   // The appointment dialog is open and the patient picker now shows the new patient
+  // (single-input combobox: the name is the input's value, not text content)
   await expect(apptDialog).toBeVisible();
-  await expect(apptDialog.getByText(newPatLastName)).toBeVisible();
+  await expect(apptDialog.getByTestId('appt-patient-input')).toHaveValue(
+    new RegExp(newPatLastName),
+  );
 });

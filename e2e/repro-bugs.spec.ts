@@ -26,8 +26,7 @@ test('repro: gender picker must work in the inline new-patient form', async ({
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
 
-  const patientTrigger = apptDialog.getByRole('button', { name: /buscar|search/i }).first();
-  await patientTrigger.click();
+  await apptDialog.getByTestId('appt-patient-input').click();
   await apptDialog.getByRole('button', { name: /nuevo paciente|new patient/i }).click();
   const newPatientDialog = page.getByRole('dialog').last();
   await expect(newPatientDialog).toBeVisible();
@@ -62,11 +61,8 @@ test('repro: insurance onboarding form receives clicks (not the patient form)', 
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
 
-  // Open patient picker → "+ Nuevo paciente"
-  const patientTrigger = apptDialog
-    .getByRole('button', { name: /buscar|search/i })
-    .first();
-  await patientTrigger.click();
+  // Focus patient picker → "+ Nuevo paciente"
+  await apptDialog.getByTestId('appt-patient-input').click();
   await apptDialog
     .getByRole('button', { name: /nuevo paciente|new patient/i })
     .click();

@@ -29,19 +29,8 @@ test('clicking an appointment opens the edit dialog (not the patient page)', asy
     .getByRole('button', { name: /nuevo turno|new appointment/i })
     .click();
   const dialog = page.getByRole('dialog');
-  await dialog
-    .getByRole('button', { name: /buscar|search/i })
-    .first()
-    .click();
-  await dialog
-    .getByPlaceholder(/buscar|search/i)
-    .first()
-    .fill('García');
-  await dialog
-    .locator('button')
-    .filter({ hasText: /García/ })
-    .first()
-    .click();
+  await dialog.getByTestId('appt-patient-input').fill('García');
+  await dialog.getByTestId('appt-patient-option').first().click();
   await fillWhen(dialog, page, start, 15);
   await dialog
     .getByRole('button', { name: /^guardar$|^save$/i })

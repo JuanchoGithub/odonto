@@ -1,8 +1,8 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, ChevronDown, Check, UserPlus, Trash2 } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
 import { Link } from '@/lib/navigation';
 import {
   createAppointment,
@@ -27,11 +26,8 @@ import { useRouter } from '@/lib/navigation';
 import { format } from 'date-fns';
 import { PatientForm } from '@/components/patients/patient-form';
 import { createPatientInline, type PatientRow } from '@/server/actions/patients';
-import {
-  fetchPatientOptions,
-  type PatientOption,
-} from '@/lib/patient-options';
-import { useServerSearch } from '@/lib/hooks/use-server-search';
+import type { PatientOption } from '@/lib/patient-options';
+import { PatientCombobox } from '@/components/patients/patient-combobox';
 import { GenerateTurnLinkDialog } from '@/components/turn-picker/generate-link-dialog';
 import { Share2 } from 'lucide-react';
 import type { Role } from '@/lib/schemas/common';
@@ -729,96 +725,20 @@ function PatientPicker({
   onChange: (id: string, opt?: PatientOption) => void;
   onCreateNew: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const t = useTranslations('patients');
-  const tCommon = useTranslations('common');
-  const fetchPatients = useCallback(
-    (q: string, signal: AbortSignal) => fetchPatientOptions(q, signal),
-    [],
-  );
-  const { query, setQuery, items, loading } = useServerSearch<PatientOption>({
-    fetchItems: fetchPatients,
-    enabled: open,
-  });
-  // The selected patient may not be in the current result page (or the
-  // parent's prefetched list), so keep a local copy for display.
-  const [selectedOpt, setSelectedOpt] = useState<PatientOption | null>(null);
-
-  const selected = patients.find((p) => p.id === value) ?? selectedOpt;
+  // The selected patient may not be in the current result page, so fall
+  // back to the parent's prefetched list for the display name.
+  const selectedName = patients.find((p) => p.id === value)?.name ?? null;
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={cn(
-          'flex min-h-[48px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-base',
-          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:text-sm',
-        )}
-      >
-        <span className={cn(!selected && 'text-muted-foreground')}>
-          {selected ? selected.name : tCommon('search') + '…'}
-        </span>
-        <ChevronDown className="h-4 w-4 opacity-50" />
-      </button>
-      {open ? (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md p-1">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={tCommon('search') + '…'}
-            inputMode="search"
-            className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1 sm:text-sm"
-          />
-          <div className="max-h-48 overflow-y-auto">
-            {loading ? (
-              <div className="text-xs text-muted-foreground p-2 text-center">
-                {tCommon('loading')}
-              </div>
-            ) : items.length === 0 ? (
-              <div className="text-xs text-muted-foreground p-2 text-center">
-                {tCommon('noResults')}
-              </div>
-            ) : (
-              items.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedOpt(p);
-                    onChange(p.id, p);
-                    setOpen(false);
-                    setQuery('');
-                  }}
-                  className={cn(
-                    'flex min-h-[44px] w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm',
-                    'hover:bg-accent hover:text-accent-foreground',
-                    value === p.id && 'bg-accent',
-                  )}
-                >
-                  {value === p.id ? <Check className="h-3.5 w-3.5" /> : <span className="w-3.5" />}
-                  <span className="truncate">{p.name}</span>
-                </button>
-              ))
-            )}
-          </div>
-          <div className="border-t mt-1 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onCreateNew();
-              }}
-              className="flex min-h-[44px] w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm text-primary hover:bg-accent"
-            >
-              <UserPlus className="h-3.5 w-3.5" />
-              {t('new')}
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
+    <PatientCombobox
+      value={value}
+      onChange={onChange}
+      onCreateNew={onCreateNew}
+      selectedName={selectedName}
+      inputTestId="appt-patient-input"
+      listTestId="appt-patient-list"
+      optionTestId="appt-patient-option"
+    />
   );
 }
 

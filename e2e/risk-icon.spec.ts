@@ -65,16 +65,12 @@ test('risk icon is hidden on list pages; patient detail header shows the icon re
   ).toHaveCount(0);
 
   // The appointment dialog (which uses the patient picker) doesn't show icons either:
-  // even if we preselect the risky patient, the picker button itself is just a name
+  // the single-input picker just shows the name as text
   await page.goto('/appointments');
   await page.getByRole('button', { name: /nuevo turno|new appointment/i }).click();
   const apptDialog = page.getByRole('dialog');
   await expect(apptDialog).toBeVisible();
-  const apptTrigger = apptDialog.getByRole('button', { name: /buscar|search/i }).first();
-  await apptTrigger.click();
-  const riskPatientRow = apptDialog.getByRole('button', {
-    name: new RegExp(`risk.*${patientId.slice(0, 8)}`, 'i'),
-  });
+  await apptDialog.getByTestId('appt-patient-input').click();
   // The row isn't the patient picker in this case, but at least ensure appointment API doesn't emit the icon
   await expect(apptDialog.getByRole('button', { name: /clinical alert|alerta clínica/i })).toHaveCount(0);
 });
