@@ -11,11 +11,14 @@ export function ShareTurnButton({
   dentists,
   currentUserId,
   role,
+  clinicDefaultDuration,
 }: {
   patientId: string;
-  dentists: { id: string; name: string }[];
+  dentists: { id: string; name: string; slot_minutes?: number | null }[];
   currentUserId: string;
   role: Role;
+  /** Clinic fallback for `slot_minutes` when the selected dentist has none. */
+  clinicDefaultDuration?: number;
 }) {
   const t = useTranslations('turnPicker');
   const [open, setOpen] = useState(false);
@@ -40,6 +43,7 @@ export function ShareTurnButton({
         defaultDentistId={preselect}
         currentUserId={currentUserId}
         viewerRole={role}
+        clinicDefaultDuration={clinicDefaultDuration}
       />
     </>
   );

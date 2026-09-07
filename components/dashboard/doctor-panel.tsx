@@ -14,7 +14,7 @@ import { PanelApptCard } from './panel-appt-card';
 import { usePanelRefresh } from './use-panel-refresh';
 
 /** Dentist panel: next-hour queue, attend flow, give new turns. */
-export function DoctorPanel({ dentist }: { dentist: { id: string; name: string } }) {
+export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; slot_minutes?: number | null } }) {
   const t = useTranslations('dashboard');
   const [items, setItems] = useState<PanelAppt[]>([]);
   const [attended, setAttended] = useState<PanelAppt[]>([]);
@@ -125,6 +125,7 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string }
         onCreated={load}
         currentUserId={dentist.id}
         viewerRole="dentist"
+        clinicDefaultDuration={dentist.slot_minutes ?? undefined}
       />
     </div>
   );

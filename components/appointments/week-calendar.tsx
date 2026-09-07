@@ -31,7 +31,7 @@ import { useToast } from '@/components/ui/toaster';
 import { effectiveExpiryMs } from '@/lib/turn-picker';
 import { es, enUS } from 'date-fns/locale';
 
-export type DentistRef = { id: string; name: string; color: string | null };
+export type DentistRef = { id: string; name: string; color: string | null; slot_minutes?: number | null };
 
 export function WeekCalendar({
   initial,
@@ -39,6 +39,7 @@ export function WeekCalendar({
   pendingLinks,
   initialWeekStart,
   viewer,
+  clinicDefaultDuration,
 }: {
   initial: ApptRow[];
   dentists: DentistRef[];
@@ -46,6 +47,8 @@ export function WeekCalendar({
   initialWeekStart?: string;
   /** Current user — dentists see only their own calendar, no filter UI. */
   viewer?: { id: string; role: string };
+  /** Clinic-wide fallback default for new-turn duration. */
+  clinicDefaultDuration?: number;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -298,6 +301,7 @@ export function WeekCalendar({
           onCreated={refresh}
           currentUserId={viewer?.id}
           viewerRole={viewer?.role as any}
+          clinicDefaultDuration={clinicDefaultDuration}
         />
         {editingAppt ? (
           <AppointmentDialog

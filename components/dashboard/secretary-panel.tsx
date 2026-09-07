@@ -42,10 +42,12 @@ export function SecretaryPanel({
   dentists,
   currency,
   locale,
+  clinicDefaultDuration,
 }: {
-  dentists: { id: string; name: string }[];
+  dentists: { id: string; name: string; slot_minutes?: number | null }[];
   currency: string;
   locale: string;
+  clinicDefaultDuration?: number;
 }) {
   const t = useTranslations('dashboard');
   const tBilling = useTranslations('billing');
@@ -330,6 +332,7 @@ export function SecretaryPanel({
         defaultStart={null}
         dentists={dentists}
         onCreated={load}
+        clinicDefaultDuration={clinicDefaultDuration}
       />
     </div>
   );

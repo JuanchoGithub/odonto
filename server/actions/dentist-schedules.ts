@@ -51,7 +51,7 @@ export async function getSchedulePageData(dentistId?: string) {
   // Admins see everyone; dentists see only themselves.
   const targetId =
     user.role === 'admin' && dentistId ? dentistId : user.id;
-  const [weekly, exceptions, businessHours, clinicExceptions, dentists] =
+  const [weekly, exceptions, businessHours, clinicExceptions, dentists, targetUser, clinicRow] =
     await Promise.all([
       query<DentistScheduleRow>(
         `SELECT * FROM dentist_schedules WHERE dentist_id = ? ORDER BY day_of_week, start_time`,
@@ -72,12 +72,32 @@ export async function getSchedulePageData(dentistId?: string) {
           )
         : Promise.resolve([] as ClinicExceptionRow[]),
       user.role === 'admin'
-        ? query<{ id: string; name: string }>(
-            `SELECT id, name FROM users WHERE role = 'dentist' ORDER BY name`,
+        ? query<{ id: string; name: string; slot_minutes: number | null }>(
+            `SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' ORDER BY name`,
           )
-        : Promise.resolve([] as { id: string; name: string }[]),
+        : Promise.resolve([] as { id: string; name: string; slot_minutes: number | null }[]),
+      queryOne<{ slot_minutes: number | null }>(
+        `SELECT slot_minutes FROM users WHERE id = ?`,
+        [targetId],
+      ),
+      user.role === 'admin'
+        ? queryOne<{ default_slot_minutes: number | null }>(
+            `SELECT default_slot_minutes FROM clinics LIMIT 1`,
+          )
+        : Promise.resolve(null as { default_slot_minutes: number | null } | null),
     ]);
-  return { weekly, exceptions, businessHours, clinicExceptions, dentists, targetId };
+  const clinicDefaultDuration = clinicRow?.default_slot_minutes ?? 15;
+  const defaultDuration = targetUser?.slot_minutes ?? clinicDefaultDuration;
+  return {
+    weekly,
+    exceptions,
+    businessHours,
+    clinicExceptions,
+    dentists,
+    targetId,
+    defaultDuration,
+    clinicDefaultDuration,
+  };
 }
 
 /**
@@ -298,6 +318,95 @@ export async function saveWeeklySchedule(
      VALUES (?, ?, 'update', 'dentist_schedules', ?, ?)`,
     [uid(), user.id, d.dentist_id, JSON.stringify({ windows: d.windows.length, decisions: Object.keys(d.decisions).length })],
   );
+  revalidatePath('/settings/schedules');
+  return { ok: true };
+}
+
+// ---------- Default turn duration ----------
+
+const ALLOWED_DURATIONS = [15, 30, 45, 60, 90, 120] as const;
+
+const DefaultDurationSchema = z.object({
+  dentist_id: z.string().min(1),
+  slot_minutes: z.coerce.number().int().pipe(
+    z.union([
+      z.literal(15),
+      z.literal(30),
+      z.literal(45),
+      z.literal(60),
+      z.literal(90),
+      z.literal(120),
+    ]),
+  ),
+});
+
+const ClinicDefaultDurationSchema = z.object({
+  slot_minutes: z.coerce.number().int().pipe(
+    z.union([
+      z.literal(15),
+      z.literal(30),
+      z.literal(45),
+      z.literal(60),
+      z.literal(90),
+      z.literal(120),
+    ]),
+  ),
+});
+
+/** Default duration for a dentist; falls back to clinic default → 15. */
+export async function getDentistDefaultDuration(
+  dentistId: string,
+): Promise<number> {
+  await requireUser();
+  const row = await queryOne<{ slot_minutes: number | null }>(
+    'SELECT slot_minutes FROM users WHERE id = ?',
+    [dentistId],
+  );
+  if (row?.slot_minutes) return row.slot_minutes;
+  const clinic = await getClinicDefaultDuration();
+  return clinic;
+}
+
+/** Clinic-wide default (single-row v1 schema; null-safe). */
+export async function getClinicDefaultDuration(): Promise<number> {
+  await requireUser();
+  const row = await queryOne<{ default_slot_minutes: number | null }>(
+    'SELECT default_slot_minutes FROM clinics LIMIT 1',
+  );
+  return row?.default_slot_minutes ?? 15;
+}
+
+/** Dentist may edit own; admin may edit any. */
+export async function saveDefaultDuration(
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  const parsed = DefaultDurationSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, error: 'invalid' };
+  const d = parsed.data;
+  if (user.role !== 'admin' && user.id !== d.dentist_id) {
+    return { ok: false, error: 'forbidden' };
+  }
+  await query('UPDATE users SET slot_minutes = ? WHERE id = ?', [
+    d.slot_minutes,
+    d.dentist_id,
+  ]);
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+     VALUES (?, ?, 'update', 'user', ?, ?)`,
+    [uid(), user.id, d.dentist_id, JSON.stringify({ slot_minutes: d.slot_minutes })],
+  );
+  revalidatePath('/settings/schedules');
+  return { ok: true };
+}
+
+export async function saveClinicDefaultDuration(
+  payload: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireRole(['admin']);
+  const parsed = ClinicDefaultDurationSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, error: 'invalid' };
+  await query('UPDATE clinics SET default_slot_minutes = ?', [parsed.data.slot_minutes]);
   revalidatePath('/settings/schedules');
   return { ok: true };
 }

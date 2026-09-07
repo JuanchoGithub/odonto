@@ -41,7 +41,8 @@ test('clicking a slot opens the dialog with the exact 15-minute time pre-filled'
     expectedDate,
   );
   await expect(dialog.getByTestId('appt-start-time')).toHaveText('10:30');
-  await expect(dialog.getByTestId('appt-duration')).toHaveText(/30 min/);
+  // Slot-click with no per-dentist value falls back to the clinic default (15).
+  await expect(dialog.getByTestId('appt-duration')).toHaveText(/15 min/);
   await page.keyboard.press('Escape');
 });
 

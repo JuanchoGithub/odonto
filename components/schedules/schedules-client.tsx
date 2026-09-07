@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Plus, Trash2, X, AlertTriangle } from 'lucide-react';
@@ -30,11 +30,15 @@ import {
   deleteClinicException,
   addDentistException,
   deleteDentistException,
+  saveDefaultDuration,
+  saveClinicDefaultDuration,
   type DentistScheduleRow,
   type DentistExceptionRow,
   type ClinicBusinessHoursRow,
   type ClinicExceptionRow,
 } from '@/server/actions/dentist-schedules';
+
+const ALLOWED_DURATIONS = [15, 30, 45, 60, 90, 120] as const;
 
 type Window = { day_of_week: number; start_time: string; end_time: string };
 
@@ -119,6 +123,8 @@ export function SchedulesClient({
   businessHours,
   clinicExceptions,
   dentists,
+  defaultDuration,
+  clinicDefaultDuration,
 }: {
   targetDentistId: string;
   isAdmin: boolean;
@@ -126,7 +132,9 @@ export function SchedulesClient({
   exceptions: DentistExceptionRow[];
   businessHours: ClinicBusinessHoursRow[];
   clinicExceptions: ClinicExceptionRow[];
-  dentists: { id: string; name: string }[];
+  dentists: { id: string; name: string; slot_minutes?: number | null }[];
+  defaultDuration: number;
+  clinicDefaultDuration: number;
 }) {
   const t = useTranslations('schedules');
   const tCommon = useTranslations('common');
@@ -150,6 +158,19 @@ export function SchedulesClient({
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [defaultDur, setDefaultDur] = useState<number>(defaultDuration);
+  const [clinicDefaultDur, setClinicDefaultDur] = useState<number>(
+    clinicDefaultDuration,
+  );
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [savingClinicDefault, setSavingClinicDefault] = useState(false);
+
+  useEffect(() => {
+    setDefaultDur(defaultDuration);
+  }, [defaultDuration, targetDentistId]);
+  useEffect(() => {
+    setClinicDefaultDur(clinicDefaultDuration);
+  }, [clinicDefaultDuration]);
 
   function weekdayLabel(d: number) {
     return t(`weekdays.${d}` as 'weekdays.0');
@@ -248,6 +269,35 @@ export function SchedulesClient({
     }
   }
 
+  async function saveDefault() {
+    setSavingDefault(true);
+    setError(null);
+    try {
+      const res = await saveDefaultDuration({
+        dentist_id: targetDentistId,
+        slot_minutes: defaultDur,
+      });
+      if (!res.ok) setError(res.error ?? 'error');
+      else router.refresh();
+    } finally {
+      setSavingDefault(false);
+    }
+  }
+
+  async function saveClinicDefault() {
+    setSavingClinicDefault(true);
+    setError(null);
+    try {
+      const res = await saveClinicDefaultDuration({
+        slot_minutes: clinicDefaultDur,
+      });
+      if (!res.ok) setError(res.error ?? 'error');
+      else router.refresh();
+    } finally {
+      setSavingClinicDefault(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Dentist selector for admins */}
@@ -275,6 +325,88 @@ export function SchedulesClient({
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Default turn duration (per-dentist + clinic fallback) */}
+      <Card data-testid="default-duration">
+        <CardHeader>
+          <CardTitle className="text-base">{t('defaultDuration')}</CardTitle>
+          <CardDescription>{t('defaultDurationDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-2">
+              <Label>
+                {isAdmin && dentists.length > 1
+                  ? dentists.find((d) => d.id === targetDentistId)?.name
+                  : t('defaultDuration')}
+              </Label>
+              <Select
+                value={String(defaultDur)}
+                onValueChange={(v) => setDefaultDur(Number(v))}
+              >
+                <SelectTrigger
+                  className="w-32"
+                  data-testid="default-duration-select"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALLOWED_DURATIONS.map((m) => (
+                    <SelectItem key={m} value={String(m)}>
+                      {m} min
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={saveDefault}
+              disabled={savingDefault || defaultDur === defaultDuration}
+              data-testid="default-duration-save"
+            >
+              {savingDefault ? tCommon('loading') : tCommon('save')}
+            </Button>
+          </div>
+          {isAdmin ? (
+            <div className="space-y-2 border-t pt-4">
+              <Label>{t('clinicDefaultDuration')}</Label>
+              <p className="text-xs text-muted-foreground">
+                {t('clinicDefaultDurationDesc')}
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <Select
+                  value={String(clinicDefaultDur)}
+                  onValueChange={(v) => setClinicDefaultDur(Number(v))}
+                >
+                  <SelectTrigger
+                    className="w-32"
+                    data-testid="clinic-default-duration-select"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ALLOWED_DURATIONS.map((m) => (
+                      <SelectItem key={m} value={String(m)}>
+                        {m} min
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={saveClinicDefault}
+                  disabled={
+                    savingClinicDefault ||
+                    clinicDefaultDur === clinicDefaultDuration
+                  }
+                  data-testid="clinic-default-duration-save"
+                >
+                  {savingClinicDefault ? tCommon('loading') : tCommon('save')}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {/* Weekly schedule */}
       <Card data-testid="weekly-schedule">

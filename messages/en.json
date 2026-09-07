@@ -443,6 +443,10 @@
     "cancelAppt": "Cancel appointment",
     "keepException": "Keep as exception",
     "needsDecisions": "You still need to decide what to do with {count} appointment(s).",
+    "defaultDuration": "Default turn duration",
+    "defaultDurationDesc": "Duration suggested when creating a turn for this dentist.",
+    "clinicDefaultDuration": "Clinic default duration",
+    "clinicDefaultDurationDesc": "Used when no dentist is selected yet, or when a dentist has no own value.",
     "weekdays": {
       "0": "Sunday",
       "1": "Monday",

@@ -2,6 +2,7 @@ import { setRequestLocale, getTranslations } from 'next-intl/server';
 import { requireUser } from '@/lib/rbac';
 import { listAppointmentsForWeek, listPendingTurnLinks } from '@/server/actions/appointments';
 import { query } from '@/lib/db';
+import { getClinicDefaultDuration } from '@/server/actions/dentist-schedules';
 import { WeekCalendar } from '@/components/appointments/week-calendar';
 import { startOfWeek, format } from 'date-fns';
 
@@ -20,12 +21,13 @@ export default async function AppointmentsPage({
   const start = sp.start
     ? new Date(sp.start)
     : startOfWeek(new Date(), { weekStartsOn: 1 });
-  const [appts, dentists, pendingLinks] = await Promise.all([
+  const [appts, dentists, pendingLinks, clinicDefault] = await Promise.all([
     listAppointmentsForWeek(start.toISOString()),
-    query<{ id: string; name: string; color: string | null }>(
-      "SELECT id, name, color FROM users WHERE role = 'dentist' ORDER BY name",
+    query<{ id: string; name: string; color: string | null; slot_minutes: number | null }>(
+      "SELECT id, name, color, slot_minutes FROM users WHERE role = 'dentist' ORDER BY name",
     ),
     listPendingTurnLinks(),
+    getClinicDefaultDuration(),
   ]);
 
   return (
@@ -33,12 +35,13 @@ export default async function AppointmentsPage({
       <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
       <WeekCalendar
         initial={appts}
-        dentists={dentists.map((d) => ({ id: d.id, name: d.name, color: d.color }))}
+        dentists={dentists.map((d) => ({ id: d.id, name: d.name, color: d.color, slot_minutes: d.slot_minutes ?? null }))}
         pendingLinks={pendingLinks}
         viewer={{ id: user.id, role: user.role }}
         // Date-only string: parsing a full ISO in the browser would shift
         // the day when the clinic timezone differs from UTC.
         initialWeekStart={format(startOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd')}
+        clinicDefaultDuration={clinicDefault}
       />
     </div>
   );

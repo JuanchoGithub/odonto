@@ -25,6 +25,19 @@ import { PatientCombobox } from '@/components/patients/patient-combobox';
 import type { Role } from '@/lib/schemas/common';
 import { useToast } from '@/components/ui/toaster';
 
+const ALLOWED_LINK_DURATIONS = [15, 30, 45, 60, 90, 120];
+
+function defaultSlotFor(
+  dentists: { id: string; slot_minutes?: number | null }[],
+  dentistId: string,
+  clinicDefault: number,
+): number {
+  const match = dentists.find((d) => d.id === dentistId);
+  const v = match?.slot_minutes;
+  if (v && ALLOWED_LINK_DURATIONS.includes(v)) return v;
+  return ALLOWED_LINK_DURATIONS.includes(clinicDefault) ? clinicDefault : 15;
+}
+
 export function GenerateTurnLinkDialog({
   open,
   onOpenChange,
@@ -33,46 +46,67 @@ export function GenerateTurnLinkDialog({
   defaultDentistId,
   currentUserId,
   viewerRole,
+  clinicDefaultDuration,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
   /** If provided, the patient is locked to this id (e.g. from patient page). */
   patientId?: string;
-  dentists: { id: string; name: string }[];
+  dentists: { id: string; name: string; slot_minutes?: number | null }[];
   /** Preselect a dentist (e.g. current user). */
   defaultDentistId?: string;
   /** When the viewer is a dentist, the dentist field is hidden and locked to them. */
   currentUserId?: string;
   viewerRole?: Role;
+  /** Clinic fallback when the selected dentist has no per-dentist value. */
+  clinicDefaultDuration?: number;
 }) {
   const t = useTranslations('turnPicker');
   const tAppt = useTranslations('appointments');
   const tCommon = useTranslations('common');
   const { push } = useToast();
-  const [url, setUrl] = useState<string | null>(null);
-  const [slotMinutes, setSlotMinutes] = useState<string>('15');
-  const [dentistId, setDentistId] = useState<string>(
+  const clinicDefault = clinicDefaultDuration ?? 15;
+  const initialDentistId =
     viewerRole === 'dentist' && currentUserId
       ? currentUserId
-      : defaultDentistId ?? dentists[0]?.id ?? '',
+      : defaultDentistId ?? dentists[0]?.id ?? '';
+  const [url, setUrl] = useState<string | null>(null);
+  const [slotMinutes, setSlotMinutes] = useState<string>(
+    String(defaultSlotFor(dentists, initialDentistId, clinicDefault)),
   );
+  const [dentistId, setDentistId] = useState<string>(initialDentistId);
   const [patientId, setPatientId] = useState<string>(fixedPatientId ?? '');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [links, setLinks] = useState<TurnPickerLinkListItem[]>([]);
+  const [touchedSlot, setTouchedSlot] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setUrl(null);
     setError(null);
+    setTouchedSlot(false);
     if (viewerRole === 'dentist' && currentUserId) {
       setDentistId(currentUserId);
     } else if (defaultDentistId) {
       setDentistId(defaultDentistId);
+    } else {
+      setDentistId(dentists[0]?.id ?? '');
     }
     if (fixedPatientId) setPatientId(fixedPatientId);
-  }, [open, fixedPatientId, defaultDentistId, viewerRole, currentUserId]);
+  }, [open, fixedPatientId, defaultDentistId, viewerRole, currentUserId, dentists]);
+
+  // Re-sync the default slot when the dentist changes — unless the user
+  // has already picked a value explicitly. Per-dentist > clinic default > 15.
+  useEffect(() => {
+    if (!open) return;
+    setSlotMinutes(
+      String(defaultSlotFor(dentists, dentistId, clinicDefault)),
+    );
+    // dentists is stable per render; clinicDefault comes from props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dentistId, open, clinicDefaultDuration]);
 
   // Load links for the currently-selected patient whenever it changes.
   useEffect(() => {
@@ -192,15 +226,22 @@ export function GenerateTurnLinkDialog({
               )}
               <div className="space-y-2">
                 <Label>{t('duration')}</Label>
-                <Select value={slotMinutes} onValueChange={setSlotMinutes}>
+                <Select
+                  value={slotMinutes}
+                  onValueChange={(v) => {
+                    setTouchedSlot(true);
+                    setSlotMinutes(v);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="15">{t('duration15')}</SelectItem>
-                    <SelectItem value="30">{t('duration30')}</SelectItem>
-                    <SelectItem value="45">{t('duration45')}</SelectItem>
-                    <SelectItem value="60">{t('duration60')}</SelectItem>
+                    {ALLOWED_LINK_DURATIONS.map((m) => (
+                      <SelectItem key={m} value={String(m)}>
+                        {m} min
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

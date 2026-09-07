@@ -443,6 +443,10 @@
     "cancelAppt": "Cancelar turno",
     "keepException": "Mantener como excepción",
     "needsDecisions": "Tenés que decidir qué hacer con {count} turno(s) afectado(s).",
+    "defaultDuration": "Duración por defecto del turno",
+    "defaultDurationDesc": "Duración que se sugiere al crear un turno para este odontólogo.",
+    "clinicDefaultDuration": "Duración general de la clínica",
+    "clinicDefaultDurationDesc": "Se usa cuando no se eligió un odontólogo o cuando el odontólogo no tiene un valor propio.",
     "weekdays": {
       "0": "Domingo",
       "1": "Lunes",

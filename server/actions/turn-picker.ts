@@ -9,7 +9,14 @@ import { getSlots, getClinicTimezone, wallClockInTz, isWithinWorkingHours } from
 import { effectiveExpiryMs, linkStatus, type LinkStatus } from '@/lib/turn-picker';
 export type { LinkStatus } from '@/lib/turn-picker';
 
-const SlotMinutesSchema = z.union([z.literal(15), z.literal(30), z.literal(45), z.literal(60)]);
+const SlotMinutesSchema = z.union([
+  z.literal(15),
+  z.literal(30),
+  z.literal(45),
+  z.literal(60),
+  z.literal(90),
+  z.literal(120),
+]);
 
 const CreateLinkSchema = z.object({
   patient_id: z.string().min(1),

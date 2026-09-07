@@ -16,6 +16,7 @@ import { formatDate } from '@/lib/format';
 import { query, queryOne } from '@/lib/db';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
 import { ShareTurnButton } from '@/components/turn-picker/share-turn-button';
+import { getClinicDefaultDuration } from '@/server/actions/dentist-schedules';
 import { DeletePatientButton } from '@/components/patients/delete-patient-button';
 import { RestorePatientButton } from '@/components/patients/restore-patient-button';
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
@@ -40,12 +41,13 @@ export default async function PatientDetailPage({
   const initialTab = (TABS as readonly string[]).includes(sp?.tab ?? '')
     ? (sp!.tab as (typeof TABS)[number])
     : 'overview';
-  const [patient, clinic, dentists] = await Promise.all([
+  const [patient, clinic, dentists, clinicDefault] = await Promise.all([
     getPatient(id),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
-    query<{ id: string; name: string }>(
-      "SELECT id, name FROM users WHERE role = 'dentist' ORDER BY name",
+    query<{ id: string; name: string; slot_minutes: number | null }>(
+      "SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' ORDER BY name",
     ),
+    getClinicDefaultDuration(),
   ]);
   if (!patient) notFound();
 
@@ -86,9 +88,14 @@ export default async function PatientDetailPage({
           <div className="flex shrink-0 items-center gap-2 pt-1">
             <ShareTurnButton
               patientId={id}
-              dentists={dentists}
+              dentists={dentists.map((d) => ({
+                id: d.id,
+                name: d.name,
+                slot_minutes: d.slot_minutes ?? null,
+              }))}
               currentUserId={user.id}
               role={user.role}
+              clinicDefaultDuration={clinicDefault}
             />
             <DeletePatientButton
               patientId={id}

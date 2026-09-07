@@ -5,6 +5,7 @@ import { query, queryOne } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DoctorPanel } from '@/components/dashboard/doctor-panel';
 import { SecretaryPanel } from '@/components/dashboard/secretary-panel';
+import { getClinicDefaultDuration } from '@/server/actions/dentist-schedules';
 
 type Clinic = { id: string; name: string; currency: string; locale: string };
 
@@ -23,6 +24,14 @@ export default async function DashboardPage({
   );
   if (!clinic) redirect(`/${locale}/settings?firstRun=1`);
 
+  const dentistRow =
+    user.role === 'dentist'
+      ? await queryOne<{ slot_minutes: number | null }>(
+          'SELECT slot_minutes FROM users WHERE id = ?',
+          [user.id],
+        )
+      : null;
+
   return (
     <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
       <div>
@@ -30,14 +39,21 @@ export default async function DashboardPage({
         <p className="text-muted-foreground">{tCommon('appName')} · {clinic.name}</p>
       </div>
       {user.role === 'dentist' ? (
-        <DoctorPanel dentist={{ id: user.id, name: user.name ?? '' }} />
+        <DoctorPanel
+          dentist={{
+            id: user.id,
+            name: user.name ?? '',
+            slot_minutes: dentistRow?.slot_minutes ?? null,
+          }}
+        />
       ) : user.role === 'receptionist' ? (
         <SecretaryPanel
-          dentists={await query<{ id: string; name: string }>(
-            "SELECT id, name FROM users WHERE role = 'dentist' ORDER BY name",
+          dentists={await query<{ id: string; name: string; slot_minutes: number | null }>(
+            "SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' ORDER BY name",
           )}
           currency={clinic.currency}
           locale={clinic.locale}
+          clinicDefaultDuration={await getClinicDefaultDuration()}
         />
       ) : (
         <AdminCards clinic={clinic} />

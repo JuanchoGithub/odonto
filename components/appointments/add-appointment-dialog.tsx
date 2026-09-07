@@ -48,6 +48,17 @@ export type CreatedVia = 'manual' | 'click' | 'drag';
 
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 
+function defaultDurFor(
+  dentists: { id: string; slot_minutes?: number | null }[],
+  dentistId: string,
+  clinicDefault: number,
+): number {
+  const match = dentists.find((d) => d.id === dentistId);
+  const v = match?.slot_minutes;
+  if (v && DURATIONS.includes(v)) return v;
+  return DURATIONS.includes(clinicDefault) ? clinicDefault : 15;
+}
+
 // 15-minute start times, 08:00 – 18:45 (mirrors the calendar display window)
 const TIME_OPTIONS: string[] = [];
 for (let h = 8; h < 19; h++) {
@@ -82,6 +93,7 @@ export function AddAppointmentDialog({
   onCreated,
   currentUserId,
   viewerRole,
+  clinicDefaultDuration,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
@@ -92,11 +104,13 @@ export function AddAppointmentDialog({
   startExpanded?: boolean;
   /** How the user started this creation flow; recorded on the appointment. */
   createdVia?: CreatedVia;
-  dentists: { id: string; name: string }[];
+  dentists: { id: string; name: string; slot_minutes?: number | null }[];
   onCreated?: () => void;
   /** When viewer is a dentist, dentist_id is locked to this (field hidden). */
   currentUserId?: string;
   viewerRole?: Role;
+  /** Clinic fallback default duration (used when no dentist is selected yet). */
+  clinicDefaultDuration?: number;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -118,9 +132,13 @@ export function AddAppointmentDialog({
       ? currentUserId
       : dentists[0]?.id ?? '',
   );
+  const clinicDefault = clinicDefaultDuration ?? 15;
   const [dateVal, setDateVal] = useState('');
   const [timeVal, setTimeVal] = useState('');
-  const [durVal, setDurVal] = useState('30');
+  const [durVal, setDurVal] = useState(
+    String(defaultDurFor(dentists, dentistId, clinicDefault)),
+  );
+  const [touchedDur, setTouchedDur] = useState(false);
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [url, setUrl] = useState<string | null>(null);
@@ -157,25 +175,41 @@ export function AddAppointmentDialog({
     setError(null);
     setPhase(startExpanded ? 'manual' : 'choice');
     setPatientId('');
-    setDentistId(
+    const initialDentist =
       viewerRole === 'dentist' && currentUserId
         ? currentUserId
-        : dentists[0]?.id ?? '',
-    );
+        : dentists[0]?.id ?? '';
+    setDentistId(initialDentist);
     setReason('');
     setNotes('');
     setUrl(null);
     setLinks([]);
     setCopied(false);
+    setTouchedDur(false);
     const s = defaultStart ? new Date(defaultStart) : new Date();
     const e = defaultEnd
       ? new Date(defaultEnd)
-      : new Date(s.getTime() + 30 * 60000);
+      : new Date(
+          s.getTime() +
+            defaultDurFor(dentists, initialDentist, clinicDefault) * 60000,
+        );
     setDateVal(format(s, 'yyyy-MM-dd'));
     setTimeVal(format(s, 'HH:mm'));
-    const dur = Math.max(15, Math.round((e.getTime() - s.getTime()) / 60000));
-    setDurVal(DURATIONS.includes(dur) ? String(dur) : '30');
-  }, [open, startExpanded, defaultStart, defaultEnd, dentists, viewerRole, currentUserId]);
+    if (defaultEnd) {
+      // Drag-select / edit on existing appt: respect the supplied duration.
+      const dur = Math.max(15, Math.round((e.getTime() - s.getTime()) / 60000));
+      setDurVal(DURATIONS.includes(dur) ? String(dur) : String(defaultDurFor(dentists, initialDentist, clinicDefault)));
+    } else {
+      setDurVal(String(defaultDurFor(dentists, initialDentist, clinicDefault)));
+    }
+  }, [open, startExpanded, defaultStart, defaultEnd, dentists, viewerRole, currentUserId, clinicDefault]);
+
+  // When the user picks a different dentist and hasn't manually chosen a
+  // duration yet, snap to that dentist's default. Manual changes always win.
+  useEffect(() => {
+    if (touchedDur) return;
+    setDurVal(String(defaultDurFor(dentists, dentistId, clinicDefault)));
+  }, [dentistId, dentists, clinicDefault, touchedDur]);
 
   // Active links for the currently-selected patient.
   useEffect(() => {
@@ -395,7 +429,13 @@ export function AddAppointmentDialog({
 
             <div className="space-y-2">
               <Label>{t('duration')}</Label>
-              <Select value={durVal} onValueChange={setDurVal}>
+              <Select
+                value={durVal}
+                onValueChange={(v) => {
+                  setTouchedDur(true);
+                  setDurVal(v);
+                }}
+              >
                 <SelectTrigger data-testid="appt-duration">
                   <SelectValue placeholder={`${durVal} min`} />
                 </SelectTrigger>

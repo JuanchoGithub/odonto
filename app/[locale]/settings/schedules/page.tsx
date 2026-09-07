@@ -38,6 +38,8 @@ export default async function SchedulesPage({
         businessHours={data.businessHours}
         clinicExceptions={data.clinicExceptions}
         dentists={data.dentists}
+        defaultDuration={data.defaultDuration}
+        clinicDefaultDuration={data.clinicDefaultDuration}
       />
     </div>
   );
