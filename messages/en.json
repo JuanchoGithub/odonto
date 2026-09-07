@@ -458,6 +458,7 @@
     "resetToClinicConfirm": "Reset this dentist's messages to the clinic-wide ones?",
     "communicationHint": "Configure WhatsApp messages clinic-wide or per dentist.",
     "accountHint": "Your account details.",
+    "logout": "Sign out",
     "role": "Role",
     "email": "Email",
     "locale": "Locale",
