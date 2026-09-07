@@ -250,9 +250,8 @@ function TreatmentDialog({
                 <Input
                   id="tooth_number"
                   name="tooth_number"
-                  type="number"
-                  min={0}
-                  max={48}
+                  type="text"
+                  inputMode="numeric"
                 />
               </div>
               <div className="space-y-2">
@@ -264,9 +263,9 @@ function TreatmentDialog({
                 <Input
                   id="cost"
                   name="cost"
-                  type="number"
-                  step="0.01"
-                  min={0}
+                  type="text"
+                  inputMode="decimal"
+                  enterKeyHint="done"
                   defaultValue={0}
                 />
               </div>

@@ -158,15 +158,15 @@ export function PatientForm({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="first_name">{t('firstName')}</Label>
-            <Input id="first_name" name="first_name" defaultValue={patient?.first_name} required />
+            <Input id="first_name" name="first_name" defaultValue={patient?.first_name} required autoComplete="given-name" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="last_name">{t('lastName')}</Label>
-            <Input id="last_name" name="last_name" defaultValue={patient?.last_name} required />
+            <Input id="last_name" name="last_name" defaultValue={patient?.last_name} required autoComplete="family-name" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="document_id">{t('documentId')}</Label>
-            <Input id="document_id" name="document_id" defaultValue={patient?.document_id ?? ''} />
+            <Input id="document_id" name="document_id" defaultValue={patient?.document_id ?? ''} inputMode="numeric" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="birth_date">{t('birthDate')}</Label>
@@ -174,6 +174,7 @@ export function PatientForm({
               id="birth_date"
               name="birth_date"
               type="date"
+              autoComplete="bday"
               defaultValue={patient?.birth_date ?? ''}
             />
           </div>
@@ -183,7 +184,7 @@ export function PatientForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">{tc('phone')}</Label>
-            <Input id="phone" name="phone" defaultValue={patient?.phone ?? ''} />
+            <Input id="phone" name="phone" defaultValue={patient?.phone ?? ''} type="tel" inputMode="tel" autoComplete="tel" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">{tc('email')}</Label>
@@ -191,12 +192,14 @@ export function PatientForm({
               id="email"
               name="email"
               type="email"
+              inputMode="email"
+              autoComplete="email"
               defaultValue={patient?.email ?? ''}
             />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="address">{t('address')}</Label>
-            <Input id="address" name="address" defaultValue={patient?.address ?? ''} />
+            <Input id="address" name="address" defaultValue={patient?.address ?? ''} autoComplete="street-address" />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="insurer-picker-trigger">{t('insuranceProvider')}</Label>

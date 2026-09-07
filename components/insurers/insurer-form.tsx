@@ -33,11 +33,11 @@ export function InsurerForm({ insurer }: { insurer?: InsurerRow }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="phone">{t('phone')}</Label>
-          <Input id="phone" name="phone" defaultValue={insurer?.phone ?? ''} />
+          <Input id="phone" name="phone" defaultValue={insurer?.phone ?? ''} type="tel" inputMode="tel" autoComplete="tel" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">{t('email')}</Label>
-          <Input id="email" name="email" type="email" defaultValue={insurer?.email ?? ''} />
+          <Input id="email" name="email" type="email" inputMode="email" autoComplete="email" defaultValue={insurer?.email ?? ''} />
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="notes">{t('notes')}</Label>

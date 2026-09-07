@@ -111,11 +111,14 @@ export function InsurerPicker({
             onMouseLeave={() => setOpen(false)}
           >
             <input
-              autoFocus
+              type="search"
+              inputMode="search"
+              autoComplete="off"
+              enterKeyHint="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('searchPlaceholder')}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm mb-1"
+              className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1"
             />
             <div className="max-h-48 overflow-y-auto">
               <button
@@ -202,7 +205,7 @@ export function InsurerPicker({
       {value ? (
         <div className="space-y-1">
           <Label className="text-xs">N° de afiliado</Label>
-          <Input name="insurance_number" defaultValue={memberNumber ?? ''} />
+          <Input name="insurance_number" defaultValue={memberNumber ?? ''} inputMode="numeric" />
         </div>
       ) : null}
 
@@ -293,11 +296,11 @@ function NewInsurerDialog({
             </div>
             <div className="space-y-1">
               <Label htmlFor="ins_phone">{t('phone')}</Label>
-              <Input id="ins_phone" name="phone" />
+              <Input id="ins_phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="ins_email">{t('email')}</Label>
-              <Input id="ins_email" name="email" type="email" />
+              <Input id="ins_email" name="email" type="email" inputMode="email" autoComplete="email" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="ins_notes">{t('notes')}</Label>

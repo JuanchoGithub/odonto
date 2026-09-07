@@ -56,6 +56,61 @@ function toMin(hhmm: string) {
   return h * 60 + (m || 0);
 }
 
+/** Split an ISO instant into local date/time parts for date+time inputs. */
+function isoToLocalParts(iso: string): { date: string; time: string } {
+  if (!iso) return { date: '', time: '' };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: '', time: '' };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+
+/**
+ * Date + time pair that stores a timezone-aware ISO instant (same contract
+ * as the appointment dialog). Replaces the naive `datetime-local` input,
+ * whose wall-clock string was written raw into `appointments.starts_at`.
+ */
+function RescheduleDateTime({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+}) {
+  const [parts, setParts] = useState(() => isoToLocalParts(value));
+
+  function update(next: { date: string; time: string }) {
+    setParts(next);
+    // Send timezone-aware ISO instants: naive y-m-d/HH:mm strings are
+    // ambiguous between browser and server timezones (§12.9).
+    onChange(
+      next.date && next.time
+        ? new Date(`${next.date}T${next.time}:00`).toISOString()
+        : '',
+    );
+  }
+
+  return (
+    <span className="flex flex-wrap gap-2">
+      <Input
+        type="date"
+        className="w-40"
+        value={parts.date}
+        onChange={(e) => update({ ...parts, date: e.target.value })}
+      />
+      <Input
+        type="time"
+        className="w-28"
+        value={parts.time}
+        onChange={(e) => update({ ...parts, time: e.target.value })}
+      />
+    </span>
+  );
+}
+
 export function SchedulesClient({
   targetDentistId,
   isAdmin,
@@ -531,25 +586,23 @@ export function SchedulesClient({
                       </Select>
                       {dec?.action === 'reschedule' ? (
                         <>
-                          <Input
-                            type="datetime-local"
-                            className="w-56"
+                          <RescheduleDateTime
+                            key={`${o.id}-start`}
                             value={dec.new_starts_at}
-                            onChange={(e) =>
+                            onChange={(iso) =>
                               setDecisions((d) => ({
                                 ...d,
-                                [o.id]: { ...d[o.id], new_starts_at: e.target.value },
+                                [o.id]: { ...d[o.id], new_starts_at: iso },
                               }))
                             }
                           />
-                          <Input
-                            type="datetime-local"
-                            className="w-56"
+                          <RescheduleDateTime
+                            key={`${o.id}-end`}
                             value={dec.new_ends_at}
-                            onChange={(e) =>
+                            onChange={(iso) =>
                               setDecisions((d) => ({
                                 ...d,
-                                [o.id]: { ...d[o.id], new_ends_at: e.target.value },
+                                [o.id]: { ...d[o.id], new_ends_at: iso },
                               }))
                             }
                           />

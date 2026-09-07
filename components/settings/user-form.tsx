@@ -44,11 +44,11 @@ export function UserForm() {
     <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-5 items-end">
       <div className="space-y-1">
         <Label htmlFor="u_name">{tCommon('name')}</Label>
-        <Input id="u_name" name="name" required />
+        <Input id="u_name" name="name" required autoComplete="name" />
       </div>
       <div className="space-y-1">
         <Label htmlFor="u_email">{tCommon('email')}</Label>
-        <Input id="u_email" name="email" type="email" required />
+        <Input id="u_email" name="email" type="email" inputMode="email" autoComplete="email" required />
       </div>
       <div className="space-y-1">
         <Label>{t('role')}</Label>
@@ -65,7 +65,7 @@ export function UserForm() {
       </div>
       <div className="space-y-1">
         <Label htmlFor="u_password">{t('password')}</Label>
-        <Input id="u_password" name="password" type="password" minLength={6} required />
+        <Input id="u_password" name="password" type="password" minLength={6} required autoComplete="new-password" />
       </div>
       <Button type="submit" disabled={loading}>
         {loading ? tCommon('loading') : t('newUser')}

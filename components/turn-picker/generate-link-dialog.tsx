@@ -236,7 +236,7 @@ export function GenerateTurnLinkDialog({
               <div className="space-y-2">
                 <Label htmlFor="tp-url">{t('link')}</Label>
                 <div className="flex gap-2">
-                  <Input id="tp-url" readOnly value={url} onFocus={(e) => e.target.select()} />
+                  <Input id="tp-url" readOnly value={url} onFocus={(e) => e.target.select()} inputMode="url" autoComplete="off" />
                   <Button variant="outline" size="icon" onClick={() => copy()} aria-label={t('copyUrl')}>
                     {copied ? (
                       <Check className="h-4 w-4" />
@@ -369,7 +369,10 @@ function PatientPickerInline({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={tCommon('search') + '…'}
+            type="search"
             inputMode="search"
+            autoComplete="off"
+            enterKeyHint="search"
             className="flex min-h-[44px] w-full rounded-md border border-input bg-background px-2 py-1 text-base mb-1 sm:text-sm"
           />
           <div className="max-h-48 overflow-y-auto">

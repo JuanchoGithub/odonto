@@ -18,9 +18,16 @@ import { createInvoice, type InvoiceFormState } from '@/server/actions/billing';
 import { useActionState } from 'react';
 import { useRouter } from '@/lib/navigation';
 import { formatMoney, formatDate } from '@/lib/format';
+import { normalizeDecimalInput } from '@/lib/utils';
 import { Link } from '@/lib/navigation';
 import { Badge } from '@/components/ui/badge';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
+
+/** Parse a locale-typed decimal ("12,50" or "12.50") without NaN poisoning state. */
+function toDecimalNumber(raw: string) {
+  const n = Number(normalizeDecimalInput(raw));
+  return Number.isFinite(n) ? n : 0;
+}
 
 export function PatientInvoices({
   patientId,
@@ -264,21 +271,24 @@ function NewInvoiceDialog({
                   <div className="space-y-1 sm:col-span-2">
                     <Label className="text-xs">Qty</Label>
                     <Input
-                      type="number"
-                      step="0.01"
-                      min={0}
+                      type="text"
+                      inputMode="decimal"
                       value={l.quantity}
-                      onChange={(e) => setLine(i, 'quantity', Number(e.target.value))}
+                      onChange={(e) =>
+                        setLine(i, 'quantity', toDecimalNumber(e.target.value))
+                      }
                     />
                   </div>
                   <div className="space-y-1 sm:col-span-2">
                     <Label className="text-xs">Price</Label>
                     <Input
-                      type="number"
-                      step="0.01"
-                      min={0}
+                      type="text"
+                      inputMode="decimal"
+                      enterKeyHint="done"
                       value={l.unit_price}
-                      onChange={(e) => setLine(i, 'unit_price', Number(e.target.value))}
+                      onChange={(e) =>
+                        setLine(i, 'unit_price', toDecimalNumber(e.target.value))
+                      }
                     />
                   </div>
                   <div className="space-y-1 sm:col-span-1">

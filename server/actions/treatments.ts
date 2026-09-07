@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
-import { uid, nowIso, amountToCents } from '@/lib/utils';
+import { uid, nowIso, amountToCents, normalizeDecimalInput } from '@/lib/utils';
 
 const TreatmentStatusSchema = z.enum(['planned', 'in_progress', 'done', 'cancelled']);
 
@@ -13,7 +13,7 @@ const TreatmentSchema = z.object({
   tooth_number: z.coerce.number().int().min(0).max(48).optional().nullable(),
   description: z.string().min(1),
   code: z.string().optional().nullable(),
-  cost: z.coerce.number().min(0).default(0),
+  cost: z.preprocess(normalizeDecimalInput, z.coerce.number().min(0).default(0)),
   tax_kind: z.enum(['standard', 'reduced', 'none']).default('standard'),
   status: TreatmentStatusSchema.default('planned'),
 });

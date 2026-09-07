@@ -4,15 +4,15 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { query, queryOne } from '@/lib/db';
 import { requireRole } from '@/lib/rbac';
-import { uid, nowIso } from '@/lib/utils';
+import { uid, nowIso, normalizeDecimalInput } from '@/lib/utils';
 import { randomDentistColor } from '@/lib/colors';
 
 const ClinicSchema = z.object({
   name: z.string().min(1),
   address: z.string().optional().nullable(),
   tax_id: z.string().optional().nullable(),
-  tax_rate_standard_bps: z.coerce.number().int().min(0).max(10000),
-  tax_rate_reduced_bps: z.coerce.number().int().min(0).max(10000),
+  tax_rate_standard_bps: z.preprocess(normalizeDecimalInput, z.coerce.number().int().min(0).max(10000)),
+  tax_rate_reduced_bps: z.preprocess(normalizeDecimalInput, z.coerce.number().int().min(0).max(10000)),
   currency: z.enum([
     'ARS',
     'USD',

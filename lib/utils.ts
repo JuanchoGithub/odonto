@@ -20,3 +20,23 @@ export function centsToAmount(cents: number) {
 export function amountToCents(amount: number) {
   return Math.round(amount * 100);
 }
+
+/**
+ * Normalize a locale-typed decimal string so both `12.50` (en) and `12,50`
+ * (es-AR) parse identically. Accepts dots and commas as the decimal
+ * separator regardless of the phone's locale; only the LAST separator is
+ * treated as decimal and any thousand separators / spaces are stripped.
+ * Non-strings pass through untouched (for zod preprocess use).
+ */
+export function normalizeDecimalInput(v: unknown) {
+  if (typeof v !== 'string') return v;
+  const t = v.trim().replace(/[\s']/g, '');
+  if (t === '') return v;
+  const lastDot = t.lastIndexOf('.');
+  const lastComma = t.lastIndexOf(',');
+  const lastSep = Math.max(lastDot, lastComma);
+  if (lastSep === -1) return t;
+  const int = t.slice(0, lastSep).replace(/[.,]/g, '');
+  const frac = t.slice(lastSep + 1).replace(/[.,]/g, '');
+  return frac ? `${int}.${frac}` : int;
+}

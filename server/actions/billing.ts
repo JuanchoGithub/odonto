@@ -3,12 +3,14 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
-import { uid, nowIso, amountToCents } from '@/lib/utils';
+import { uid, nowIso, amountToCents, normalizeDecimalInput } from '@/lib/utils';
+
+const DecimalNumber = (inner: z.ZodTypeAny) => z.preprocess(normalizeDecimalInput, inner);
 
 const LineSchema = z.object({
   description: z.string().min(1),
-  quantity: z.coerce.number().positive().default(1),
-  unit_price: z.coerce.number().min(0),
+  quantity: DecimalNumber(z.coerce.number().positive().default(1)),
+  unit_price: DecimalNumber(z.coerce.number().min(0)),
   tax_kind: z.enum(['standard', 'reduced', 'none']).default('standard'),
   treatment_id: z.string().optional().nullable(),
 });
@@ -106,7 +108,7 @@ export async function createInvoice(
 
 const PaymentSchema = z.object({
   invoice_id: z.string().min(1),
-  amount: z.coerce.number().positive(),
+  amount: DecimalNumber(z.coerce.number().positive()),
   method: z.enum(['cash', 'card', 'transfer', 'insurance', 'other']),
   reference: z.string().optional().nullable(),
 });

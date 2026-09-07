@@ -76,15 +76,15 @@ export function ClinicForm({ clinic }: { clinic: Clinic | null }) {
     <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
       <div className="space-y-2">
         <Label htmlFor="name">{t('clinicName')}</Label>
-        <Input id="name" name="name" defaultValue={clinic?.name ?? ''} required />
+        <Input id="name" name="name" defaultValue={clinic?.name ?? ''} required autoComplete="organization" />
       </div>
       <div className="space-y-2">
         <Label htmlFor="tax_id">{t('taxId')}</Label>
-        <Input id="tax_id" name="tax_id" defaultValue={clinic?.tax_id ?? ''} />
+        <Input id="tax_id" name="tax_id" defaultValue={clinic?.tax_id ?? ''} inputMode="numeric" />
       </div>
       <div className="space-y-2 md:col-span-2">
         <Label htmlFor="address">{t('address')}</Label>
-        <Input id="address" name="address" defaultValue={clinic?.address ?? ''} />
+        <Input id="address" name="address" defaultValue={clinic?.address ?? ''} autoComplete="street-address" />
       </div>
       <div className="space-y-2">
         <Label htmlFor="tax_rate_standard_bps">
@@ -93,9 +93,8 @@ export function ClinicForm({ clinic }: { clinic: Clinic | null }) {
         <Input
           id="tax_rate_standard_bps"
           name="tax_rate_standard_bps"
-          type="number"
-          min={0}
-          max={10000}
+          type="text"
+          inputMode="numeric"
           defaultValue={clinic?.tax_rate_standard_bps ?? 2100}
         />
       </div>
@@ -106,9 +105,8 @@ export function ClinicForm({ clinic }: { clinic: Clinic | null }) {
         <Input
           id="tax_rate_reduced_bps"
           name="tax_rate_reduced_bps"
-          type="number"
-          min={0}
-          max={10000}
+          type="text"
+          inputMode="numeric"
           defaultValue={clinic?.tax_rate_reduced_bps ?? 1050}
         />
       </div>
