@@ -11,11 +11,13 @@ const ThemeContext = createContext<{
 const THEME_COLORS: Record<Theme, string> = { light: '#ffffff', dark: '#020617' };
 
 function applyThemeColor(theme: Theme) {
-  document.querySelectorAll('meta[name="theme-color"]').forEach((el) => el.remove());
-  const meta = document.createElement('meta');
-  meta.name = 'theme-color';
-  meta.content = THEME_COLORS[theme];
-  document.head.appendChild(meta);
+  // Update the existing theme-color meta(s) in place. Next.js renders these as
+  // React 19 "hoistable" head resources; removing/re-appending the node here
+  // desyncs React's internal bookkeeping and makes its commit phase throw
+  // `removeChild` on null on the next navigation (which drops the first click).
+  document.querySelectorAll('meta[name="theme-color"]').forEach((el) => {
+    el.setAttribute('content', THEME_COLORS[theme]);
+  });
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
