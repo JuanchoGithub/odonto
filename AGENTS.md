@@ -355,6 +355,11 @@ gitignored) and process env — never in migrations, scripts, or logs
 (`bootstrap-admin` refuses to run under `CI=true`).
 Blob files for wiped attachments are NOT deleted by the migration; remove
 orphans via the Vercel dashboard if needed.
+Do NOT run `npm run migrate` locally while a Vercel build of the same commit
+is still in flight — `postinstall` runs the same runner concurrently and the
+two processes can interleave (observed once: both recorded `_migrations` rows
+collided mid-0018). Push, wait for the build to finish, then migrate; if it
+ever happens, re-run migrate and check `_migrations` + `foreign_key_check`.
 
 ### Trigger a production deploy
 ```bash
