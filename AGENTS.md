@@ -67,8 +67,8 @@ git push origin main   # Vercel Git integration builds + promotes automatically
 
 ```bash
 # Post-deploy check (site is up; for "is the NEW build live" see §11)
-curl -sS -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/es/login
-# 200 = up
+curl -sSL -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/es/login
+# 200 = up (follows the /es/login → /login locale redirect)
 ```
 
 The `VERCEL_TOKEN` GitHub secret is no longer used by any workflow — safe to delete from https://github.com/JuanchoGithub/odonto/settings/secrets/actions.
@@ -415,8 +415,9 @@ The script will:
 
 ### Post-deploy verification
 ```bash
-curl -sS -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/es/login
-# 200 = up (but it can be the STALE build while the new one is still building —
+curl -sSL -o /dev/null -w "%{http_code}\n" https://midentista.vercel.app/es/login
+# 200 = up (follows the /es/login → /login locale redirect; but it can be the
+# STALE build while the new one is still building —
 # for "is the NEW build live", check the Vercel dashboard or wait ~2 min)
 ```
 
