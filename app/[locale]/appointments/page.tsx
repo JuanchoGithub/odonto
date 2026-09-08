@@ -24,7 +24,7 @@ export default async function AppointmentsPage({
   const [appts, dentists, pendingLinks, clinicDefault] = await Promise.all([
     listAppointmentsForWeek(start.toISOString()),
     query<{ id: string; name: string; color: string | null; slot_minutes: number | null }>(
-      "SELECT id, name, color, slot_minutes FROM users WHERE role = 'dentist' ORDER BY name",
+      "SELECT id, name, color, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
     ),
     listPendingTurnLinks(),
     getClinicDefaultDuration(),

@@ -4,6 +4,7 @@ import { query, queryOne } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ClinicForm } from '@/components/settings/clinic-form';
 import { UserForm } from '@/components/settings/user-form';
+import { UserActions } from '@/components/settings/user-actions';
 import { UserColorCell } from '@/components/settings/user-color-cell';
 import { MedicalTagsManager } from '@/components/settings/medical-tags-manager';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,7 @@ type User = {
   locale: string;
   created_at: string;
   color: string | null;
+  deleted_at: string | null;
 };
 
 export default async function SettingsPage({
@@ -46,9 +48,15 @@ export default async function SettingsPage({
   const sp = await searchParams;
   const [clinic, users, medicalTags] = await Promise.all([
     queryOne<Clinic>('SELECT * FROM clinics LIMIT 1'),
-    query<User>('SELECT id, email, name, role, locale, created_at, color FROM users ORDER BY created_at'),
+    query<User>(
+      `SELECT id, email, name, role, locale, created_at, color, deleted_at
+         FROM users WHERE id != 'system' ORDER BY created_at`,
+    ),
     listAllMedicalTags(),
   ]);
+  const activeDentists = users
+    .filter((u) => u.role === 'dentist' && !u.deleted_at)
+    .map((u) => ({ id: u.id, name: u.name }));
 
   return (
     <div className="container py-4 md:py-8 space-y-4 md:space-y-6 max-w-4xl">
@@ -91,6 +99,18 @@ export default async function SettingsPage({
                   <span className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <Badge variant="secondary">{u.role}</Badge>
                     <span>· {u.locale}</span>
+                    {u.deleted_at ? (
+                      <Badge variant="destructive">{t('formerStaff')}</Badge>
+                    ) : null}
+                  </span>
+                  <span className="mt-2 block">
+                    <UserActions
+                      userId={u.id}
+                      email={u.email}
+                      role={u.role}
+                      deleted={!!u.deleted_at}
+                      dentists={activeDentists}
+                    />
                   </span>
                 </span>
                 {u.role === 'dentist' ? (
@@ -108,12 +128,18 @@ export default async function SettingsPage({
                   <th className="py-2 pr-4">{t('role')}</th>
                   <th className="py-2 pr-4">{tCommon('locale')}</th>
                   <th className="py-2 pr-4">{t('color')}</th>
+                  <th className="py-2 pr-4"><span className="sr-only">{t('users')}</span></th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id} className="border-b">
-                    <td className="py-2 pr-4">{u.name}</td>
+                    <td className="py-2 pr-4">
+                      {u.name}{' '}
+                      {u.deleted_at ? (
+                        <Badge variant="destructive">{t('formerStaff')}</Badge>
+                      ) : null}
+                    </td>
                     <td className="py-2 pr-4">{u.email}</td>
                     <td className="py-2 pr-4">
                       <Badge variant="secondary">{u.role}</Badge>
@@ -123,6 +149,15 @@ export default async function SettingsPage({
                       {u.role === 'dentist' ? (
                         <UserColorCell userId={u.id} color={u.color} />
                       ) : null}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <UserActions
+                        userId={u.id}
+                        email={u.email}
+                        role={u.role}
+                        deleted={!!u.deleted_at}
+                        dentists={activeDentists}
+                      />
                     </td>
                   </tr>
                 ))}

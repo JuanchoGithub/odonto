@@ -261,6 +261,6 @@ export async function listLinksForPatient(
 export async function listDentists(): Promise<{ id: string; name: string }[]> {
   await requireUser();
   return query<{ id: string; name: string }>(
-    `SELECT id, name FROM users WHERE role = 'dentist' ORDER BY name`,
+      `SELECT id, name FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name`,
   );
 }

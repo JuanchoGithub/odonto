@@ -73,7 +73,7 @@ export async function getSchedulePageData(dentistId?: string) {
         : Promise.resolve([] as ClinicExceptionRow[]),
       user.role === 'admin'
         ? query<{ id: string; name: string; slot_minutes: number | null }>(
-            `SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' ORDER BY name`,
+            `SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name`,
           )
         : Promise.resolve([] as { id: string; name: string; slot_minutes: number | null }[]),
       queryOne<{ slot_minutes: number | null }>(

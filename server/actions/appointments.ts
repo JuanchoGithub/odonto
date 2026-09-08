@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
+import { SYSTEM_USER_ID } from '@/lib/system-user';
 import { isWithinWorkingHours, getWeekWindows, getClinicTimezone, wallClockInTz, type DayWindows } from '@/lib/availability';
 import { effectiveExpiryMs } from '@/lib/turn-picker';
 
@@ -296,14 +297,14 @@ export async function updateAppointmentStatus(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,
     [
       uid(),
-      opts?.noShowBy === 'auto' ? null : user.id,
+      opts?.noShowBy === SYSTEM_USER_ID ? SYSTEM_USER_ID : user.id,
       id,
       JSON.stringify({
         status_from: existing.status,
         status_to: next,
         cancel_reason: cancelReason,
         reopened: isTerminal(existing.status) && isActive(next),
-        via: opts?.noShowBy === 'auto' ? 'auto' : 'manual',
+        via: opts?.noShowBy === SYSTEM_USER_ID ? 'auto' : 'manual',
       }),
     ],
   );
@@ -399,11 +400,11 @@ export async function listAppointmentHistory(appointmentId: string) {
  */
 export async function sweepOverdueNoShows(
   graceMin = 60,
-  markedBy: string | null = null,
+  markedBy: string = SYSTEM_USER_ID,
 ): Promise<{ checked: number; noShows: number; attended: number; ids: string[] }> {
-  // markedBy = null when the cron runs unattended — audit_log.user_id is an
-  // FK to users(id), so system actions must store NULL there (the marker
-  // lives in appointments.no_show_by = 'auto').
+  // markedBy defaults to the reserved system user (see lib/system-user.ts):
+  // no_show_by / audit_log.user_id are FKs to users(id), so automated writes
+  // attribute to 'system' instead of a magic string or NULL.
   const cutoff = new Date(Date.now() - graceMin * 60000).toISOString();
   const candidates = await query<{ id: string; patient_id: string; starts_at: string; ends_at: string }>(
     `SELECT id, patient_id, starts_at, ends_at FROM appointments
@@ -430,7 +431,7 @@ export async function sweepOverdueNoShows(
     } else {
       await query(
         `UPDATE appointments SET status='no_show', no_show_at=?, no_show_by=? WHERE id=? AND status='scheduled'`,
-        [now, markedBy ?? 'auto', c.id],
+        [now, markedBy, c.id],
       );
       await query(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,

@@ -197,7 +197,7 @@ export async function getWhatsappContextData(): Promise<{
     whatsapp_default_country_code: string | null;
   }>(
     `SELECT id, name, role, whatsapp_templates, whatsapp_default_country_code
-     FROM users ORDER BY name`,
+     FROM users WHERE deleted_at IS NULL AND id != 'system' ORDER BY name`,
   );
   return { countryCode, templates, users };
 }

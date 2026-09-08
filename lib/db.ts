@@ -77,6 +77,12 @@ export async function transaction(
   await ensureForeignKeys();
   const tx = await db.transaction('write');
   try {
+    // FK enforcement is per-connection: re-assert inside the tx connection.
+    try {
+      await tx.execute('PRAGMA foreign_keys = ON');
+    } catch {
+      // Best-effort; the statements still run.
+    }
     await fn({
       query: async <T extends Row = Row>(sql: string, args: unknown[] = []) => {
         const res = await tx.execute({ sql, args: args as never });

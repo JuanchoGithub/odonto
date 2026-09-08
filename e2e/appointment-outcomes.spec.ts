@@ -125,7 +125,7 @@ test('overdue scheduled appointment becomes no_show via the cron sweep', async (
   expect(hit).toBeTruthy();
   expect(hit.patient_name).toContain('García');
   expect(hit.status).toBe('no_show');
-  expect(hit.no_show_by).toBe('auto');
+  expect(hit.no_show_by).toBe('system');
   expect(hit.no_show_at).toBeTruthy();
 });
 

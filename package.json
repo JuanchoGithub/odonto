@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "migrate": "node scripts/migrate.mjs",
     "seed": "node scripts/seed.mjs",
+    "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
     "postinstall": "node scripts/migrate.mjs || true",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium",

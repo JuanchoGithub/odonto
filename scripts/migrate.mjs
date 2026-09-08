@@ -14,6 +14,16 @@ const authToken = process.env.TURSO_TOKEN || undefined;
 
 const db = createClient({ url, authToken });
 
+async function ensureForeignKeys() {
+  // Best-effort: without this, CREATE/DROP/RENAME rebuilds and DELETEs run
+  // unenforced on a fresh connection (FKs are per-connection in SQLite).
+  try {
+    await db.execute('PRAGMA foreign_keys = ON');
+  } catch {
+    // The statements below still run; ordering in the SQL files is FK-safe.
+  }
+}
+
 async function ensureMigrationsTable() {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -29,6 +39,7 @@ async function appliedFiles() {
 }
 
 async function run() {
+  await ensureForeignKeys();
   await ensureMigrationsTable();
   const applied = await appliedFiles();
   const files = (await readdir(migrationsDir))

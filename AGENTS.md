@@ -15,7 +15,7 @@ This is the source of truth. README.md is a one-page pointer; everything operati
 Bilingual (es / en) clinic management app. Modules:
 - **Patients** — CRUD + insurance link + per-patient odontogram + treatments + invoices; **two tabs on the detail page** — General (identity, contact, insurer) and Médico (clinical: chronic_conditions, contagious_diseases, current_medications, allergies_medication, blood_pressure, blood_type, diabetes, pregnant, last_medical_update) — each saves independently; hidden inputs in one mode preserve the OTHER mode's values; a red risk banner appears at the top of both General and Médico tabs when contagious_diseases or allergies_medication is non-empty
 - **Appointments** — week calendar on a 15-minute slot grid; blocks are sized by duration; drag to move (cross-day too) and drag the bottom edge to extend; drag on empty space to select a range and create with that duration; overlapping appointments are allowed (rendered side-by-side); each dentist has a color (random on creation, editable in Settings → Users); doctor filter for receptionists; calendar/list view toggle; non-working hours are shaded gray (per-dentist when filtered, clinic business hours on the "all" view); creation goes through one `AddAppointmentDialog` (`components/appointments/add-appointment-dialog.tsx`): shared patient picker + dentist (admin/secretary only — hidden for dentists) + duration on top, then Cancel / Generate-link / Add-manual actions; manual expands date + 15-min start-time select + motive/notes inline, link shows the generator result inline (slot/drag open it pre-expanded); `AppointmentDialog` is edit-only; each appointment records `created_by` + `created_via` (`manual` = New button, `click` = slot click, `drag` = drag-select, `shared` = patient self-booked via turn picker); the list view additionally shows pending (shared, unbooked) turn-picker links
-- **Appointment outcomes** — statuses `scheduled | arrived | in_chair | completed | cancelled | no_show` (terminal: completed/cancelled/no_show; reopening one requires the explicit `reopen=true` ack surfaced in the dialog). **Reprogramming** = any starts/ends/dentist change in `updateAppointment` — auto-bumps `reprogram_count`, sets `original_starts_at` once, and writes an `audit_log` `reschedule` row with from/to; rendered as a "Reprogramado ×N" chip (list cards, patient page) and a ↺N marker on calendar blocks. **Cancellation** is manual with a picklist `cancel_reason` (patient_request / dentist_request / no_answer / duplicate / schedule_change / other) + `cancelled_at`/`cancelled_by`. **No-show** is automatic: Vercel Cron hits `GET /api/cron/mark-no-shows` hourly (see `vercel.json`; guarded by `CRON_SECRET`, grace via `NO_SHOW_GRACE_MIN`, default 60 min); an overdue `scheduled` appointment flips to `no_show` (`no_show_by='auto'`) unless payment/invoice/treatment/attachment/odontogram evidence in the visit window proves attendance (then auto-`completed`); `arrived`/`in_chair` never auto-flip (patient did show) — they land in the secretary "Sin completar" follow-up, which now has a "Marcar como atendido" one-tap confirm. `server/actions/appointments.ts::sweepOverdueNoShows` is the shared core; system-origin audit rows must use `user_id=NULL` (FK-safe) with the marker stored in `no_show_by`. e2e: `e2e/appointment-outcomes.spec.ts`
+- **Appointment outcomes** — statuses `scheduled | arrived | in_chair | completed | cancelled | no_show` (terminal: completed/cancelled/no_show; reopening one requires the explicit `reopen=true` ack surfaced in the dialog). **Reprogramming** = any starts/ends/dentist change in `updateAppointment` — auto-bumps `reprogram_count`, sets `original_starts_at` once, and writes an `audit_log` `reschedule` row with from/to; rendered as a "Reprogramado ×N" chip (list cards, patient page) and a ↺N marker on calendar blocks. **Cancellation** is manual with a picklist `cancel_reason` (patient_request / dentist_request / no_answer / duplicate / schedule_change / other) + `cancelled_at`/`cancelled_by`. **No-show** is automatic: Vercel Cron hits `GET /api/cron/mark-no-shows` hourly (see `vercel.json`; guarded by `CRON_SECRET`, grace via `NO_SHOW_GRACE_MIN`, default 60 min); an overdue `scheduled` appointment flips to `no_show` (`no_show_by='system'`, the reserved system user — see `lib/system-user.ts`) unless payment/invoice/treatment/attachment/odontogram evidence in the visit window proves attendance (then auto-`completed`); `arrived`/`in_chair` never auto-flip (patient did show) — they land in the secretary "Sin completar" follow-up, which now has a "Marcar como atendido" one-tap confirm. `server/actions/appointments.ts::sweepOverdueNoShows` is the shared core; system-origin rows attribute to the reserved `users(id='system')` row (password `*LOCKED*`, login rejected) in both `appointments.no_show_by` and `audit_log.user_id`. Never store a magic string like `'auto'` in an FK column — it throws `SQLITE_CONSTRAINT_FOREIGNKEY` mid-sweep (the appointment row was already updated, so it half-applies). e2e: `e2e/appointment-outcomes.spec.ts`
 - **Insurers** (obras sociales) — master table, searchable, with inline onboarding
 - **Treatments** — per-patient pipeline + cost
 - **Billing** — invoices (two-rate tax) + payments + jsPDF export
@@ -337,6 +337,25 @@ set -a; source .local/.env.production; set +a
 npm run migrate
 ```
 
+### Wipe prod for go-live + bootstrap the first admin
+`migrations/0017_prod_reset.sql` deletes all operational + master data (no
+credentials inside — safe to commit). `0018` adds the FK hardening, the
+reserved `system` user, and `users.deleted_at`. Flow:
+```bash
+set -a; source .local/.env.production; set +a
+npm run migrate   # applies 0017 (wipe) then 0018 (system user + FKs)
+BOOTSTRAP_ADMIN_EMAIL=admin@clinic.com BOOTSTRAP_ADMIN_NAME="Admin" \
+  BOOTSTRAP_ADMIN_PASSWORD='<12+ chars, generated>' npm run bootstrap:admin
+```
+Then log in as that admin → Settings → clinic profile (name, currency,
+locale, **timezone**) → Users (dentists/receptionists) → Schedules →
+WhatsApp templates. Change the bootstrap password immediately. The repo is
+public: passwords only ever live in `.local/.env.production` (chmod 600,
+gitignored) and process env — never in migrations, scripts, or logs
+(`bootstrap-admin` refuses to run under `CI=true`).
+Blob files for wiped attachments are NOT deleted by the migration; remove
+orphans via the Vercel dashboard if needed.
+
 ### Trigger a production deploy
 ```bash
 git push origin main   # Vercel Git integration builds + promotes automatically
@@ -430,7 +449,7 @@ The current `VERCEL_TOKEN` GitHub secret is a `vcp_` personal access token, whic
 
 10. **The build step on Vercel runs `postinstall`** which is `node scripts/migrate.mjs || true`. So fresh deploys auto-apply migrations as long as `TURSO_URL` + `TURSO_TOKEN` are set in the build env. If they're missing, the build still succeeds (because of `|| true`) and you must apply migrations manually.
 
-11. **System-origin `audit_log` rows must use `user_id = NULL`.** `audit_log.user_id` is an FK to `users(id)` — a marker like `'auto'` violates it and throws `SQLITE_CONSTRAINT_FOREIGNKEY` mid-sweep (the appointment row was already updated, so it half-applies). Store the marker on the domain row instead (e.g. `appointments.no_show_by = 'auto'`); only real user ids go into `audit_log.user_id`.
+11. **System-origin rows attribute to `users(id='system')`.** All `*_by` / `audit_log.user_id` columns are FKs to `users(id)` — a marker like `'auto'` violates them and throws `SQLITE_CONSTRAINT_FOREIGNKEY` mid-sweep (the appointment row was already updated, so it half-applies). Automated writes use the reserved system user (`lib/system-user.ts`, seeded in 0018, password `*LOCKED*`, login rejected in `lib/auth.ts`); only real user ids otherwise. User hard-deletes reassign attribution to `'system'` via `hardDeleteUser()` with an audit note (`original user deleted: <email>`); dentist-owned rows (`dentist_id`) move to a successor dentist, never to system.
 
 ---
 

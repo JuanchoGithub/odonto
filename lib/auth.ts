@@ -53,10 +53,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
         const row = await queryOne<UserRow>(
-          'SELECT id, email, password_hash, name, role, locale FROM users WHERE lower(email) = lower(?) LIMIT 1',
+          'SELECT id, email, password_hash, name, role, locale FROM users WHERE lower(email) = lower(?) AND deleted_at IS NULL LIMIT 1',
           [email],
         );
         if (!row) return null;
+        // The reserved system user (id/email system@internal) carries an
+        // unusable '*LOCKED*' hash, but reject it explicitly so it can never
+        // hold a session even if its row is ever edited.
+        if (row.id === 'system') return null;
         const ok = await bcrypt.compare(password, row.password_hash);
         if (!ok) return null;
         return {

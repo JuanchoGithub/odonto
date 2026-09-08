@@ -45,7 +45,7 @@ export default async function PatientDetailPage({
     getPatient(id),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
     query<{ id: string; name: string; slot_minutes: number | null }>(
-      "SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' ORDER BY name",
+      "SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
     ),
     getClinicDefaultDuration(),
   ]);
