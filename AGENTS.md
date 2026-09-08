@@ -337,6 +337,28 @@ set -a; source .local/.env.production; set +a
 npm run migrate
 ```
 
+### Mirror the production DB to local for testing
+Never run `seed.mjs` (or anything that writes test data) against the production
+Turso DB — it's a clean, near-empty dataset and must stay that way. To test
+against a faithful local copy instead, mirror prod into `.e2e.db` (the Playwright
+DB) then re-add the e2e fixtures **on the local file only**:
+
+```bash
+set -a; source .local/.env.production; set +a
+node scripts/mirror-db.mjs                 # prod (read-only) -> file:./.e2e.db
+TURSO_URL='file:./.e2e.db' node scripts/e2e-fixtures.mjs   # fixtures on local only
+```
+
+- `scripts/mirror-db.mjs` is **read-only against prod**; it replaces the data in
+  `.e2e.db` (schema preserved). It dumps the remote in a child process because
+  holding a remote + file `@libsql` client in one process panics the native
+  runtime, and converts row objects → positional arrays for the insert.
+- `scripts/e2e-fixtures.mjs` re-adds the seed users (`admin@local`, `doc@local`,
+  `front@local`) + 10 patients/appointments/invoices, but resolves the real
+  clinic + user ids from the mirrored DB so FKs stay valid. (`seed.mjs` can't be
+  used here — it creates a fresh random `clinicId` that would break
+  `invoices.clinic_id` against the mirrored clinic.)
+
 ### Wipe prod for go-live + bootstrap the first admin
 `migrations/0017_prod_reset.sql` deletes all operational + master data (no
 credentials inside — safe to commit). `0018` adds the FK hardening, the

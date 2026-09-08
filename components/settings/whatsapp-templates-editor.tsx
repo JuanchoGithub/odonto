@@ -46,6 +46,7 @@ export function WhatsappTemplatesEditor({
   const t = useTranslations('settings');
   const tAppt = useTranslations('appointments');
   const locale = useLocale() as 'es' | 'en';
+  const langKey = locale === 'en' ? 'en' : 'es';
   const { push } = useToast();
   const [pending, startTransition] = useTransition();
   const [countryCode, setCountryCode] = useState(initial.countryCode);
@@ -183,51 +184,27 @@ export function WhatsappTemplatesEditor({
                 ) : null}
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div>
-                  <Label className="text-xs">{t('whatsappTemplateLabelEs')}</Label>
-                  <Input
-                    value={tpl.label_es}
-                    onChange={(e) =>
-                      updateTemplate(tpl.id, { label_es: e.target.value })
-                    }
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">{t('whatsappTemplateLabelEn')}</Label>
-                  <Input
-                    value={tpl.label_en}
-                    onChange={(e) =>
-                      updateTemplate(tpl.id, { label_en: e.target.value })
-                    }
-                    className="mt-1"
-                  />
-                </div>
+              <div>
+                <Label className="text-xs">{t('whatsappTemplateLabel')}</Label>
+                <Input
+                  value={tpl[`label_${langKey}`]}
+                  onChange={(e) =>
+                    updateTemplate(tpl.id, { [`label_${langKey}`]: e.target.value })
+                  }
+                  className="mt-1"
+                />
               </div>
 
               <div>
-                <Label className="text-xs">{t('whatsappTemplateBodyEs')}</Label>
+                <Label className="text-xs">{t('whatsappTemplateBody')}</Label>
                 <Textarea
-                  value={tpl.body_es}
+                  value={tpl[`body_${langKey}`]}
                   onChange={(e) =>
-                    updateTemplate(tpl.id, { body_es: e.target.value })
+                    updateTemplate(tpl.id, { [`body_${langKey}`]: e.target.value })
                   }
                   rows={3}
                   className="mt-1"
-                  data-testid={`${testIdPrefix}-tpl-body-es-${tpl.id}`}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">{t('whatsappTemplateBodyEn')}</Label>
-                <Textarea
-                  value={tpl.body_en}
-                  onChange={(e) =>
-                    updateTemplate(tpl.id, { body_en: e.target.value })
-                  }
-                  rows={3}
-                  className="mt-1"
-                  data-testid={`${testIdPrefix}-tpl-body-en-${tpl.id}`}
+                  data-testid={`${testIdPrefix}-tpl-body-${langKey}-${tpl.id}`}
                 />
               </div>
 
