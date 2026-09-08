@@ -23,6 +23,7 @@ export function InsurerPicker({
   initialPlan,
   onFreeTextChange,
   memberNumber,
+  hideMemberNumber = false,
 }: {
   value: string | null;
   onChange: (id: string | null) => void;
@@ -30,6 +31,8 @@ export function InsurerPicker({
   initialPlan?: string;
   onFreeTextChange?: (s: { name: string; plan: string }) => void;
   memberNumber?: string;
+  /** Quick turn intake: hide the member-number input (it lives in collapsed details). */
+  hideMemberNumber?: boolean;
 }) {
   const t = useTranslations('insurers');
   const tPi = useTranslations('patientOnboarding');
@@ -202,7 +205,7 @@ export function InsurerPicker({
         </div>
       ) : null}
 
-      {value ? (
+      {value && !hideMemberNumber ? (
         <div className="space-y-1">
           <Label className="text-xs">N° de afiliado</Label>
           <Input name="insurance_number" defaultValue={memberNumber ?? ''} inputMode="numeric" />

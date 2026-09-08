@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openManualCreate, fillBirthDate } from './helpers';
+import { openManualCreate } from './helpers';
 
 const ADMIN = { email: 'admin@local', password: 'Admin123!' };
 
@@ -90,7 +90,7 @@ test('medical tab: save preserves general fields (no cross-tab data loss)', asyn
   await expect(page.getByLabel(/diabetes/i)).toHaveValue('Tipo 2 controlada');
 });
 
-test('inline new-patient dialog (from appointment) shows the full intake', async ({ page }) => {
+test('inline new-patient dialog (from appointment) shows the quick intake', async ({ page }) => {
   await login(page, ADMIN);
 
   await page.goto('/appointments');
@@ -105,27 +105,35 @@ test('inline new-patient dialog (from appointment) shows the full intake', async
   const newPatientDialog = page.getByRole('dialog').last();
   await expect(newPatientDialog).toBeVisible();
 
-  // The full form (general + clinical) must be present in one page
+  // The quick form (bare minimum) must be present: names + phone + age +
+  // email + insurance, in call order
   await expect(newPatientDialog.locator('input[name="first_name"]')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="last_name"]')).toBeVisible();
-  // Birth-date picker: desktop renders Year/Month/Day dropdowns (plus a
-  // hidden submit input), touch renders a native date input.
-  await expect(
-    newPatientDialog.getByText(/fecha de nacimiento|birth date/i),
-  ).toBeVisible();
-  // Clinical section also present (TagTextarea renders a contentEditable
-  // div with data-field, not a <textarea>)
-  await expect(newPatientDialog.locator('[data-field="medical_history"]')).toBeVisible();
-  await expect(newPatientDialog.locator('[data-field="contagious_diseases"]')).toBeVisible();
-  await expect(newPatientDialog.locator('[data-field="allergies_medication"]')).toBeVisible();
-  // Email field
+  await expect(newPatientDialog.locator('input[name="phone"]')).toBeVisible();
+  await expect(newPatientDialog.getByTestId('patient-age')).toBeVisible();
   await expect(newPatientDialog.locator('input[name="email"]')).toBeVisible();
+  await expect(newPatientDialog.locator('#insurer-picker-trigger')).toBeVisible();
+  // Member number hides collapsed in the insurance-details section
+  await expect(newPatientDialog.locator('input[name="insurance_number"]')).not.toBeVisible();
+  // Exact birth date hides in the collapsed "more details" section…
+  await expect(newPatientDialog.locator('#birth_date_exact')).toHaveCount(1);
+  await expect(newPatientDialog.locator('#birth_date_exact')).not.toBeVisible();
+  // …and clinical fields hide collapsed too (TagTextarea renders a
+  // contentEditable div with data-field, not a <textarea>)
+  await expect(newPatientDialog.locator('[data-field="medical_history"]')).toHaveCount(1);
+  await expect(newPatientDialog.locator('[data-field="medical_history"]')).not.toBeVisible();
+  await expect(newPatientDialog.locator('[data-field="contagious_diseases"]')).toHaveCount(1);
+  await expect(newPatientDialog.locator('[data-field="allergies_medication"]')).toHaveCount(1);
 
-  // Fill required fields, create the patient via the inline action
+  // Fill required fields + age shorthand (→ 01/01 birth_date), create inline
   await newPatientDialog.getByLabel(/nombre|first name/i).fill('Inline');
-  const newPatLastName = `Full${Date.now()}`;
+  const newPatLastName = `Quick${Date.now()}`;
   await newPatientDialog.getByLabel(/apellido|last name/i).fill(newPatLastName);
-  await fillBirthDate(page, newPatientDialog, '1990-05-05');
+  await newPatientDialog.getByTestId('patient-age').fill('40');
+  const expectedDob = `${new Date().getFullYear() - 40}-01-01`;
+  await expect
+    .poll(() => newPatientDialog.locator('input[name="birth_date"]').inputValue())
+    .toBe(expectedDob);
 
   // The form should use the inline create action (no redirect, no full-page nav)
   // Hitting Save should close the dialog and return to the appointment form

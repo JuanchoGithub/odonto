@@ -24,7 +24,22 @@ import {
 import { listAllMedicalTags } from '@/server/actions/medical-tags';
 import { cn } from '@/lib/utils';
 
-type Mode = 'general' | 'medical' | 'full';
+type Mode = 'general' | 'medical' | 'full' | 'quick';
+
+/** Derive an approximate age from a stored birth_date (currentYear - year). */
+function ageFromBirthDate(birthDate: string | null | undefined): string {
+  const m = /^(\d{4})-\d{2}-\d{2}$/.exec((birthDate ?? '').trim());
+  if (!m) return '';
+  const age = new Date().getFullYear() - Number(m[1]);
+  return age >= 0 && age <= 130 ? String(age) : '';
+}
+
+/** Quick-intake shorthand: age → Jan 1st of (currentYear - age). */
+function birthDateFromAge(ageStr: string): string {
+  const age = Number(ageStr);
+  if (!Number.isInteger(age) || age < 0 || age > 130) return '';
+  return `${new Date().getFullYear() - age}-01-01`;
+}
 
 export function PatientForm({
   patient,
@@ -44,8 +59,10 @@ export function PatientForm({
   /**
    * 'general' — demographics, contact, insurance, notes (default).
    * 'medical' — clinical history, allergies, conditions, meds, vitals.
-   * 'full'    — both sections stacked vertically (used by the inline
-   *             new-patient dialog in the appointment flow; no tabs there).
+   * 'full'    — both sections stacked vertically (kept for compat).
+   * 'quick'   — bare-minimum turn intake (post-call): Name, Last name,
+   *             Phone, Age (→ 01/01 birth_date), Email, Insurance (no
+   *             member number); everything else in collapsed <details>.
    * When mode is 'general' or 'medical', the OTHER mode's fields are
    * submitted as hidden inputs so a partial save doesn't wipe data the
    * user can't see.
@@ -56,8 +73,10 @@ export function PatientForm({
   const tc = useTranslations('common');
   const isGeneral = mode === 'general';
   const isMedical = mode === 'medical';
+  const isQuick = mode === 'quick';
   const showGeneral = isGeneral || mode === 'full';
   const showMedical = isMedical || mode === 'full';
+  const showQuick = isQuick;
 
   const [insurerId, setInsurerId] = useState<string | null>(patient?.insurer_id ?? null);
   const [freeText, setFreeText] = useState<{ name: string; plan: string }>({
@@ -70,6 +89,26 @@ export function PatientForm({
     listAllMedicalTags().then(setDictionaries).catch(() => {});
   }, []);
   const dictFor = (field: string) => dictionaries[field] ?? [];
+
+  // Quick-intake age shorthand (source of truth for birth_date in quick mode).
+  const [birthIso, setBirthIso] = useState(patient?.birth_date ?? '');
+  const [ageStr, setAgeStr] = useState(() => ageFromBirthDate(patient?.birth_date));
+
+  function onAgeChange(v: string) {
+    setAgeStr(v);
+    if (v.trim() === '') {
+      setBirthIso('');
+      return;
+    }
+    const iso = birthDateFromAge(v.trim());
+    if (iso) setBirthIso(iso);
+  }
+
+  function onExactDobChange(v: string) {
+    setBirthIso(v);
+    const m = /^(\d{4})-\d{2}-\d{2}$/.exec(v.trim());
+    setAgeStr(m ? ageFromBirthDate(v) : '');
+  }
 
   const baseBound = action
     ? action
@@ -85,29 +124,29 @@ export function PatientForm({
           id: '',
           first_name: String(fd.get('first_name') ?? ''),
           last_name: String(fd.get('last_name') ?? ''),
-          document_id: null,
-          birth_date: null,
-          gender: null,
-          phone: null,
-          email: null,
-          address: null,
+          document_id: (fd.get('document_id') as string) || null,
+          birth_date: (fd.get('birth_date') as string) || null,
+          gender: (fd.get('gender') as string) || null,
+          phone: (fd.get('phone') as string) || null,
+          email: (fd.get('email') as string) || null,
+          address: (fd.get('address') as string) || null,
           insurance_provider: freeText.name || null,
-          insurance_number: null,
+          insurance_number: (fd.get('insurance_number') as string) || null,
           insurer_id: insurerId,
           insurance_plan: freeText.plan || null,
-          medical_history: null,
-          allergies: null,
-          notes: null,
+          medical_history: (fd.get('medical_history') as string) || null,
+          allergies: (fd.get('allergies') as string) || null,
+          notes: (fd.get('notes') as string) || null,
           deleted_at: null,
-          chronic_conditions: null,
-          contagious_diseases: null,
-          current_medications: null,
-          allergies_medication: null,
-          blood_pressure: null,
-          blood_type: null,
-          diabetes: null,
-          pregnant: null,
-          last_medical_update: null,
+          chronic_conditions: (fd.get('chronic_conditions') as string) || null,
+          contagious_diseases: (fd.get('contagious_diseases') as string) || null,
+          current_medications: (fd.get('current_medications') as string) || null,
+          allergies_medication: (fd.get('allergies_medication') as string) || null,
+          blood_pressure: (fd.get('blood_pressure') as string) || null,
+          blood_type: (fd.get('blood_type') as string) || null,
+          diabetes: (fd.get('diabetes') as string) || null,
+          pregnant: (fd.get('pregnant') as string) || null,
+          last_medical_update: (fd.get('last_medical_update') as string) || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });
@@ -152,6 +191,127 @@ export function PatientForm({
           <input type="hidden" name="pregnant" value={patient?.pregnant ?? ''} />
           <input type="hidden" name="last_medical_update" value={patient?.last_medical_update ?? ''} />
         </>
+      ) : null}
+
+      {/* ==== Quick turn intake: bare minimum, in call order ==== */}
+      {showQuick ? (
+        <div className="space-y-4">
+          {/* Age shorthand drives this hidden birth_date (01/01 of year-age). */}
+          <input type="hidden" name="birth_date" value={birthIso} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="first_name">{t('firstName')}</Label>
+              <Input id="first_name" name="first_name" defaultValue={patient?.first_name} required autoComplete="given-name" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="last_name">{t('lastName')}</Label>
+              <Input id="last_name" name="last_name" defaultValue={patient?.last_name} required autoComplete="family-name" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">{tc('phone')}</Label>
+              <Input id="phone" name="phone" defaultValue={patient?.phone ?? ''} type="tel" inputMode="tel" autoComplete="tel" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="patient_age">{t('age')}</Label>
+              <Input
+                id="patient_age"
+                data-testid="patient-age"
+                type="number"
+                min={0}
+                max={130}
+                inputMode="numeric"
+                value={ageStr}
+                onChange={(e) => onAgeChange(e.target.value)}
+                placeholder="30"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="email">{tc('email')}</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                defaultValue={patient?.email ?? ''}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="insurer-picker-trigger">{t('insuranceProvider')}</Label>
+              <InsurerPicker
+                value={insurerId}
+                onChange={setInsurerId}
+                initialName={freeText.name}
+                initialPlan={freeText.plan}
+                onFreeTextChange={setFreeText}
+                hideMemberNumber
+              />
+              <input type="hidden" name="insurer_id" value={insurerId ?? ''} />
+              <input type="hidden" name="insurance_provider" value={freeText.name} />
+              <input type="hidden" name="insurance_plan" value={freeText.plan} />
+            </div>
+          </div>
+
+          <details className="rounded-md border px-3 py-2">
+            <summary className="cursor-pointer py-1 text-sm font-medium">
+              {t('sectionExtra')}
+            </summary>
+            <div className="grid gap-4 py-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="document_id">{t('documentId')}</Label>
+                <Input id="document_id" name="document_id" defaultValue={patient?.document_id ?? ''} inputMode="numeric" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gender">{t('gender')}</Label>
+                <GenderSelect defaultValue={patient?.gender ?? ''} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="birth_date_exact">{t('birthDate')}</Label>
+                <Input
+                  id="birth_date_exact"
+                  type="date"
+                  autoComplete="bday"
+                  value={birthIso}
+                  onChange={(e) => onExactDobChange(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="address">{t('address')}</Label>
+                <Input id="address" name="address" defaultValue={patient?.address ?? ''} autoComplete="street-address" />
+              </div>
+            </div>
+          </details>
+
+          <details className="rounded-md border px-3 py-2">
+            <summary className="cursor-pointer py-1 text-sm font-medium">
+              {t('sectionInsuranceDetail')}
+            </summary>
+            <div className="grid gap-4 py-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="insurance_number">{t('insuranceNumber')}</Label>
+                <Input id="insurance_number" name="insurance_number" defaultValue={patient?.insurance_number ?? ''} inputMode="numeric" />
+              </div>
+            </div>
+          </details>
+
+          <details className="rounded-md border px-3 py-2">
+            <summary className="cursor-pointer py-1 text-sm font-medium">
+              {t('sectionMedical')}
+            </summary>
+            <div className="py-3">
+              <MedicalSections patient={patient} dictFor={dictFor} />
+            </div>
+          </details>
+
+          <details className="rounded-md border px-3 py-2">
+            <summary className="cursor-pointer py-1 text-sm font-medium">
+              {tc('notes')}
+            </summary>
+            <div className="py-3">
+              <Textarea id="notes" name="notes" defaultValue={patient?.notes ?? ''} rows={2} />
+            </div>
+          </details>
+        </div>
       ) : null}
 
       {/* ==== General fields (always visible in general/full) ==== */}
@@ -219,133 +379,7 @@ export function PatientForm({
 
       {/* ==== Medical sections (always visible in medical/full) ==== */}
       {showMedical ? (
-        <div className="space-y-6">
-          {/* Risk factors: shown prominently because they can change the
-              treatment protocol (e.g. antibiotic prophylaxis, bleeding
-              protocols, radiation avoidance). */}
-          <section>
-            <h3 className="text-sm font-medium text-foreground mb-3">
-              {t('sectionRisks')}
-            </h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="contagious_diseases">{t('contagiousDiseases')}</Label>
-                <TagTextarea
-                  name="contagious_diseases"
-                  defaultValue={patient?.contagious_diseases ?? ''}
-                  dictionary={dictFor('contagious_diseases')}
-                  placeholder={t('contagiousDiseasesHint')}
-                  rows={2}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="allergies_medication">{t('allergiesMedication')}</Label>
-                <TagTextarea
-                  name="allergies_medication"
-                  defaultValue={patient?.allergies_medication ?? ''}
-                  dictionary={dictFor('allergies_medication')}
-                  placeholder={t('allergiesMedicationHint')}
-                  rows={2}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="current_medications">{t('currentMedications')}</Label>
-                <TagTextarea
-                  name="current_medications"
-                  defaultValue={patient?.current_medications ?? ''}
-                  dictionary={dictFor('current_medications')}
-                  placeholder={t('currentMedicationsHint')}
-                  rows={2}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-medium text-foreground mb-3">
-              {t('sectionConditions')}
-            </h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="chronic_conditions">{t('chronicConditions')}</Label>
-                <TagTextarea
-                  name="chronic_conditions"
-                  defaultValue={patient?.chronic_conditions ?? ''}
-                  dictionary={dictFor('chronic_conditions')}
-                  placeholder={t('chronicConditionsHint')}
-                  rows={2}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="diabetes">{t('diabetes')}</Label>
-                <Input
-                  id="diabetes"
-                  name="diabetes"
-                  defaultValue={patient?.diabetes ?? ''}
-                  placeholder={t('diabetesHint')}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pregnant">{t('pregnant')}</Label>
-                <PregnantSelect defaultValue={patient?.pregnant ?? ''} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="blood_type">{t('bloodType')}</Label>
-                <Input
-                  id="blood_type"
-                  name="blood_type"
-                  defaultValue={patient?.blood_type ?? ''}
-                  placeholder="A+ / O−"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="blood_pressure">{t('bloodPressure')}</Label>
-                <Input
-                  id="blood_pressure"
-                  name="blood_pressure"
-                  defaultValue={patient?.blood_pressure ?? ''}
-                  placeholder="120/80"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-medium text-foreground mb-3">
-              {t('sectionHistory')}
-            </h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="medical_history">{t('medicalHistory')}</Label>
-                <TagTextarea
-                  name="medical_history"
-                  defaultValue={patient?.medical_history ?? ''}
-                  dictionary={dictFor('medical_history')}
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="allergies">{t('allergies')}</Label>
-                <TagTextarea
-                  name="allergies"
-                  defaultValue={patient?.allergies ?? ''}
-                  dictionary={dictFor('allergies')}
-                  placeholder={t('allergiesHint')}
-                  rows={2}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="last_medical_update">{t('lastMedicalUpdate')}</Label>
-                <Input
-                  id="last_medical_update"
-                  name="last_medical_update"
-                  type="date"
-                  defaultValue={patient?.last_medical_update ?? ''}
-                />
-              </div>
-            </div>
-          </section>
-        </div>
+        <MedicalSections patient={patient} dictFor={dictFor} />
       ) : null}
 
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
@@ -356,6 +390,145 @@ export function PatientForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function MedicalSections({
+  patient,
+  dictFor,
+}: {
+  patient?: PatientRow;
+  dictFor: (field: string) => string[];
+}) {
+  const t = useTranslations('patients');
+  return (
+    <div className="space-y-6">
+      {/* Risk factors: shown prominently because they can change the
+          treatment protocol (e.g. antibiotic prophylaxis, bleeding
+          protocols, radiation avoidance). */}
+      <section>
+        <h3 className="text-sm font-medium text-foreground mb-3">
+          {t('sectionRisks')}
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="contagious_diseases">{t('contagiousDiseases')}</Label>
+            <TagTextarea
+              name="contagious_diseases"
+              defaultValue={patient?.contagious_diseases ?? ''}
+              dictionary={dictFor('contagious_diseases')}
+              placeholder={t('contagiousDiseasesHint')}
+              rows={2}
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="allergies_medication">{t('allergiesMedication')}</Label>
+            <TagTextarea
+              name="allergies_medication"
+              defaultValue={patient?.allergies_medication ?? ''}
+              dictionary={dictFor('allergies_medication')}
+              placeholder={t('allergiesMedicationHint')}
+              rows={2}
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="current_medications">{t('currentMedications')}</Label>
+            <TagTextarea
+              name="current_medications"
+              defaultValue={patient?.current_medications ?? ''}
+              dictionary={dictFor('current_medications')}
+              placeholder={t('currentMedicationsHint')}
+              rows={2}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="text-sm font-medium text-foreground mb-3">
+          {t('sectionConditions')}
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="chronic_conditions">{t('chronicConditions')}</Label>
+            <TagTextarea
+              name="chronic_conditions"
+              defaultValue={patient?.chronic_conditions ?? ''}
+              dictionary={dictFor('chronic_conditions')}
+              placeholder={t('chronicConditionsHint')}
+              rows={2}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="diabetes">{t('diabetes')}</Label>
+            <Input
+              id="diabetes"
+              name="diabetes"
+              defaultValue={patient?.diabetes ?? ''}
+              placeholder={t('diabetesHint')}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pregnant">{t('pregnant')}</Label>
+            <PregnantSelect defaultValue={patient?.pregnant ?? ''} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="blood_type">{t('bloodType')}</Label>
+            <Input
+              id="blood_type"
+              name="blood_type"
+              defaultValue={patient?.blood_type ?? ''}
+              placeholder="A+ / O−"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="blood_pressure">{t('bloodPressure')}</Label>
+            <Input
+              id="blood_pressure"
+              name="blood_pressure"
+              defaultValue={patient?.blood_pressure ?? ''}
+              placeholder="120/80"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="text-sm font-medium text-foreground mb-3">
+          {t('sectionHistory')}
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="medical_history">{t('medicalHistory')}</Label>
+            <TagTextarea
+              name="medical_history"
+              defaultValue={patient?.medical_history ?? ''}
+              dictionary={dictFor('medical_history')}
+              rows={3}
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="allergies">{t('allergies')}</Label>
+            <TagTextarea
+              name="allergies"
+              defaultValue={patient?.allergies ?? ''}
+              dictionary={dictFor('allergies')}
+              placeholder={t('allergiesHint')}
+              rows={2}
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="last_medical_update">{t('lastMedicalUpdate')}</Label>
+            <Input
+              id="last_medical_update"
+              name="last_medical_update"
+              type="date"
+              defaultValue={patient?.last_medical_update ?? ''}
+            />
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 

@@ -136,6 +136,10 @@
     "sectionRisks": "Risks",
     "sectionConditions": "Conditions",
     "sectionHistory": "Clinical history",
+    "age": "Age",
+    "sectionExtra": "More details",
+    "sectionInsuranceDetail": "Insurance details",
+    "sectionMedical": "Medical",
     "chronicConditions": "Chronic conditions",
     "chronicConditionsHint": "Hypertension, diabetes, asthma, epilepsy…",
     "contagiousDiseases": "Contagious diseases",
@@ -484,6 +488,7 @@
   "patientOnboarding": {
     "title": "New patient",
     "fullFormNotice": "You're filling in the full intake. You can return to appointments afterwards or keep editing the patient.",
+    "quickFormNotice": "Quick intake: just the bare minimum from the call. The rest lives in the collapsed sections.",
     "insurerNone": "No insurance",
     "insurerOther": "Other (type manually)"
   },

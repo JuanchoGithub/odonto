@@ -649,7 +649,7 @@ export function PatientContact({
   );
 }
 
-/** Shared inline "new patient" intake (full form, no redirect). */
+/** Shared inline "new patient" quick intake (bare minimum, no redirect). */
 export function NewPatientFullDialog({
   open,
   onOpenChange,
@@ -671,7 +671,7 @@ export function NewPatientFullDialog({
           <div className="flex items-center justify-between mb-4">
             <div>
               <Dialog.Title className="text-lg font-semibold">{t('title')}</Dialog.Title>
-              <p className="text-xs text-muted-foreground mt-1">{t('fullFormNotice')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('quickFormNotice')}</p>
             </div>
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon">
@@ -680,7 +680,7 @@ export function NewPatientFullDialog({
             </Dialog.Close>
           </div>
           <PatientForm
-            mode="full"
+            mode="quick"
             action={async (_prev, fd) => {
               const res = await createPatientInline({}, fd);
               if (res.ok) {

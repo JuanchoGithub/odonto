@@ -32,6 +32,9 @@ test('repro: gender picker must work in the inline new-patient form', async ({
   const newPatientDialog = page.getByRole('dialog').last();
   await expect(newPatientDialog).toBeVisible();
 
+  // Quick intake hides gender in the collapsed "more details" section
+  await newPatientDialog.getByText(/más datos|more details/i).click();
+
   // Same pattern: capture the gender trigger by its accessible name (the
   // hidden input id='gender' is what aria-labelledby points to).
   const inlineGender = newPatientDialog.locator('button[aria-labelledby="gender"]').first();

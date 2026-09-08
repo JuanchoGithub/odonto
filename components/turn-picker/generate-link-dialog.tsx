@@ -404,7 +404,7 @@ function NewPatientInlineDialog({
           <div className="flex items-center justify-between mb-4">
             <div>
               <Dialog.Title className="text-lg font-semibold">{t('title')}</Dialog.Title>
-              <p className="text-xs text-muted-foreground mt-1">{t('fullFormNotice')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('quickFormNotice')}</p>
             </div>
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon">
@@ -413,7 +413,7 @@ function NewPatientInlineDialog({
             </Dialog.Close>
           </div>
           <PatientForm
-            mode="full"
+            mode="quick"
             action={async (_prev, fd) => {
               const res = await createPatientInline({}, fd);
               if (res.ok) {

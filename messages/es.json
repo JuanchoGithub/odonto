@@ -136,6 +136,10 @@
     "sectionRisks": "Riesgos",
     "sectionConditions": "Condiciones",
     "sectionHistory": "Historia clínica",
+    "age": "Edad",
+    "sectionExtra": "Más datos",
+    "sectionInsuranceDetail": "Detalle de obra social",
+    "sectionMedical": "Médico",
     "chronicConditions": "Condiciones crónicas",
     "chronicConditionsHint": "Hipertensión, diabetes, asma, epilepsia, etc.",
     "contagiousDiseases": "Enfermedades transmisibles",
@@ -482,6 +486,7 @@
   "patientOnboarding": {
     "title": "Nuevo paciente",
     "fullFormNotice": "Vas a completar el alta completa. Después podés volver a turnos o seguir editando el paciente.",
+    "quickFormNotice": "Alta rápida: solo lo mínimo de la llamada. El resto queda en las secciones plegadas.",
     "insurerNone": "Sin obra social",
     "insurerOther": "Otra (escribir manualmente)"
   },
