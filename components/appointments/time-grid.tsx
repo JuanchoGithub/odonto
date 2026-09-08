@@ -114,9 +114,9 @@ export function TimeGrid({
   );
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto overflow-y-clip">
       <div
-        className="grid border rounded-md"
+        className="grid border rounded-md min-w-[962px]"
         style={{
           gridTemplateColumns: '52px repeat(7, minmax(130px, 1fr))',
         }}
@@ -220,6 +220,12 @@ function DayColumn({
 
   function onColPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
+    // Touch: don't capture — capture would hijack vertical page scroll.
+    // Taps still create via onPointerUp.
+    if (coarse) {
+      dragSel.current = { startMin: yToMin(e.clientY), moved: false };
+      return;
+    }
     colRef.current?.setPointerCapture(e.pointerId);
     dragSel.current = { startMin: yToMin(e.clientY), moved: false };
   }
