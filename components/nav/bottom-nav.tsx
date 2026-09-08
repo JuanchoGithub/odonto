@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Link, usePathname } from '@/lib/navigation';
+import { Link, usePathname, useRouter } from '@/lib/navigation';
 import { useTranslations } from 'next-intl';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import type { Role } from '@/lib/schemas/common';
+import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
 
 const PRIMARY: {
   href: string;
@@ -46,15 +47,31 @@ const MORE: {
   { href: '/settings', key: 'settings', icon: Settings, roles: ['admin'] },
 ];
 
-export function BottomNav({ role }: { role: Role }) {
+export function BottomNav({
+  role,
+  currentUserId,
+  dentists,
+  clinicDefaultDuration,
+}: {
+  role: Role;
+  currentUserId?: string;
+  dentists?: { id: string; name: string; slot_minutes?: number | null }[] | null;
+  clinicDefaultDuration?: number;
+}) {
   const t = useTranslations('nav');
   const tc = useTranslations('common');
+  const td = useTranslations('dashboard');
   const pathname = usePathname();
+  const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const primary = PRIMARY.filter((l) => l.roles.includes(role));
   const more = MORE.filter((l) => l.roles.includes(role));
   const moreActive = more.some((l) => pathname.startsWith(l.href));
+  // Admins keep the legacy new-patient shortcut; dentist/receptionist get
+  // the same add-turn flow as the dashboard panels.
+  const addTurnMode = role !== 'admin';
 
   return (
     <>
@@ -126,13 +143,25 @@ export function BottomNav({ role }: { role: Role }) {
             label={primary[1] ? t(primary[1].key) : ''}
           />
           <div className="flex items-stretch justify-center py-1">
-            <Link
-              href="/patients/new"
-              aria-label="New"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
-            >
-              <Plus className="h-6 w-6" />
-            </Link>
+            {addTurnMode ? (
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                aria-label={td('addTurn')}
+                data-testid="bottomnav-add-turn"
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
+              >
+                <Plus className="h-6 w-6" />
+              </button>
+            ) : (
+              <Link
+                href="/patients/new"
+                aria-label="New"
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
+              >
+                <Plus className="h-6 w-6" />
+              </Link>
+            )}
           </div>
           <TabLink
             href={primary[2]?.href ?? '/patients'}
@@ -155,6 +184,18 @@ export function BottomNav({ role }: { role: Role }) {
           </button>
         </div>
       </nav>
+      {addTurnMode && dentists ? (
+        <AddAppointmentDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          defaultStart={null}
+          dentists={dentists}
+          onCreated={() => router.refresh()}
+          currentUserId={currentUserId}
+          viewerRole={role}
+          clinicDefaultDuration={clinicDefaultDuration}
+        />
+      ) : null}
     </>
   );
 }

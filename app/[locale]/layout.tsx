@@ -3,7 +3,8 @@ import { getMessages, setRequestLocale } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
 import { routing } from '@/lib/i18n';
 import { auth } from '@/lib/auth';
-import { queryOne } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
+import { getClinicDefaultDuration } from '@/server/actions/dentist-schedules';
 import { TopNav } from '@/components/nav/top-nav';
 import { BottomNav } from '@/components/nav/bottom-nav';
 import { AuthProvider } from '@/components/auth/session-provider';
@@ -55,6 +56,35 @@ export default async function LocaleLayout({
     whatsapp.countryCode,
   );
 
+  // Add-turn context for the mobile toolbar (+). Dentists get a locked
+  // single-entry list (picker hidden in the dialog); receptionists get the
+  // full dentist list. Admins keep the legacy /patients/new shortcut, so
+  // no extra query for them.
+  type DentistOpt = { id: string; name: string; slot_minutes: number | null };
+  let addTurnDentists: DentistOpt[] | null = null;
+  let clinicDefaultDuration: number | undefined;
+  if (session?.user && session.user.role !== 'admin') {
+    if (session.user.role === 'dentist') {
+      const me = await queryOne<{ name: string; slot_minutes: number | null }>(
+        'SELECT name, slot_minutes FROM users WHERE id = ?',
+        [session.user.id],
+      );
+      addTurnDentists = me
+        ? [{ id: session.user.id, name: me.name, slot_minutes: me.slot_minutes }]
+        : [];
+      clinicDefaultDuration = me?.slot_minutes ?? undefined;
+    } else {
+      const [dentists, clinicDefault] = await Promise.all([
+        query<DentistOpt>(
+          "SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
+        ),
+        getClinicDefaultDuration(),
+      ]);
+      addTurnDentists = dentists;
+      clinicDefaultDuration = clinicDefault;
+    }
+  }
+
   return (
     <AuthProvider>
       <NextIntlClientProvider messages={messages} locale={locale}>
@@ -77,7 +107,14 @@ export default async function LocaleLayout({
                 />
               ) : null}
               <main className="flex-1 pb-20 md:pb-0">{children}</main>
-              {session?.user ? <BottomNav role={session.user.role} /> : null}
+              {session?.user ? (
+                <BottomNav
+                  role={session.user.role}
+                  currentUserId={session.user.id}
+                  dentists={addTurnDentists}
+                  clinicDefaultDuration={clinicDefaultDuration}
+                />
+              ) : null}
             </div>
             </ThemeProvider>
           </Toaster>

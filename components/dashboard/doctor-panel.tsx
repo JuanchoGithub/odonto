@@ -205,7 +205,8 @@ export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; 
 
   return (
     <div className="space-y-4" data-testid="doctor-panel">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Hidden on mobile: the bottom-toolbar + opens this same flow. */}
+      <div className="hidden flex-wrap items-center gap-2 md:flex">
         <Button
           size="lg"
           onClick={() => setAddOpen(true)}

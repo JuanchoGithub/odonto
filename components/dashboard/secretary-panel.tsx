@@ -129,7 +129,8 @@ export function SecretaryPanel({
 
   return (
     <div className="space-y-6" data-testid="secretary-panel">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Hidden on mobile: the bottom-toolbar + opens this same flow. */}
+      <div className="hidden flex-wrap items-center gap-2 md:flex">
         <Button
           size="lg"
           onClick={() => setAddOpen(true)}

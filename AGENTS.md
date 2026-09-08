@@ -503,7 +503,7 @@ The app is built **iPhone-first** (390×844 default), then progressively enhance
 ### 13.3 Shell
 
 - `app/[locale]/layout.tsx` mounts both navs: `<TopNav>` (`hidden lg:flex`, `pt-safe`) and `<BottomNav>` (`md:hidden`, 5 tabs, safe-area padded). The `<main>` has `pb-20 md:pb-0` to clear the bottom nav. Do not remove either.
-- `components/nav/bottom-nav.tsx` — Dashboard / Appointments / (+Create) / Patients / More. The center button is `/patients/new`. The More sheet is role-gated (see `PRIMARY` / `MORE` arrays). When adding a new top-level section, update both `PRIMARY` (if it's a primary destination) and `MORE` (if it's secondary). Use the existing i18n keys under `nav.*`.
+- `components/nav/bottom-nav.tsx` — Dashboard / Appointments / (+Create) / Patients / More. The center button opens the shared `AddAppointmentDialog` add-turn flow for dentist/receptionist (`data-testid="bottomnav-add-turn"`; context comes from `app/[locale]/layout.tsx`); admin keeps the legacy `/patients/new` link. The dashboard `panel-add-turn` buttons are `hidden md:flex` (mobile relies on the toolbar). The More sheet is role-gated (see `PRIMARY` / `MORE` arrays). When adding a new top-level section, update both `PRIMARY` (if it's a primary destination) and `MORE` (if it's secondary). Use the existing i18n keys under `nav.*`.
 - `components/nav/top-nav.tsx` — desktop only (`hidden lg:flex`). Has a hamburger that opens a mobile accordion with all role-allowed links. Preserve `aria-label="Primary"`, `aria-current="page"`, and `aria-expanded` on the toggle.
 
 ### 13.4 Lists, tables, cards
