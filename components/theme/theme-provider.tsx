@@ -19,16 +19,14 @@ function applyThemeColor(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>(
+    () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'),
+  );
 
   useEffect(() => {
-    const stored = localStorage.getItem('theme') as Theme | null;
-    const initial: Theme =
-      stored ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    setTheme(initial);
-    document.documentElement.classList.toggle('dark', initial === 'dark');
-    applyThemeColor(initial);
-  }, []);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    applyThemeColor(theme);
+  }, [theme]);
 
   const toggleTheme = () => {
     setTheme((prev) => {

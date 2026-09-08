@@ -23,5 +23,24 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      {/* Apply theme before first paint to avoid a white flash in dark mode. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function () {
+  try {
+    var stored = localStorage.getItem('theme');
+    var dark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', dark);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', dark ? '#020617' : '#ffffff');
+  } catch (e) {}
+})();`,
+        }}
+      />
+      {children}
+    </>
+  );
 }
