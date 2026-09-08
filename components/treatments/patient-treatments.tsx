@@ -213,13 +213,51 @@ function TreatmentDialog({
 }) {
   const t = useTranslations('treatments');
   const tCommon = useTranslations('common');
+  const tBilling = useTranslations('billing');
   const [loading, setLoading] = useState(false);
+  const [desc, setDesc] = useState('');
+  const [options, setOptions] = useState<
+    { id: string; code: string | null; description: string; default_price_cents: number; tax_kind: string; is_definitive: number }[]
+  >([]);
+  const [cost, setCost] = useState('0');
+  const [code, setCode] = useState('');
+  const [taxKind, setTaxKind] = useState('standard');
+
+  useEffect(() => {
+    if (!open) {
+      setDesc('');
+      setOptions([]);
+      setCost('0');
+      setCode('');
+      setTaxKind('standard');
+      return;
+    }
+    const id = setTimeout(() => {
+      fetch(`/api/catalog${desc.trim() ? `?q=${encodeURIComponent(desc.trim())}` : ''}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows) => setOptions(Array.isArray(rows) ? rows.slice(0, 6) : []))
+        .catch(() => {});
+    }, desc.trim() ? 250 : 0);
+    return () => clearTimeout(id);
+  }, [desc, open]);
+
+  function pick(o: { code: string | null; description: string; default_price_cents: number; tax_kind: string }) {
+    setDesc(o.description);
+    setCode(o.code ?? '');
+    setCost(String(o.default_price_cents / 100));
+    setTaxKind(o.tax_kind);
+    setOptions([]);
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     fd.set('patient_id', patientId);
+    fd.set('description', desc);
+    fd.set('code', code);
+    fd.set('cost', cost);
+    fd.set('tax_kind', taxKind);
     await createTreatment(fd);
     setLoading(false);
     onOpenChange(false);
@@ -242,7 +280,36 @@ function TreatmentDialog({
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="description">{t('description')}</Label>
-              <Textarea id="description" name="description" required rows={2} />
+              <Textarea
+                id="description"
+                name="description"
+                required
+                rows={2}
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+              />
+              {options.length > 0 ? (
+                <ul className="space-y-1">
+                  {options.map((o) => (
+                    <li key={o.id}>
+                      <button
+                        type="button"
+                        onClick={() => pick(o)}
+                        className="flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg border px-2 text-left text-sm active:bg-accent"
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {o.description}
+                          {o.is_definitive ? '' : ` · ${tBilling('provisional')}`}
+                        </span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {(o.default_price_cents / 100).toLocaleString('es-AR')}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="text-xs text-muted-foreground">{t('catalogHint')}</p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2">
               <div className="space-y-2">
@@ -256,7 +323,7 @@ function TreatmentDialog({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="code">{t('code')}</Label>
-                <Input id="code" name="code" />
+                <Input id="code" name="code" value={code} onChange={(e) => setCode(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cost">{t('cost')}</Label>
@@ -266,22 +333,38 @@ function TreatmentDialog({
                   type="text"
                   inputMode="decimal"
                   enterKeyHint="done"
-                  defaultValue={0}
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>{tCommon('status')}</Label>
-              <Select name="status" defaultValue="planned">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="planned">{t('status.planned')}</SelectItem>
-                  <SelectItem value="in_progress">{t('status.in_progress')}</SelectItem>
-                  <SelectItem value="done">{t('status.done')}</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-2">
+              <div className="space-y-2">
+                <Label>{tBilling('taxKind.standard')}</Label>
+                <Select value={taxKind} onValueChange={setTaxKind}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">{tBilling('taxKind.standard')}</SelectItem>
+                    <SelectItem value="reduced">{tBilling('taxKind.reduced')}</SelectItem>
+                    <SelectItem value="none">{tBilling('taxKind.none')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{tCommon('status')}</Label>
+                <Select name="status" defaultValue="planned">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="planned">{t('status.planned')}</SelectItem>
+                    <SelectItem value="in_progress">{t('status.in_progress')}</SelectItem>
+                    <SelectItem value="done">{t('status.done')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Dialog.Close asChild>

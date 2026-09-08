@@ -1,20 +1,32 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
 import { format } from 'date-fns';
-import { X, Phone, FileText, ChevronRight, MessageCircle } from 'lucide-react';
+import { X, Phone, FileText, ChevronRight, MessageCircle, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Link } from '@/lib/navigation';
 import { dentistColor } from '@/lib/colors';
 import {
   updateAppointmentStatus,
   type ApptRow,
 } from '@/server/actions/appointments';
+import {
+  previewVisitInvoice,
+  buildVisitInvoice,
+  type VisitPreview,
+} from '@/server/actions/billing';
+import { createTreatment } from '@/server/actions/treatments';
 import { useToast } from '@/components/ui/toaster';
 import { AttendTemplateSheet } from './attend-template-sheet';
 import { useWhatsapp } from '@/components/whatsapp-provider';
+
+function fmtArs(cents: number) {
+  return `$ ${(cents / 100).toLocaleString('es-AR', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}`;
+}
 
 const FLOW = ['scheduled', 'arrived', 'in_chair', 'completed'] as const;
 
@@ -191,6 +203,14 @@ export function AttendSheet({
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
             </Link>
           </div>
+
+          {appointment.status !== 'cancelled' && appointment.status !== 'no_show' ? (
+            <VisitBilling
+              appointment={appointment}
+              open={open}
+              onBilled={onAdvanced}
+            />
+          ) : null}
         </Dialog.Content>
       </Dialog.Portal>
       <AttendTemplateSheet
@@ -213,5 +233,211 @@ export function AttendSheet({
         onOpened={onRefresh}
       />
     </Dialog.Root>
+  );
+}
+
+type CatalogOption = {
+  id: string;
+  code: string | null;
+  description: string;
+  default_price_cents: number;
+  tax_kind: string;
+  is_definitive: number;
+};
+
+function VisitBilling({
+  appointment,
+  open,
+  onBilled,
+}: {
+  appointment: ApptRow;
+  open: boolean;
+  onBilled?: () => void;
+}) {
+  const t = useTranslations('billing');
+  const tCommon = useTranslations('common');
+  const { push } = useToast();
+  const [preview, setPreview] = useState<VisitPreview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [billing, setBilling] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogOption[]>([]);
+  const [q, setQ] = useState('');
+  const [price, setPrice] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const p = await previewVisitInvoice(appointment.id);
+      if (!('error' in p)) setPreview(p);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      refresh();
+      fetch('/api/catalog')
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows) => setCatalog(Array.isArray(rows) ? rows : []))
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, appointment.id, appointment.status]);
+
+  async function bill() {
+    setBilling(true);
+    try {
+      const res = await buildVisitInvoice(appointment.id);
+      if ('error' in res) {
+        push({ title: res.error, variant: 'destructive' });
+      } else {
+        push({ title: t('billed'), variant: 'success' });
+        await refresh();
+        if (onBilled) onBilled();
+      }
+    } finally {
+      setBilling(false);
+    }
+  }
+
+  async function addTreatment(opt: CatalogOption | null) {
+    const desc = opt?.description ?? q.trim();
+    if (!desc) return;
+    const rawPrice = price.trim() === '' ? (opt ? opt.default_price_cents / 100 : 0) : Number(price.replace(',', '.'));
+    if (!Number.isFinite(rawPrice) || rawPrice < 0) return;
+    setAdding(true);
+    try {
+      const fd = new FormData();
+      fd.set('patient_id', appointment.patient_id);
+      fd.set('appointment_id', appointment.id);
+      fd.set('description', desc);
+      if (opt?.code) fd.set('code', opt.code);
+      fd.set('cost', String(rawPrice));
+      fd.set('tax_kind', opt?.tax_kind ?? 'standard');
+      fd.set('status', 'done');
+      const res = await createTreatment(fd);
+      if (res && 'error' in res) {
+        push({ title: String(res.error), variant: 'destructive' });
+      } else {
+        setQ('');
+        setPrice('');
+        await refresh();
+      }
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  const filtered = q.trim()
+    ? catalog.filter((c) => c.description.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6)
+    : catalog.filter((c) => c.is_definitive).slice(0, 6);
+
+  return (
+    <div className="mt-3 rounded-xl border p-3" data-testid="visit-billing">
+      <div className="mb-2 flex items-center gap-2 text-base font-semibold">
+        <Receipt className="h-5 w-5 text-muted-foreground" />
+        {t('billVisit')}
+      </div>
+      {loading || !preview ? (
+        <p className="text-sm text-muted-foreground">…</p>
+      ) : preview.already_invoiced ? (
+        <div className="flex items-center justify-between gap-2">
+          <Badge variant="success">{t('billed')}</Badge>
+          <Link
+            href={`/billing/${preview.invoice_id}`}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {t('viewInvoice')}
+          </Link>
+        </div>
+      ) : (
+        <>
+          {preview.lines.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('nothingToBill')}</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {preview.lines.map((l) => (
+                <li key={l.treatment_id} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate">
+                    {l.description}
+                    {l.bundled ? ` · ${t('included')}` : ''}
+                  </span>
+                  <span className="shrink-0 font-medium">{fmtArs(l.total_cents)}</span>
+                </li>
+              ))}
+              <li className="flex items-center justify-between gap-2 border-t pt-1 font-semibold">
+                <span>{tCommon('total')}</span>
+                <span>{fmtArs(preview.total_cents)}</span>
+              </li>
+            </ul>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">{t('vatIncluded')}</p>
+          {preview.lines.length > 0 ? (
+            <Button
+              size="lg"
+              onClick={bill}
+              disabled={billing}
+              className="mt-2 min-h-[52px] w-full text-base"
+              data-testid="visit-bill"
+            >
+              {billing ? tCommon('loading') : `${t('billVisit')} · ${fmtArs(preview.total_cents)}`}
+            </Button>
+          ) : null}
+        </>
+      )}
+      {!preview?.already_invoiced ? (
+        <div className="mt-3 border-t pt-3">
+          <Label className="text-xs">{t('addTreatment')}</Label>
+          <div className="mt-1 flex gap-2">
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t('treatmentPlaceholder')}
+              className="min-h-[44px]"
+            />
+            <Input
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="50000"
+              inputMode="decimal"
+              className="min-h-[44px] w-28"
+            />
+          </div>
+          {filtered.length > 0 ? (
+            <ul className="mt-1 space-y-1">
+              {filtered.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    disabled={adding}
+                    onClick={() => addTreatment(c)}
+                    className="flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg border px-2 text-left text-sm active:bg-accent"
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {c.description}
+                      {c.is_definitive ? '' : ` · ${t('provisional')}`}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">{fmtArs(c.default_price_cents)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {q.trim() ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={adding}
+              onClick={() => addTreatment(null)}
+              className="mt-1 min-h-[44px]"
+            >
+              {t('addCustom', { name: q.trim() })}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -336,6 +336,7 @@
     "code": "Código",
     "cost": "Costo",
     "tooth": "Pieza",
+    "catalogHint": "Elegí del catálogo o escribí uno nuevo: el precio es final (IVA incluido) y los nuevos pasan a la lista como pendientes.",
     "status": {
       "planned": "Planificado",
       "in_progress": "En curso",
@@ -372,7 +373,17 @@
       "other": "Otro"
     },
     "reference": "Referencia",
-    "exportPdf": "Exportar PDF"
+    "exportPdf": "Exportar PDF",
+    "billVisit": "Facturar visita",
+    "billed": "Facturada",
+    "viewInvoice": "Ver factura",
+    "nothingToBill": "Sin tratamientos para facturar",
+    "included": "incluida",
+    "vatIncluded": "Precios finales, IVA incluido",
+    "addTreatment": "Agregar tratamiento",
+    "treatmentPlaceholder": "Buscar o escribir tratamiento…",
+    "provisional": "pendiente",
+    "addCustom": "Agregar \"{name}\""
   },
   "reports": {
     "title": "Reportes",
@@ -386,6 +397,14 @@
   "settings": {
     "title": "Configuración",
     "clinic": "Clínica",
+    "catalog": "Catálogo de tratamientos",
+    "catalogHint": "Precio definitivo de la consulta + lista compartida. Los nuevos de los odontólogos entran como pendientes.",
+    "catalogDefinitive": "Definitivo",
+    "catalogPending": "Pendiente",
+    "catalogApprove": "Aprobar",
+    "catalogArchive": "Archivar",
+    "catalogNew": "Nuevo tratamiento…",
+    "catalogAdd": "Agregar",
     "clinicName": "Nombre de la clínica",
     "address": "Dirección",
     "taxId": "CUIT/RFC",

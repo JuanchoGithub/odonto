@@ -328,7 +328,8 @@ function NewInvoiceDialog({
             </Button>
           </div>
           <div className="text-right text-sm mt-4">
-            {tCommon('subtotal')}: {formatMoney(Math.round(subtotal * 100), currency, locale)}
+            {tCommon('total')}: {formatMoney(Math.round(subtotal * 100), currency, locale)}
+            <span className="block text-xs text-muted-foreground">{t('vatIncluded')}</span>
           </div>
           {state.error ? <p className="text-sm text-destructive mt-2">{state.error}</p> : null}
           <div className="flex justify-end gap-2 mt-4">

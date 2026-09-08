@@ -337,6 +337,7 @@
     "code": "Code",
     "cost": "Cost",
     "tooth": "Tooth",
+    "catalogHint": "Pick from the catalog or type a new one: price is final (VAT included) and new ones join the list as pending.",
     "status": {
       "planned": "Planned",
       "in_progress": "In progress",
@@ -373,7 +374,17 @@
       "other": "Other"
     },
     "reference": "Reference",
-    "exportPdf": "Export PDF"
+    "exportPdf": "Export PDF",
+    "billVisit": "Bill visit",
+    "billed": "Billed",
+    "viewInvoice": "View invoice",
+    "nothingToBill": "No treatments to bill",
+    "included": "included",
+    "vatIncluded": "Final prices, VAT included",
+    "addTreatment": "Add treatment",
+    "treatmentPlaceholder": "Search or type treatment…",
+    "provisional": "pending",
+    "addCustom": "Add \"{name}\""
   },
   "reports": {
     "title": "Reports",
@@ -387,6 +398,14 @@
   "settings": {
     "title": "Settings",
     "clinic": "Clinic",
+    "catalog": "Treatment catalog",
+    "catalogHint": "Definitive consulta price + shared list. New dentist entries arrive as pending.",
+    "catalogDefinitive": "Definitive",
+    "catalogPending": "Pending",
+    "catalogApprove": "Approve",
+    "catalogArchive": "Archive",
+    "catalogNew": "New treatment…",
+    "catalogAdd": "Add",
     "clinicName": "Clinic name",
     "address": "Address",
     "taxId": "Tax ID",

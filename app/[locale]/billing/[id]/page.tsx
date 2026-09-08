@@ -114,7 +114,7 @@ export default async function InvoiceDetailPage({
               </tr>
               <tr>
                 <td colSpan={4} className="py-2 text-right text-muted-foreground">
-                  {tCommon('tax')}
+                  {tCommon('tax')} <span className="text-xs">({t('vatIncluded')})</span>
                 </td>
                 <td className="py-2 text-right">{formatMoney(invoice.tax_cents, c, l)}</td>
               </tr>

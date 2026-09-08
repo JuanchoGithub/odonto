@@ -25,6 +25,7 @@ export async function createTreatment(fd: FormData) {
   if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
   const d = parsed.data;
   const id = uid();
+  const now = nowIso();
   await query(
     `INSERT INTO treatments (id, patient_id, appointment_id, tooth_number, description, code, cost_cents, tax_kind, status, performed_by, performed_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -39,10 +40,42 @@ export async function createTreatment(fd: FormData) {
       d.tax_kind,
       d.status,
       d.status === 'done' ? user.id : null,
-      d.status === 'done' ? nowIso() : null,
-      nowIso(),
+      d.status === 'done' ? now : null,
+      now,
     ],
   );
+  // Provisional catalog entry: custom descriptions/prices flow into the shared
+  // clinic list for everyone; secretary/admin later mark definitive. Dedup on
+  // normalized description; never auto-create a second consulta kind.
+  try {
+    const desc = d.description.trim();
+    const codeUpper = (d.code ?? '').trim().toUpperCase();
+    const isConsulta = codeUpper === 'CONSULTA';
+    if (desc && !isConsulta) {
+      const existing = await queryOne<{ id: string }>(
+        `SELECT id FROM treatment_catalog WHERE lower(trim(description)) = lower(trim(?)) AND archived_at IS NULL LIMIT 1`,
+        [desc],
+      );
+      if (!existing && (can(user.role, 'catalog:propose') || can(user.role, 'catalog:write'))) {
+        await query(
+          `INSERT INTO treatment_catalog (id, code, description, default_price_cents, tax_kind, kind, is_definitive, created_by, created_at)
+           VALUES (?, ?, ?, ?, ?, 'general', ?, ?, ?)`,
+          [
+            uid(),
+            d.code?.trim() || null,
+            desc,
+            amountToCents(d.cost),
+            d.tax_kind,
+            can(user.role, 'catalog:write') ? 1 : 0,
+            user.id,
+            now,
+          ],
+        );
+      }
+    }
+  } catch {
+    // Provisional catalog is best-effort; treatment creation already succeeded.
+  }
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'treatment', ?)`,
     [uid(), user.id, id],

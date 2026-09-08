@@ -7,6 +7,7 @@ import { UserForm } from '@/components/settings/user-form';
 import { UserActions } from '@/components/settings/user-actions';
 import { UserColorCell } from '@/components/settings/user-color-cell';
 import { MedicalTagsManager } from '@/components/settings/medical-tags-manager';
+import { CatalogManager } from '@/components/settings/catalog-manager';
 import { Badge } from '@/components/ui/badge';
 import { listAllMedicalTags } from '@/server/actions/medical-tags';
 
@@ -165,6 +166,15 @@ export default async function SettingsPage({
             </table>
           </div>
           <UserForm />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('catalog')}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t('catalogHint')}</p>
+        </CardHeader>
+        <CardContent>
+          <CatalogManager />
         </CardContent>
       </Card>
       <Card>

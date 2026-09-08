@@ -244,6 +244,14 @@ export async function updateAppointment(
       }),
     ],
   );
+  if (completed) {
+    try {
+      const { ensureConsultaForAppointment } = await import('./billing');
+      await ensureConsultaForAppointment(data.id, user.id);
+    } catch {
+      // Best-effort; update already succeeded.
+    }
+  }
   revalidatePath('/appointments');
   return { ok: true, id: data.id, reprogrammed: timeChanged };
 }
@@ -308,6 +316,16 @@ export async function updateAppointmentStatus(
       }),
     ],
   );
+  // Completed visits carry a default consulta treatment (never duplicated).
+  // Dynamic import avoids a billing↔appointments cycle.
+  if (next === 'completed') {
+    try {
+      const { ensureConsultaForAppointment } = await import('./billing');
+      await ensureConsultaForAppointment(id, user.id);
+    } catch {
+      // Best-effort; status flip already succeeded.
+    }
+  }
   revalidatePath('/appointments');
   return { ok: true as const };
 }
@@ -427,6 +445,12 @@ export async function sweepOverdueNoShows(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,
         [uid(), markedBy, c.id, JSON.stringify({ status_from: 'scheduled', status_to: 'completed', via: 'auto-attendance', evidence })],
       );
+      try {
+        const { ensureConsultaForAppointment } = await import('./billing');
+        await ensureConsultaForAppointment(c.id, markedBy);
+      } catch {
+        // Best-effort.
+      }
       attended++;
     } else {
       await query(
