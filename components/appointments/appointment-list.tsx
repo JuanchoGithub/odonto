@@ -1,6 +1,8 @@
 'use client';
+import { useMemo } from 'react';
 import { format, type Locale } from 'date-fns';
 import { useTranslations } from 'next-intl';
+import { Phone, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -13,7 +15,16 @@ import {
 import { WhatsappButton } from '@/components/ui/whatsapp-button';
 import { useWhatsapp } from '@/components/whatsapp-provider';
 import { dentistColor } from '@/lib/colors';
+import { statusAccentBar } from '@/components/dashboard/panel-appt-card';
 import type { ApptRow, PendingLinkRow } from '@/server/actions/appointments';
+
+/** True on touch devices (coarse pointer): tap gestures, no hover. */
+function useCoarsePointer(): boolean {
+  return useMemo(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(pointer: coarse)').matches;
+  }, []);
+}
 
 type Labels = {
   date: string;
@@ -25,6 +36,8 @@ type Labels = {
   empty: string;
   pendingTitle: string;
   pending: string;
+  call: string;
+  edit: string;
 };
 
 function statusVariant(s: string) {
@@ -99,6 +112,7 @@ export function AppointmentList({
   statusLabel,
   onAttend,
   attendLabel,
+  onChanged,
 }: {
   appts: ApptRow[];
   pending: PendingLinkRow[];
@@ -109,8 +123,11 @@ export function AppointmentList({
   statusLabel: (s: string) => string;
   onAttend?: (a: ApptRow) => void;
   attendLabel?: string;
+  /** Called after an inline WhatsApp phone capture so the parent can refresh. */
+  onChanged?: () => void;
 }) {
   const { countryCode, templates } = useWhatsapp();
+  const coarse = useCoarsePointer();
   const sorted = [...appts].sort(
     (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
   );
@@ -119,7 +136,10 @@ export function AppointmentList({
     <div className="space-y-6" data-testid="day-agenda">
       {sorted.length > 0 ? (
         <>
-          {/* Mobile cards: full-width rows, 64px+ targets, tel: links. */}
+{/* Mobile cards: full-width rows, 64px+ targets, tel: links.
+              On touch (coarse pointer) tapping an attendable row opens the
+              attend sheet directly (one tap); a pencil button keeps the edit
+              dialog (reschedule / cancel) reachable. */}
           <ul className="space-y-2 md:hidden">
             {sorted.map((a) => {
               const start = new Date(a.starts_at);
@@ -129,20 +149,26 @@ export function AppointmentList({
                 (a.status === 'scheduled' ||
                   a.status === 'arrived' ||
                   a.status === 'in_chair');
+              const tapAttend = coarse && attendable;
               return (
                 <li key={a.id}>
                   <div
-                    role="button"
-                    tabIndex={0}
+                    role={tapAttend ? 'button' : undefined}
+                    tabIndex={tapAttend ? 0 : undefined}
                     data-testid="appt-list-row"
-                    onClick={() => onOpenAppt(a)}
+                    onClick={
+                      tapAttend ? () => onAttend!(a) : () => onOpenAppt(a)
+                    }
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        onOpenAppt(a);
+                        if (tapAttend) onAttend!(a);
+                        else onOpenAppt(a);
                       }
                     }}
-                    className="flex min-h-[64px] w-full items-center gap-3 rounded-xl border bg-card p-3 text-left active:bg-accent"
+                    className={`flex min-h-[64px] w-full items-center gap-3 rounded-xl border bg-card p-3 text-left ${
+                      tapAttend ? 'cursor-pointer active:bg-accent' : ''
+                    }`}
                   >
                     <span
                       aria-hidden
@@ -150,64 +176,94 @@ export function AppointmentList({
                       style={{ backgroundColor: dentistColor(a.dentist_color, a.dentist_id) }}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-base font-semibold">
-                        {a.patient_name}
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-base font-semibold">
+                          {a.patient_name}
+                        </span>
+                        <span className="shrink-0 text-base font-semibold tabular-nums">
+                          {format(start, 'HH:mm')}
+                        </span>
                       </span>
-                      <span className="block text-sm text-muted-foreground">
-                        {format(start, 'EEE d MMM', { locale })} ·{' '}
-                        {format(start, 'HH:mm')}–{format(end, 'HH:mm')} · {a.dentist_name}
+                      <span className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <span
+                          aria-hidden
+                          className={`h-2 w-2 shrink-0 rounded-full ${statusAccentBar(a.status)}`}
+                        />
+                        <span className="truncate">
+                          {format(start, 'EEE d MMM', { locale })} ·{' '}
+                          {format(start, 'HH:mm')}–{format(end, 'HH:mm')}
+                          {a.dentist_name ? ` · ${a.dentist_name}` : null}
+                          {a.reason ? ` · ${a.reason}` : null}
+                        </span>
                       </span>
                       <span className="mt-1 flex flex-wrap items-center gap-2">
                         <Badge variant={statusVariant(a.status)} className="shrink-0">
                           {statusLabel(a.status)}
                         </Badge>
                         <ReprogramBadge count={a.reprogram_count} />
-                        {a.patient_phone ? (
-                          <a
-                            href={`tel:${a.patient_phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex min-h-[44px] items-center text-sm text-primary hover:underline"
-                          >
-                            {a.patient_phone}
-                          </a>
-                        ) : null}
-                        {a.clinic_date && a.start_hhmm ? (
-                          <WhatsappButton
-                            patientId={a.patient_id}
-                            patientPhone={a.patient_phone}
-                            context={{
-                              patientName: a.patient_name,
-                              clinicDate: a.clinic_date,
-                              startHhmm: a.start_hhmm,
-                              dentistName: a.dentist_name,
-                              reason: a.reason,
-                            }}
-                            templates={templates}
-                            countryCode={countryCode}
-                            dentistId={a.dentist_id}
-                            status={a.status}
-                            isFuture={Date.parse(a.starts_at) > Date.now()}
-                            variant="icon"
-                            stopPropagation
-                            className="min-h-[36px] min-w-[36px] border-0"
-                            testId={`list-whatsapp-${a.id}`}
-                          />
-                        ) : null}
                       </span>
                     </span>
-                    {attendable ? (
-                      <button
-                        type="button"
-                        data-testid="appt-attend"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAttend!(a);
-                        }}
-                        className="inline-flex min-h-[48px] min-w-[72px] shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground"
-                      >
-                        {attendLabel ?? 'Attend'}
-                      </button>
-                    ) : null}
+                    <span className="flex shrink-0 items-center gap-1">
+                      {a.patient_phone ? (
+                        <a
+                          href={`tel:${a.patient_phone}`}
+                          aria-label={`${labels.call} ${a.patient_name}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border active:bg-accent"
+                        >
+                          <Phone className="h-5 w-5" />
+                        </a>
+                      ) : null}
+                      {a.clinic_date && a.start_hhmm ? (
+                        <WhatsappButton
+                          patientId={a.patient_id}
+                          patientPhone={a.patient_phone}
+                          context={{
+                            patientName: a.patient_name,
+                            clinicDate: a.clinic_date,
+                            startHhmm: a.start_hhmm,
+                            dentistName: a.dentist_name,
+                            reason: a.reason,
+                          }}
+                          templates={templates}
+                          countryCode={countryCode}
+                          status={a.status}
+                          isFuture={Date.parse(a.starts_at) > Date.now()}
+                          variant="icon"
+                          stopPropagation
+                          onPhoneSaved={onChanged}
+                          className="min-h-[36px] min-w-[36px] border-0"
+                          testId={`list-whatsapp-${a.id}`}
+                        />
+                      ) : null}
+                      {tapAttend ? (
+                        <button
+                          type="button"
+                          data-testid="appt-edit"
+                          aria-label={labels.edit}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenAppt(a);
+                          }}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border active:bg-accent"
+                        >
+                          <Pencil className="h-5 w-5" />
+                        </button>
+                      ) : null}
+                      {attendable && !coarse ? (
+                        <button
+                          type="button"
+                          data-testid="appt-attend"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAttend!(a);
+                          }}
+                          className="inline-flex min-h-[48px] min-w-[72px] shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground"
+                        >
+                          {attendLabel ?? 'Attend'}
+                        </button>
+                      ) : null}
+                    </span>
                   </div>
                 </li>
               );

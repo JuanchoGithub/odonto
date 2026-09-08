@@ -292,11 +292,14 @@ export function WeekCalendar({
               contact: t('contact'),
               pendingTitle: t('pendingLinks'),
               pending: t('status.pending'),
+              call: t('call'),
+              edit: t('edit'),
             }}
             statusLabel={(s) => t(`status.${s}`)}
             attendLabel={t('attend')}
             onOpenAppt={openEdit}
             onAttend={(a) => setAttendAppt(a)}
+            onChanged={refresh}
             onCopyLink={(token) => {
               const url = `${window.location.origin}/pick-turn/${token}`;
               navigator.clipboard.writeText(url).catch(() => undefined);
