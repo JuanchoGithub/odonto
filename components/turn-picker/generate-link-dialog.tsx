@@ -25,6 +25,8 @@ import type { PatientOption } from '@/lib/patient-options';
 import { PatientCombobox } from '@/components/patients/patient-combobox';
 import type { Role } from '@/lib/schemas/common';
 import { useToast } from '@/components/ui/toaster';
+import { useWhatsapp } from '@/components/whatsapp-provider';
+import { waMeUrl } from '@/lib/whatsapp';
 
 const ALLOWED_LINK_DURATIONS = [15, 30, 45, 60, 90, 120];
 
@@ -44,6 +46,7 @@ export function GenerateTurnLinkDialog({
   onOpenChange,
   patientId: fixedPatientId,
   patientName,
+  patientPhone,
   dentists,
   defaultDentistId,
   currentUserId,
@@ -56,6 +59,8 @@ export function GenerateTurnLinkDialog({
   patientId?: string;
   /** Display name of the patient, used for the WhatsApp message. */
   patientName?: string;
+  /** Patient phone, used to open a direct WhatsApp chat. */
+  patientPhone?: string | null;
   dentists: { id: string; name: string; slot_minutes?: number | null }[];
   /** Preselect a dentist (e.g. current user). */
   defaultDentistId?: string;
@@ -69,6 +74,7 @@ export function GenerateTurnLinkDialog({
   const tAppt = useTranslations('appointments');
   const tCommon = useTranslations('common');
   const { push } = useToast();
+  const { countryCode } = useWhatsapp();
   const clinicDefault = clinicDefaultDuration ?? 15;
   const initialDentistId =
     viewerRole === 'dentist' && currentUserId
@@ -196,6 +202,12 @@ export function GenerateTurnLinkDialog({
   function sendWhatsApp(token: string) {
     const linkUrl = `${window.location.origin}/pick-turn/${token}`;
     const msg = t('whatsappMessage', { name: patientName ?? '', link: linkUrl });
+    // Direct chat with the patient when we have a phone; otherwise a share picker.
+    const direct = waMeUrl(patientPhone, msg, countryCode);
+    if (direct) {
+      window.open(direct, '_blank');
+      return;
+    }
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   }
 

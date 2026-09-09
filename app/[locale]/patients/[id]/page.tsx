@@ -89,6 +89,7 @@ export default async function PatientDetailPage({
             <ShareTurnButton
               patientId={id}
               patientName={`${patient.first_name} ${patient.last_name}`}
+              patientPhone={patient.phone}
               dentists={dentists.map((d) => ({
                 id: d.id,
                 name: d.name,

@@ -9,6 +9,7 @@ import type { Role } from '@/lib/schemas/common';
 export function ShareTurnButton({
   patientId,
   patientName,
+  patientPhone,
   dentists,
   currentUserId,
   role,
@@ -16,6 +17,7 @@ export function ShareTurnButton({
 }: {
   patientId: string;
   patientName?: string;
+  patientPhone?: string | null;
   dentists: { id: string; name: string; slot_minutes?: number | null }[];
   currentUserId: string;
   role: Role;
@@ -42,6 +44,7 @@ export function ShareTurnButton({
         onOpenChange={setOpen}
         patientId={patientId}
         patientName={patientName}
+        patientPhone={patientPhone}
         dentists={dentists}
         defaultDentistId={preselect}
         currentUserId={currentUserId}
