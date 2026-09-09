@@ -266,12 +266,12 @@ export async function listPatients(q?: string, limit = 200) {
       `SELECT * FROM patients
        WHERE deleted_at IS NULL
          AND (first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' OR document_id LIKE ? ESCAPE '\\' OR phone LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\')
-       ORDER BY last_name, first_name LIMIT ?`,
+       ORDER BY first_name, last_name LIMIT ?`,
       [like, like, like, like, like, safeLimit],
     );
   }
   return query<PatientRow>(
-    'SELECT * FROM patients WHERE deleted_at IS NULL ORDER BY last_name, first_name LIMIT ?',
+    'SELECT * FROM patients WHERE deleted_at IS NULL ORDER BY first_name, last_name LIMIT ?',
     [safeLimit],
   );
 }
