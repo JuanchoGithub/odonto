@@ -54,6 +54,10 @@ const copy: Record<string, Record<'es' | 'en', string>> = {
     en: 'This link has already been used',
   },
   expired: { es: 'Este enlace expiró', en: 'This link expired' },
+  revoked: {
+    es: 'Este enlace fue revocado',
+    en: 'This link was revoked',
+  },
   subtitle: {
     es: 'Si creés que es un error, contactá a la clínica.',
     en: 'If you think this is a mistake, contact the clinic.',
@@ -64,7 +68,7 @@ function InvalidLink({
   reason,
   locale,
 }: {
-  reason: 'invalid' | 'consumed' | 'expired';
+  reason: 'invalid' | 'consumed' | 'expired' | 'revoked';
   locale: 'es' | 'en';
 }) {
   return (

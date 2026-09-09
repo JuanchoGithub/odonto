@@ -38,7 +38,9 @@
     "searching": "Buscando…",
     "noResults": "Sin resultados",
     "syncHint": "Cambios sin sincronizar. Toca para sincronizar ahora.",
-    "syncPending": "Sin sincronizar: {n}"
+    "syncPending": "Sin sincronizar: {n}",
+    "refresh": "Actualizar",
+    "refreshing": "Actualizando…"
   },
   "nav": {
     "dashboard": "Panel",
@@ -542,6 +544,12 @@
     "copied": "¡Enlace copiado!",
     "idleNotice": "También vence automáticamente 5 días después de su creación si no se usa.",
     "activeLinks": "Enlaces activos",
+    "copyLink": "Copiar enlace",
+    "whatsapp": "Enviar por WhatsApp",
+    "revoke": "Revocar",
+    "revoked": "Enlace revocado",
+    "revokeConfirm": "¿Revocar este enlace? El paciente ya no podrá usarlo.",
+    "whatsappMessage": "Hola {name}, sentite libre de elegir un turno disponible usando este enlace: {link}",
     "publicTitle": "Reservá tu turno",
     "publicSubtitle": "Elegí día y horario disponible",
     "noSlots": "No hay horarios disponibles en los próximos días",

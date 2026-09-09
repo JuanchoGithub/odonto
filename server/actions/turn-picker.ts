@@ -33,6 +33,7 @@ export type TurnPickerLinkRow = {
   slot_minutes: number;
   expires_at: string;
   used_at: string | null;
+  revoked_at: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -97,7 +98,7 @@ export type PublicLinkInfo = {
   timezone: string;
 } | {
   ok: false;
-  reason: 'invalid' | 'consumed' | 'expired';
+  reason: 'invalid' | 'consumed' | 'expired' | 'revoked';
 };
 
 export async function getPublicLinkInfo(token: string): Promise<PublicLinkInfo> {
@@ -108,7 +109,7 @@ export async function getPublicLinkInfo(token: string): Promise<PublicLinkInfo> 
   if (!link) return { ok: false, reason: 'invalid' };
   const status = linkStatus(link);
   if (status !== 'active') {
-    return { ok: false, reason: status === 'consumed' ? 'consumed' : 'expired' };
+    return { ok: false, reason: status === 'consumed' ? 'consumed' : status === 'revoked' ? 'revoked' : 'expired' };
   }
   const [p, d, tz] = await Promise.all([
     queryOne<{ first_name: string; last_name: string }>(
@@ -154,7 +155,7 @@ export async function getAvailability(
 
 export type BookResult =
   | { ok: true; startsAt: string; endsAt: string }
-  | { ok: false; reason: 'invalid' | 'consumed' | 'expired' | 'slot_unavailable' | 'conflict' };
+  | { ok: false; reason: 'invalid' | 'consumed' | 'expired' | 'revoked' | 'slot_unavailable' | 'conflict' };
 
 export async function bookViaPicker(
   token: string,
@@ -167,7 +168,7 @@ export async function bookViaPicker(
   if (!link) return { ok: false, reason: 'invalid' };
   const status = linkStatus(link);
   if (status !== 'active') {
-    return { ok: false, reason: status === 'consumed' ? 'consumed' : 'expired' };
+    return { ok: false, reason: status === 'consumed' ? 'consumed' : status === 'revoked' ? 'revoked' : 'expired' };
   }
 
   const start = new Date(slotStartIso);
@@ -256,6 +257,32 @@ export async function listLinksForPatient(
     ...r,
     status: linkStatus(r),
   }));
+}
+
+export async function revokeTurnPickerLink(
+  linkId: string,
+): Promise<{ ok: true } | { ok: false; error: 'forbidden' | 'not_found' }> {
+  const user = await requireUser();
+  if (!can(user.role, 'appointments:share')) return { ok: false, error: 'forbidden' };
+  const link = await queryOne<{ id: string; patient_id: string; used_at: string | null; revoked_at: string | null }>(
+    'SELECT id, patient_id, used_at, revoked_at FROM turn_picker_links WHERE id = ?',
+    [linkId],
+  );
+  if (!link) return { ok: false, error: 'not_found' };
+  // Already consumed/revoked — nothing to do.
+  if (link.used_at || link.revoked_at) return { ok: true };
+  const at = nowIso();
+  await query(
+    `UPDATE turn_picker_links SET revoked_at = ? WHERE id = ? AND used_at IS NULL AND revoked_at IS NULL`,
+    [at, linkId],
+  );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+     VALUES (?, ?, 'revoke', 'turn_picker_link', ?, ?)`,
+    [uid(), user.id, linkId, JSON.stringify({ patient_id: link.patient_id, at })],
+  );
+  revalidatePath(`/patients/${link.patient_id}`);
+  return { ok: true };
 }
 
 export async function listDentists(): Promise<{ id: string; name: string }[]> {

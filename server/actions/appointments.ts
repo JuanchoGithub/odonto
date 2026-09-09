@@ -603,7 +603,7 @@ export async function listPendingTurnLinks(): Promise<PendingLinkRow[]> {
      JOIN patients p ON p.id = l.patient_id
      JOIN users u ON u.id = l.dentist_id
      LEFT JOIN users cu ON cu.id = l.created_by
-     WHERE l.used_at IS NULL
+     WHERE l.used_at IS NULL AND l.revoked_at IS NULL
      ORDER BY l.created_at DESC`,
   );
   // Exclude expired links server-side (effective expiry = min(expires_at, created+idle)).

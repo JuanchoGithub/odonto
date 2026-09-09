@@ -1,6 +1,6 @@
 import { TURN_PICKER_IDLE_MS } from './config';
 
-export type LinkStatus = 'active' | 'consumed' | 'expired';
+export type LinkStatus = 'active' | 'consumed' | 'expired' | 'revoked';
 
 /** Effective expiry = min(expires_at, created_at + idle window). */
 export function effectiveExpiryMs(link: {
@@ -12,10 +12,16 @@ export function effectiveExpiryMs(link: {
 }
 
 export function linkStatus(
-  link: { used_at: string | null; expires_at: string; created_at: string },
+  link: {
+    used_at: string | null;
+    revoked_at?: string | null;
+    expires_at: string;
+    created_at: string;
+  },
   now = Date.now(),
 ): LinkStatus {
   if (link.used_at) return 'consumed';
+  if (link.revoked_at) return 'revoked';
   if (now > effectiveExpiryMs(link)) return 'expired';
   return 'active';
 }

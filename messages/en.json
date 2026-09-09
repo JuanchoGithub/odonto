@@ -38,7 +38,9 @@
     "searching": "Searching…",
     "noResults": "No results",
     "syncHint": "Unsynced changes. Tap to sync now.",
-    "syncPending": "Pending sync: {n}"
+    "syncPending": "Pending sync: {n}",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -544,6 +546,12 @@
     "copied": "Link copied!",
     "idleNotice": "Also auto-expires 5 days after creation if unused.",
     "activeLinks": "Active links",
+    "copyLink": "Copy link",
+    "whatsapp": "Send via WhatsApp",
+    "revoke": "Revoke",
+    "revoked": "Link revoked",
+    "revokeConfirm": "Revoke this link? The patient will no longer be able to use it.",
+    "whatsappMessage": "Hello {name}, feel free to select an available turn using this link: {link}",
     "publicTitle": "Book your appointment",
     "publicSubtitle": "Pick a day and time",
     "noSlots": "No available slots in the next days",

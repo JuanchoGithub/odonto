@@ -88,6 +88,7 @@ export default async function PatientDetailPage({
           <div className="flex shrink-0 items-center gap-2 pt-1">
             <ShareTurnButton
               patientId={id}
+              patientName={`${patient.first_name} ${patient.last_name}`}
               dentists={dentists.map((d) => ({
                 id: d.id,
                 name: d.name,

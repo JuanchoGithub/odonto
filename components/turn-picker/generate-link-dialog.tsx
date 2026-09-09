@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
-import { X, Copy, Check, Link2, Share } from 'lucide-react';
+import { X, Copy, Check, Link2, Share, Send, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,7 @@ import { PatientForm } from '@/components/patients/patient-form';
 import {
   createTurnPickerLink,
   listLinksForPatient,
+  revokeTurnPickerLink,
   type TurnPickerLinkListItem,
 } from '@/server/actions/turn-picker';
 import type { PatientRow } from '@/server/actions/patients';
@@ -42,6 +43,7 @@ export function GenerateTurnLinkDialog({
   open,
   onOpenChange,
   patientId: fixedPatientId,
+  patientName,
   dentists,
   defaultDentistId,
   currentUserId,
@@ -52,6 +54,8 @@ export function GenerateTurnLinkDialog({
   onOpenChange: (b: boolean) => void;
   /** If provided, the patient is locked to this id (e.g. from patient page). */
   patientId?: string;
+  /** Display name of the patient, used for the WhatsApp message. */
+  patientName?: string;
   dentists: { id: string; name: string; slot_minutes?: number | null }[];
   /** Preselect a dentist (e.g. current user). */
   defaultDentistId?: string;
@@ -177,6 +181,37 @@ export function GenerateTurnLinkDialog({
       }
     }
     copy(true);
+  }
+
+  async function copyLink(token: string) {
+    const linkUrl = `${window.location.origin}/pick-turn/${token}`;
+    try {
+      await navigator.clipboard.writeText(linkUrl);
+      push({ title: t('copied'), variant: 'success' });
+    } catch {
+      push({ title: t('copyFailed'), variant: 'destructive' });
+    }
+  }
+
+  function sendWhatsApp(token: string) {
+    const linkUrl = `${window.location.origin}/pick-turn/${token}`;
+    const msg = t('whatsappMessage', { name: patientName ?? '', link: linkUrl });
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
+  async function revokeLink(linkId: string) {
+    if (!window.confirm(t('revokeConfirm'))) return;
+    const res = await revokeTurnPickerLink(linkId);
+    if (res.ok) {
+      push({ title: t('revoked'), variant: 'success' });
+      setLinks((prev) =>
+        prev
+          .map((l) =>
+            l.id === linkId ? { ...l, status: 'revoked' as const } : l,
+          )
+          .filter((l) => l.status === 'active'),
+      );
+    }
   }
 
   const activeLinks = links.filter((l) => l.status === 'active');
@@ -308,17 +343,46 @@ export function GenerateTurnLinkDialog({
               <p className="text-xs font-medium text-muted-foreground">
                 {t('activeLinks')}
               </p>
-              <ul className="space-y-1 text-xs">
+              <ul className="space-y-2 text-xs">
                 {activeLinks.map((l) => (
                   <li
                     key={l.id}
-                    className="flex items-center gap-2 text-muted-foreground"
+                    className="flex items-center gap-2 rounded-lg border p-2"
                   >
-                    <Link2 className="h-3 w-3" />
-                    <span className="truncate">
+                    <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-muted-foreground">
                       {l.dentist_name} · {l.slot_minutes} min ·{' '}
                       {new Date(l.created_at).toLocaleDateString()}
                     </span>
+                    <div className="ml-auto flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => copyLink(l.token)}
+                        aria-label={t('copyLink')}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => sendWhatsApp(l.token)}
+                        aria-label={t('whatsapp')}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => revokeLink(l.id)}
+                        aria-label={t('revoke')}
+                      >
+                        <Ban className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
