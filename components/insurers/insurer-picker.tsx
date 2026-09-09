@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useState } from 'react';
 import { useServerSearch } from '@/lib/hooks/use-server-search';
+import { useEnsureSeeded } from '@/lib/store/sync';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, Plus, X } from 'lucide-react';
@@ -44,15 +45,17 @@ export function InsurerPicker({
     plan: initialPlan ?? '',
   });
 
-  // Server-driven search (name/plan) — refetches after the inline
-  // "new insurer" dialog closes so the fresh record shows up.
-  const fetchInsurers = useCallback(async (q: string, signal: AbortSignal) => {
-    const r = await fetch(`/api/insurers?q=${encodeURIComponent(q)}`, {
-      signal,
-    });
-    if (!r.ok) return [];
-    const data = await r.json();
-    return Array.isArray(data) ? (data as InsurerOption[]) : [];
+  // Ensure the insurers snapshot is seeded on fresh sessions.
+  useEnsureSeeded({ snaps: ['insurers'] });
+
+  // Store-backed search (name/plan) — zero invocations. Refreshes after
+  // the inline "new insurer" dialog closes so the fresh record shows up.
+  const fetchInsurers = useCallback(async (q: string, _signal: AbortSignal) => {
+    const { searchInsurersLocal, ensureInsurersSeeded } = await import('@/lib/store/options');
+    await ensureInsurersSeeded();
+    return searchInsurersLocal(q, 50).map(
+      (r): InsurerOption => ({ id: r.id, name: r.name, plan: r.plan }),
+    );
   }, []);
   const {
     query,
@@ -238,28 +241,34 @@ function NewInsurerDialog({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     e.stopPropagation();
+    // Read the form synchronously: React nulls currentTarget after awaits.
+    const fd = new FormData(e.currentTarget);
     setSaving(true);
     setError(null);
     try {
-      const fd = new FormData(e.currentTarget);
-      const payload = {
-        name: fd.get('name'),
-        plan: fd.get('plan') || undefined,
-        phone: fd.get('phone') || undefined,
-        email: fd.get('email') || undefined,
-        notes: fd.get('notes') || undefined,
-      };
-      const r = await fetch('/api/insurers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await r.json();
-      if (!r.ok) {
-        setError(data?.error === 'duplicate' ? t('duplicate') : tCommon('cancel'));
+      // Offline-first: queue locally, flush at sync (zero invocations).
+      const { queueInsurerCreate } = await import('@/lib/store/write');
+      const name = String(fd.get('name') ?? '').trim();
+      if (!name) {
+        setError(tCommon('cancel'));
         return;
       }
-      onCreated({ id: data.id, name: data.name, plan: data.plan });
+      const { getSnapRows } = await import('@/lib/store/snapshots');
+      const dup = (getSnapRows('insurers') as { name: string }[]).some(
+        (r) => r.name.trim().toLowerCase() === name.toLowerCase(),
+      );
+      if (dup) {
+        setError(t('duplicate'));
+        return;
+      }
+      const id = queueInsurerCreate({
+        name,
+        plan: fd.get('plan') || null,
+        phone: fd.get('phone') || null,
+        email: fd.get('email') || null,
+        notes: fd.get('notes') || null,
+      });
+      onCreated({ id, name, plan: String(fd.get('plan') ?? '') || null });
     } catch {
       setError(tCommon('cancel'));
     } finally {
@@ -273,6 +282,7 @@ function NewInsurerDialog({
         {/* No overlay: the parent dialog's overlay is already in place.
             Adding a second overlay here would block clicks on the parent. */}
         <Dialog.Content
+          data-testid="new-insurer-dialog"
           className="fixed inset-x-0 bottom-0 z-[100] w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-md sm:max-h-[90vh]"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}

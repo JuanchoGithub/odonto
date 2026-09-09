@@ -4,6 +4,7 @@ import { Link, usePathname, useRouter } from '@/lib/navigation';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { SyncBadge } from '@/components/sync-badge';
 import { cn } from '@/lib/utils';
 import {
   Activity,
@@ -103,6 +104,7 @@ export function TopNav({
             <span className="hidden sm:inline text-xs text-muted-foreground">{currency}</span>
           ) : null}
           <span className="hidden sm:inline text-sm text-muted-foreground">{user.name}</span>
+          <SyncBadge />
           <ThemeToggle />
           <Button
             variant="ghost"

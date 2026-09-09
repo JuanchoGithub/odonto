@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DoctorPanel } from '@/components/dashboard/doctor-panel';
 import { SecretaryPanel } from '@/components/dashboard/secretary-panel';
 import { getClinicDefaultDuration } from '@/server/actions/dentist-schedules';
+import { getClinicTimezone } from '@/lib/availability';
 
 type Clinic = { id: string; name: string; currency: string; locale: string };
 
@@ -31,6 +32,9 @@ export default async function DashboardPage({
           [user.id],
         )
       : null;
+  // Offline-first store: panels compute from cached snapshots using the
+  // clinic timezone (passed once at SSR, no per-poll server formatting).
+  const clinicTz = await getClinicTimezone();
 
   return (
     <div className="container py-4 md:py-8 space-y-4 md:space-y-6">
@@ -45,6 +49,7 @@ export default async function DashboardPage({
             name: user.name ?? '',
             slot_minutes: dentistRow?.slot_minutes ?? null,
           }}
+          clinicTz={clinicTz}
         />
       ) : user.role === 'receptionist' ? (
         <SecretaryPanel
@@ -54,6 +59,7 @@ export default async function DashboardPage({
           currency={clinic.currency}
           locale={clinic.locale}
           clinicDefaultDuration={await getClinicDefaultDuration()}
+          clinicTz={clinicTz}
         />
       ) : (
         <AdminCards clinic={clinic} />

@@ -157,24 +157,24 @@ async function run() {
       .replace('T', ' ')
       .slice(0, 19);
     await db.execute({
-      sql: `INSERT INTO appointments (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_at)
-            VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
-      args: [apptId, patientId, dentistId, starts, starts, 'Limpieza', '', now],
+      sql: `INSERT INTO appointments (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?)`,
+      args: [apptId, patientId, dentistId, starts, starts, 'Limpieza', '', now, now],
     });
     const treatmentId = randomUUID();
     const cost = 5000_00;
     await db.execute({
-      sql: `INSERT INTO treatments (id, patient_id, appointment_id, tooth_number, description, code, cost_cents, tax_kind, status, performed_by, performed_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'standard', 'done', ?, ?, ?)`,
-      args: [treatmentId, patientId, apptId, 16, 'Limpieza dental', 'D1110', cost, dentistId, starts, now],
+      sql: `INSERT INTO treatments (id, patient_id, appointment_id, tooth_number, description, code, cost_cents, tax_kind, status, performed_by, performed_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'standard', 'done', ?, ?, ?, ?)`,
+      args: [treatmentId, patientId, apptId, 16, 'Limpieza dental', 'D1110', cost, dentistId, starts, now, now],
     });
     const invoiceId = randomUUID();
     const number = `F-${String(1000 + i).padStart(5, '0')}`;
     const tax = Math.round(cost * 0.21);
     await db.execute({
-      sql: `INSERT INTO invoices (id, patient_id, number, issued_at, status, subtotal_cents, tax_cents, total_cents, notes, clinic_id)
-            VALUES (?, ?, ?, ?, 'paid', ?, ?, ?, ?, ?)`,
-      args: [invoiceId, patientId, number, starts, cost, tax, cost + tax, '', clinicId],
+      sql: `INSERT INTO invoices (id, patient_id, number, issued_at, status, subtotal_cents, tax_cents, total_cents, notes, clinic_id, updated_at)
+            VALUES (?, ?, ?, ?, 'paid', ?, ?, ?, ?, ?, ?)`,
+      args: [invoiceId, patientId, number, starts, cost, tax, cost + tax, '', clinicId, now],
     });
     await db.execute({
       sql: `INSERT INTO invoice_lines (id, invoice_id, treatment_id, description, quantity, unit_price_cents, tax_kind, tax_bps, total_cents)
@@ -182,9 +182,9 @@ async function run() {
       args: [randomUUID(), invoiceId, treatmentId, cost, cost],
     });
     await db.execute({
-      sql: `INSERT INTO payments (id, invoice_id, paid_at, method, amount_cents, reference)
-            VALUES (?, ?, ?, 'card', ?, ?)`,
-      args: [randomUUID(), invoiceId, starts, cost + tax, `REF-${i}`],
+      sql: `INSERT INTO payments (id, invoice_id, paid_at, method, amount_cents, reference, updated_at)
+            VALUES (?, ?, ?, 'card', ?, ?, ?)`,
+      args: [randomUUID(), invoiceId, starts, cost + tax, `REF-${i}`, now],
     });
   }
 

@@ -1,23 +1,20 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * Click Save on the insurer form and land on the detail page.
- * Fast path: the server action redirects to /insurers/[id].
- * Slow path: under suite load the action can complete server-side (row +
- * audit_log written) while its redirect response never lands client-side —
- * the button stays "Loading…" forever. In that case recover via the list.
+ * Click Save on the insurer form (offline-first: queues locally, lands on
+ * the list), flush via the pending-sync badge, and open the detail page.
  */
 async function saveInsurerAndOpenDetail(page: Page, name: string) {
   await page.getByRole('button', { name: /guardar|save/i }).click();
-  const redirected = await page
-    .waitForURL(/\/insurers\/[a-f0-9-]{36}$/, { timeout: 10_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (redirected) return page.url();
-  await page.goto('/insurers');
-  const link = page.locator('.md\\:block').getByRole('link', { name });
-  await expect(link).toBeVisible({ timeout: 10_000 });
-  await link.click();
+  await page.waitForURL(/\/(es|en)\/insurers$/, { timeout: 10_000 });
+  const badge = page.getByTestId('sync-badge');
+  await badge.click({ timeout: 15_000 });
+  await badge.waitFor({ state: 'hidden', timeout: 30_000 });
+  const res = await page.request.get(`/api/insurers?q=${encodeURIComponent(name)}`);
+  expect(res.ok()).toBeTruthy();
+  const list = (await res.json()) as { id: string }[];
+  expect(list.length).toBeGreaterThan(0);
+  await page.goto(`/insurers/${list[0].id}`);
   await page.waitForURL(/\/insurers\/[a-f0-9-]{36}$/, { timeout: 10_000 });
   return page.url();
 }
@@ -39,11 +36,14 @@ test('admin can create, view, edit, delete an insurer', async ({ page }) => {
   const detailUrl = await saveInsurerAndOpenDetail(page, name);
   await expect(page.getByRole('heading', { name })).toBeVisible();
 
-  // 2. Edit via the same detail page
+  // 2. Edit via the same detail page (queued: flush, then verify)
   const nameInput = page.locator('input[name="name"]');
   await nameInput.fill(`${name} v2`);
   await page.getByRole('button', { name: /guardar|save/i }).click();
   await expect(page.getByText('Saved')).toBeVisible();
+  const badge = page.getByTestId('sync-badge');
+  await badge.click({ timeout: 15_000 });
+  await badge.waitFor({ state: 'hidden', timeout: 30_000 });
 
   // 3. Verify via list — target the desktop table (the mobile card list is hidden at desktop sizes)
   await page.goto('/insurers');

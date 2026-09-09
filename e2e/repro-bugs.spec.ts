@@ -71,7 +71,7 @@ test('repro: insurance onboarding form receives clicks (not the patient form)', 
     .getByRole('button', { name: /nuevo paciente|new patient/i })
     .click();
 
-  const newPatientDialog = page.getByRole('dialog').last();
+  const newPatientDialog = page.getByTestId('new-patient-dialog');
   await expect(newPatientDialog).toBeVisible();
 
   // Required patient fields
@@ -89,7 +89,7 @@ test('repro: insurance onboarding form receives clicks (not the patient form)', 
     .click();
 
   // Insurer dialog is now open. The form inputs must be interactive.
-  const insurerDialog = page.getByRole('dialog').last();
+  const insurerDialog = page.getByTestId('new-insurer-dialog');
   await expect(insurerDialog).toBeVisible();
   const stamp = Date.now();
   const insurerName = `OS BugRepro ${stamp}`;
@@ -100,22 +100,32 @@ test('repro: insurance onboarding form receives clicks (not the patient form)', 
   await nameInput.fill(insurerName);
   await expect(nameInput).toHaveValue(insurerName);
 
-  // Save the insurer — the patient dialog should remain open.
-  const postResp = page.waitForResponse(
-    (r) =>
-      r.url().includes('/api/insurers') && r.request().method() === 'POST',
-    { timeout: 10_000 },
-  );
+  // Save the insurer (offline-first: queued locally, zero invocations) —
+  // the insurer dialog closes, the patient dialog should remain open.
   await insurerDialog
     .getByRole('button', { name: /^guardar$|^save$/i })
     .click();
-  const resp = await postResp;
-  expect(resp.status()).toBe(201);
+  await expect(insurerDialog).toBeHidden({ timeout: 10_000 });
 
   // The new patient dialog should still be visible (not closed)
   await expect(newPatientDialog).toBeVisible();
 
-  // The insurer is persisted
+  // Close the patient dialog (the queued insurer survives in localStorage),
+  // then flush the queue via the pending-sync badge and verify server-side.
+  // NOTE: closing the topmost dialog reveals the appointment dialog
+  // underneath (Radix un-hides it), so scope the cancel click explicitly.
+  await newPatientDialog
+    .getByRole('button', { name: /cancelar|cancel/i })
+    .click();
+  await expect(newPatientDialog).toBeHidden({ timeout: 10_000 });
+  // The appointment dialog is still open here; close it to reach the badge.
+  const apptDialog2 = page.getByTestId('add-appt-dialog');
+  if (await apptDialog2.isVisible().catch(() => false)) {
+    await apptDialog2.getByRole('button', { name: /cancelar|cancel/i }).first().click().catch(() => {});
+  }
+  const badge = page.getByTestId('sync-badge');
+  await badge.click({ timeout: 15_000 });
+  await badge.waitFor({ state: 'hidden', timeout: 30_000 });
   const list = await (await page.request.get('/api/insurers')).json();
   expect(list.find((i: any) => i.name === insurerName)).toBeTruthy();
 });

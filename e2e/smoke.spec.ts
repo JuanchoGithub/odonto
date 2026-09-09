@@ -38,8 +38,13 @@ test('full smoke: login → dashboard → create patient → view detail', async
   await page.getByLabel(/documento|id document/i).fill(String(stamp));
   await page.getByRole('button', { name: /guardar|save/i }).click();
 
-  // After save, redirects to /patients/{id}
-  await page.waitForURL(/\/patients\/[a-f0-9-]{36}$/, { timeout: 15_000 });
+  // Offline-first: save queues locally and lands on the list with a
+  // pending-sync badge. Forcing the sync flushes the patient to the DB.
+  await page.waitForURL(/\/(es|en)\/patients$/, { timeout: 15_000 });
+  const badge = page.getByTestId('sync-badge');
+  await expect(badge).toBeVisible({ timeout: 15_000 });
+  await badge.click();
+  await expect(badge).toBeHidden({ timeout: 30_000 });
 
   // Back to list — newly created patient should be searchable
   await page.goto(`/patients?q=${lastName}`);

@@ -20,6 +20,7 @@ export function SearchSuggest<T extends { id: string }>({
   initial = '',
   placeholder,
   fetchUrl,
+  fetchItems: fetchItemsProp,
   renderItem,
   getHref,
   optionTestId,
@@ -27,7 +28,9 @@ export function SearchSuggest<T extends { id: string }>({
   initial?: string;
   placeholder: string;
   /** Builds the JSON endpoint for a query (already-trimmed). */
-  fetchUrl: (q: string) => string;
+  fetchUrl?: (q: string) => string;
+  /** Local (zero-invocation) fetcher. Takes precedence when provided. */
+  fetchItems?: (q: string, signal: AbortSignal) => Promise<T[]>;
   renderItem: (item: T) => React.ReactNode;
   getHref: (item: T) => string;
   optionTestId: string;
@@ -41,12 +44,14 @@ export function SearchSuggest<T extends { id: string }>({
 
   const fetchItems = useCallback(
     async (q: string, signal: AbortSignal) => {
+      if (fetchItemsProp) return fetchItemsProp(q, signal);
+      if (!fetchUrl) return [];
       const r = await fetch(fetchUrl(q), { signal });
       if (!r.ok) return [];
       const data = await r.json();
       return Array.isArray(data) ? (data as T[]) : [];
     },
-    [fetchUrl],
+    [fetchUrl, fetchItemsProp],
   );
 
   const { query, setQuery, items, loading } = useServerSearch<T>({

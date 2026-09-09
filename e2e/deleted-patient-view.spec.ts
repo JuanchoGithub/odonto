@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { flushQueueAndOpenPatient } from './helpers';
 test('deleted patient shows banner + restore', async ({ page }) => {
   await page.goto('/login');
   await page.getByLabel('Email').fill('doc@local');
@@ -11,8 +12,7 @@ test('deleted patient shows banner + restore', async ({ page }) => {
   await page.getByLabel(/first name|nombre/i).fill('ToRestore');
   await page.getByLabel(/last name|apellido/i).fill(`Restore${stamp}`);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
-  await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
-  const detailUrl = page.url();
+  const detailUrl = await flushQueueAndOpenPatient(page, `Restore${stamp}`);
 
   await page.getByTestId('delete-patient').click();
   const dialog = page.getByRole('dialog');

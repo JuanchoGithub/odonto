@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,11 +16,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import { createTreatment, type TreatmentRow } from '@/server/actions/treatments';
+import type { TreatmentRow } from '@/server/actions/treatments';
 import { useRouter } from '@/lib/navigation';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
+import { useDeltaRows } from '@/lib/store/snapshots';
+import { runSync, useAutoSync, useEnsureSeeded } from '@/lib/store/sync';
 
 export function PatientTreatments({
   patientId,
@@ -34,14 +36,20 @@ export function PatientTreatments({
   const t = useTranslations('treatments');
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const [list, setList] = useState<TreatmentRow[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Treatments come from the offline-first store (zero invocations).
+  useEnsureSeeded({ deltas: ['treatments'] });
+  const storeTreatments = useDeltaRows('treatments');
+  useAutoSync();
+  const list: TreatmentRow[] | null = useMemo(
+    () =>
+      storeTreatments
+        .filter((r) => r.patient_id === patientId)
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1)),
+    [storeTreatments, patientId],
+  );
 
-  async function refresh() {
-    setLoading(true);
-    const res = await fetch(`/api/treatments?patient_id=${patientId}`);
-    if (res.ok) setList(await res.json());
-    setLoading(false);
+  function refresh() {
+    void runSync();
   }
 
   return (
@@ -94,20 +102,8 @@ function TreatmentsTable({
 }) {
   const t = useTranslations('treatments');
   const tCommon = useTranslations('common');
-  const [rows, setRows] = useState<TreatmentRow[] | null>(list);
-  const [loading, setLoading] = useState(false);
-
-  if (list && list !== rows) setRows(list);
-
-  useEffect(() => {
-    let mounted = true;
-    fetch(`/api/treatments?patient_id=${patientId}`)
-      .then((r) => r.json())
-      .then((data) => mounted && setRows(data));
-    return () => {
-      mounted = false;
-    };
-  }, [patientId]);
+  // Rows come from the parent's store projection (zero invocations).
+  const rows = list;
 
   if (!rows) return <p className="text-sm text-muted-foreground">…</p>;
   if (rows.length === 0)
@@ -233,10 +229,33 @@ function TreatmentDialog({
       return;
     }
     const id = setTimeout(() => {
-      fetch(`/api/catalog${desc.trim() ? `?q=${encodeURIComponent(desc.trim())}` : ''}`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((rows) => setOptions(Array.isArray(rows) ? rows.slice(0, 6) : []))
-        .catch(() => {});
+      // Store-backed catalog type-ahead (zero invocations).
+      import('@/lib/store/options').then(async ({ getCatalogRows, ensureCatalogSeeded }) => {
+        await ensureCatalogSeeded();
+        const needle = desc.trim().toLowerCase();
+        const rows = getCatalogRows().filter(
+          (c) =>
+            !needle ||
+            c.description.toLowerCase().includes(needle) ||
+            (c.code ?? '').toLowerCase().includes(needle),
+        );
+        setOptions(
+          rows
+            .sort((a, b) =>
+              Number(b.is_definitive) - Number(a.is_definitive) ||
+              (a.description < b.description ? -1 : 1),
+            )
+            .slice(0, 6)
+            .map((c) => ({
+              id: c.id,
+              code: c.code,
+              description: c.description,
+              default_price_cents: c.default_price_cents,
+              tax_kind: c.tax_kind,
+              is_definitive: Number(c.is_definitive),
+            })),
+        );
+      }).catch(() => {});
     }, desc.trim() ? 250 : 0);
     return () => clearTimeout(id);
   }, [desc, open]);
@@ -252,14 +271,22 @@ function TreatmentDialog({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
-    fd.set('patient_id', patientId);
-    fd.set('description', desc);
-    fd.set('code', code);
-    fd.set('cost', cost);
-    fd.set('tax_kind', taxKind);
-    await createTreatment(fd);
-    setLoading(false);
+    try {
+      // Offline-first: queue locally, flush at sync (zero invocations).
+      const { queueTreatmentCreate } = await import('@/lib/store/write');
+      queueTreatmentCreate({
+        patient_id: patientId,
+        appointment_id: null,
+        tooth_number: null,
+        description: desc,
+        code: code || null,
+        cost: Number(String(cost).replace(',', '.')) || 0,
+        tax_kind: taxKind,
+        status: 'planned',
+      });
+    } finally {
+      setLoading(false);
+    }
     onOpenChange(false);
   }
 

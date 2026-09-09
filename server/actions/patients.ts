@@ -1,40 +1,12 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 import { syncTagsFromField } from '@/server/actions/medical-tags';
 import { MEDICAL_TAG_FIELDS } from '@/lib/medical-tags';
-
-const PatientSchema = z.object({
-  first_name: z.string().min(1),
-  last_name: z.string().min(1),
-  document_id: z.string().optional().nullable(),
-  birth_date: z.string().optional().nullable(),
-  gender: z.enum(['male', 'female', 'other', '']).optional().nullable(),
-  phone: z.string().optional().nullable(),
-  email: z.string().email().optional().nullable().or(z.literal('')),
-  address: z.string().optional().nullable(),
-  insurance_provider: z.string().optional().nullable(),
-  insurance_number: z.string().optional().nullable(),
-  insurer_id: z.string().optional().nullable(),
-  insurance_plan: z.string().optional().nullable(),
-  medical_history: z.string().optional().nullable(),
-  allergies: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
-  // Clinical summary fields (Médico / Medical tab)
-  chronic_conditions: z.string().optional().nullable(),
-  contagious_diseases: z.string().optional().nullable(),
-  current_medications: z.string().optional().nullable(),
-  allergies_medication: z.string().optional().nullable(),
-  blood_pressure: z.string().optional().nullable(),
-  blood_type: z.string().optional().nullable(),
-  diabetes: z.string().optional().nullable(),
-  pregnant: z.enum(['yes', 'no', 'unknown', '']).optional().nullable(),
-  last_medical_update: z.string().optional().nullable(),
-});
+import { PatientSchema, type PatientData } from '@/lib/schemas/entities';
 
 export type PatientFormState = { error?: string; ok?: boolean };
 
@@ -54,17 +26,26 @@ function clampLimit(limit: number): number {
 }
 
 /** After a patient write, add any marker-tagged terms to the shared dictionary. */
-async function syncPatientTags(data: z.infer<typeof PatientSchema>): Promise<void> {
+async function syncPatientTags(data: PatientData): Promise<void> {
   for (const field of MEDICAL_TAG_FIELDS) {
     await syncTagsFromField(field, data[field] as string | null | undefined);
   }
 }
 
-async function insertPatientWithAudit(
-  data: z.infer<typeof PatientSchema>,
+function coerceClientId(clientId: string | undefined): string {
+  // Offline-first: the client generates the row id so queued creates keep
+  // referential integrity. Accept only safe uuid-shaped ids, else generate.
+  if (clientId && /^[0-9a-fA-F-]{8,64}$/.test(clientId)) return clientId;
+  return uid();
+}
+
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function insertPatientWithAudit(
+  data: PatientData,
   userId: string,
+  clientId?: string,
 ): Promise<string> {
-  const id = uid();
+  const id = coerceClientId(clientId);
   const cols = PATIENT_COLS.split(',').map((c) => c.trim());
   const placeholders = cols.map(() => '?').join(', ');
   await transaction(async (tx) => {
@@ -125,17 +106,12 @@ export async function createPatient(
   redirect(`/patients/${id}`);
 }
 
-export async function updatePatient(
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function updatePatientCore(
   id: string,
-  _prev: PatientFormState,
-  formData: FormData,
-): Promise<PatientFormState> {
-  const user = await requireUser();
-  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
-  const raw = Object.fromEntries(formData);
-  const parsed = PatientSchema.safeParse(raw);
-  if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
-  const data = parsed.data;
+  data: PatientData,
+  userId: string,
+): Promise<void> {
   const cols = PATIENT_COLS.split(',').map((c) => c.trim());
   const setClauses = cols.map((c) => `${c}=?`).join(', ');
   await query(
@@ -171,40 +147,63 @@ export async function updatePatient(
   );
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'update', 'patient', ?)`,
-    [uid(), user.id, id],
+    [uid(), userId, id],
   );
   await syncPatientTags(data);
+}
+
+export async function updatePatient(
+  id: string,
+  _prev: PatientFormState,
+  formData: FormData,
+): Promise<PatientFormState> {
+  const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
+  const raw = Object.fromEntries(formData);
+  const parsed = PatientSchema.safeParse(raw);
+  if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
+  await updatePatientCore(id, parsed.data, user.id);
   revalidatePath(`/patients/${id}`);
   return { ok: true };
 }
 
-export async function deletePatient(id: string) {
-  const user = await requireUser();
-  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function deletePatientCore(id: string, userId: string): Promise<void> {
   await query(
     `UPDATE patients SET deleted_at = ?, updated_at = ? WHERE id = ?`,
     [nowIso(), nowIso(), id],
   );
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'soft_delete', 'patient', ?)`,
-    [uid(), user.id, id],
+    [uid(), userId, id],
   );
+}
+
+export async function deletePatient(id: string) {
+  const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
+  await deletePatientCore(id, user.id);
   revalidatePath('/patients');
   revalidatePath(`/patients/${id}`);
   return { ok: true, id };
 }
 
-export async function restorePatient(id: string) {
-  const user = await requireUser();
-  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function restorePatientCore(id: string, userId: string): Promise<void> {
   await query(
     `UPDATE patients SET deleted_at = NULL, updated_at = ? WHERE id = ?`,
     [nowIso(), id],
   );
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'restore', 'patient', ?)`,
-    [uid(), user.id, id],
+    [uid(), userId, id],
   );
+}
+
+export async function restorePatient(id: string) {
+  const user = await requireUser();
+  if (!can(user.role, 'patients:write')) return { error: 'Forbidden' };
+  await restorePatientCore(id, user.id);
   revalidatePath('/patients');
   revalidatePath(`/patients/${id}`);
   return { ok: true, id };

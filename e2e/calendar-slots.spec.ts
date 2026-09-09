@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { pad, login, fillWhen, pickPatient, settleCalendar, openManualCreate } from './helpers';
+import { pad, login, fillWhen, pickPatient, settleCalendar, openManualCreate, waitForSyncIdle } from './helpers';
 
 /** A day in the currently displayed week (0=Mon … 6=Sun) at h:m local time. */
 function weekDate(dayOffset: number, h: number, m: number) {
@@ -61,11 +61,17 @@ test('blocks are sized by duration, overlaps are allowed, drag reschedules', asy
   await createAppt(page, weekDate(2, 14, 0), 30);
   await createAppt(page, weekDate(2, 14, 15), 30);
 
-  const block60 = page
+  // Let the background reconcile sync land so blocks render authoritatively.
+  await waitForSyncIdle(page);
+
+  // Scope to the Wednesday column: other specs leave blocks at the same
+  // times on other days, and unscoped `.first()` would match those.
+  const wed = page.getByTestId('day-col-2');
+  const block60 = wed
     .getByTestId('appt-badge')
     .filter({ hasText: '10:00' })
     .first();
-  const block15 = page
+  const block15 = wed
     .getByTestId('appt-badge')
     .filter({ hasText: '13:00' })
     .first();
@@ -79,11 +85,11 @@ test('blocks are sized by duration, overlaps are allowed, drag reschedules', asy
   expect(b60.height / b15.height).toBeLessThan(4.6);
 
   // Overlapping blocks render side-by-side (each narrower than the column)
-  const ovl1 = page
+  const ovl1 = wed
     .getByTestId('appt-badge')
     .filter({ hasText: '14:00' })
     .first();
-  const ovl2 = page
+  const ovl2 = wed
     .getByTestId('appt-badge')
     .filter({ hasText: '14:15' })
     .first();
@@ -103,7 +109,7 @@ test('blocks are sized by duration, overlaps are allowed, drag reschedules', asy
   await page.mouse.move(cx, cy + 10, { steps: 3 });
   await page.mouse.move(cx, cy + 28, { steps: 5 });
   await page.mouse.up();
-  const moved = page
+  const moved = wed
     .getByTestId('appt-badge')
     .filter({ hasText: '13:30' })
     .first();

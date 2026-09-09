@@ -19,7 +19,7 @@ import {
   listLinksForPatient,
   type TurnPickerLinkListItem,
 } from '@/server/actions/turn-picker';
-import { createPatientInline, type PatientRow } from '@/server/actions/patients';
+import type { PatientRow } from '@/server/actions/patients';
 import type { PatientOption } from '@/lib/patient-options';
 import { PatientCombobox } from '@/components/patients/patient-combobox';
 import type { Role } from '@/lib/schemas/common';
@@ -414,14 +414,8 @@ function NewPatientInlineDialog({
           </div>
           <PatientForm
             mode="quick"
-            action={async (_prev, fd) => {
-              const res = await createPatientInline({}, fd);
-              if (res.ok) {
-                onCreated(res.patient);
-                return { ok: true };
-              }
-              return { error: res.error };
-            }}
+            queueMode
+            onCreated={onCreated}
           />
           <div className="mt-4 flex justify-end">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

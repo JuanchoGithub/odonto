@@ -1,32 +1,26 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
 import { requireUser, requireRole } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 
-const InsurerSchema = z.object({
-  name: z.string().min(1),
-  plan: z.string().optional().nullable(),
-  phone: z.string().optional().nullable(),
-  email: z.string().email().optional().nullable().or(z.literal('')),
-  notes: z.string().optional().nullable(),
-});
+import { InsurerSchema, type InsurerData } from '@/lib/schemas/entities';
 
 export type InsurerFormState = { error?: string; ok?: boolean; id?: string };
 
-export async function createInsurer(
-  _prev: InsurerFormState,
-  fd: FormData,
-): Promise<InsurerFormState> {
-  const user = await requireUser();
-  const parsed = InsurerSchema.safeParse(Object.fromEntries(fd));
-  if (!parsed.success) {
-    return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
-  }
-  const d = parsed.data;
-  const id = uid();
+function coerceClientId(clientId: string | undefined): string {
+  if (clientId && /^[0-9a-fA-F-]{8,64}$/.test(clientId)) return clientId;
+  return uid();
+}
+
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function createInsurerCore(
+  d: InsurerData,
+  userId: string,
+  clientId?: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const id = coerceClientId(clientId);
   try {
     await query(
       `INSERT INTO insurers (id, name, plan, phone, email, notes, created_at, updated_at)
@@ -44,19 +38,17 @@ export async function createInsurer(
     );
   } catch (e: any) {
     const msg = String(e?.message ?? e);
-    if (msg.includes('UNIQUE')) return { error: 'An insurer with that name already exists' };
+    if (msg.includes('UNIQUE')) return { ok: false, error: 'duplicate' };
     throw e;
   }
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'insurer', ?)`,
-    [uid(), user.id, id],
+    [uid(), userId, id],
   );
-  revalidatePath('/insurers');
-  redirect(`/insurers/${id}`);
+  return { ok: true, id };
 }
 
-export async function updateInsurer(
-  id: string,
+export async function createInsurer(
   _prev: InsurerFormState,
   fd: FormData,
 ): Promise<InsurerFormState> {
@@ -65,7 +57,25 @@ export async function updateInsurer(
   if (!parsed.success) {
     return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
   }
-  const d = parsed.data;
+  const res = await createInsurerCore(parsed.data, user.id);
+  if (!res.ok) {
+    return {
+      error:
+        res.error === 'duplicate'
+          ? 'An insurer with that name already exists'
+          : res.error,
+    };
+  }
+  revalidatePath('/insurers');
+  redirect(`/insurers/${res.id}`);
+}
+
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function updateInsurerCore(
+  id: string,
+  d: InsurerData,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await query(
       `UPDATE insurers SET name=?, plan=?, phone=?, email=?, notes=?, updated_at=? WHERE id=?`,
@@ -81,21 +91,48 @@ export async function updateInsurer(
     );
   } catch (e: any) {
     const msg = String(e?.message ?? e);
-    if (msg.includes('UNIQUE')) return { error: 'An insurer with that name already exists' };
+    if (msg.includes('UNIQUE')) return { ok: false, error: 'duplicate' };
     throw e;
   }
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'update', 'insurer', ?)`,
-    [uid(), user.id, id],
+    [uid(), userId, id],
   );
+  return { ok: true };
+}
+
+export async function updateInsurer(
+  id: string,
+  _prev: InsurerFormState,
+  fd: FormData,
+): Promise<InsurerFormState> {
+  const user = await requireUser();
+  const parsed = InsurerSchema.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) {
+    return { error: parsed.error.errors[0]?.message ?? 'Invalid' };
+  }
+  const res = await updateInsurerCore(id, parsed.data, user.id);
+  if (!res.ok) {
+    return {
+      error:
+        res.error === 'duplicate'
+          ? 'An insurer with that name already exists'
+          : res.error,
+    };
+  }
   revalidatePath('/insurers');
   revalidatePath(`/insurers/${id}`);
   return { ok: true };
 }
 
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function deleteInsurerCore(id: string): Promise<void> {
+  await query('DELETE FROM insurers WHERE id = ?', [id]);
+}
+
 export async function deleteInsurer(id: string) {
   await requireRole(['admin']);
-  await query('DELETE FROM insurers WHERE id = ?', [id]);
+  await deleteInsurerCore(id);
   revalidatePath('/insurers');
   redirect('/insurers');
 }

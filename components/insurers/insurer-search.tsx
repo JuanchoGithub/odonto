@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Link, useRouter } from '@/lib/navigation';
 import { SearchSuggest } from '@/components/ui/search-suggest';
 import type { InsurerRow } from '@/server/actions/insurers';
+import { useEnsureSeeded } from '@/lib/store/sync';
 
 export function InsurerSearch({ initial }: { initial?: string }) {
   const t = useTranslations('insurers');
   const tCommon = useTranslations('common');
   const router = useRouter();
+  useEnsureSeeded({ snaps: ['insurers'] });
 
   return (
     <form
@@ -25,7 +27,16 @@ export function InsurerSearch({ initial }: { initial?: string }) {
       <SearchSuggest<InsurerRow>
         initial={initial}
         placeholder={t('searchPlaceholder')}
-        fetchUrl={(query) => `/api/insurers?q=${encodeURIComponent(query)}`}
+        fetchItems={async (query) => {
+          // Store-backed type-ahead (zero invocations).
+          const { searchInsurersLocal, ensureInsurersSeeded } = await import('@/lib/store/options');
+          const { getSnapRows } = await import('@/lib/store/snapshots');
+          await ensureInsurersSeeded();
+          const byId = new Map(getSnapRows('insurers').map((r) => [r.id, r]));
+          return searchInsurersLocal(query, 8)
+            .map((o) => byId.get(o.id))
+            .filter((r): r is InsurerRow => !!r);
+        }}
         getHref={(i) => `/insurers/${i.id}`}
         optionTestId="insurer-suggest-option"
         renderItem={(i) => (

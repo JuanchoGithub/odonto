@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openManualCreate } from './helpers';
+import { openManualCreate, flushQueueAndOpenPatient, saveAndSync } from './helpers';
 
 const ADMIN = { email: 'admin@local', password: 'Admin123!' };
 
@@ -20,18 +20,15 @@ async function findRiskyPatientId(page: Page) {
   const id = `IconTest${Date.now()}`;
   await page.getByLabel(/apellido|last name/i).fill(id);
   await page.getByRole('button', { name: /guardar|save/i }).click();
-  await page.waitForURL(/\/patients\/[a-f0-9-]{36}$/);
-  const url = page.url();
+  const url = await flushQueueAndOpenPatient(page, id);
   const patientId = url.match(/\/patients\/([a-f0-9-]{36})$/)![1];
 
   // Add a risk via the medical tab (TagTextarea is contentEditable —
   // getByLabel doesn't match contenteditable, so use data-field)
   await page.getByRole('tab', { name: /médico|medical/i }).click();
   await page.locator('[data-field="allergies_medication"]').fill('Penicilina');
-  await page
-    .getByRole('button', { name: /guardar|save/i })
-    .click();
-  await page.waitForTimeout(1500); // let react server action complete
+  await saveAndSync(page);
+  await page.getByRole('tab', { name: /médico|medical/i }).click();
   return patientId;
 }
 
@@ -84,7 +81,7 @@ test('risk icon does not appear when patient has no clinical risk', async ({ pag
   const id = `Clean${Date.now()}`;
   await page.getByLabel(/apellido|last name/i).fill(id);
   await page.getByRole('button', { name: /guardar|save/i }).click();
-  await page.waitForURL(/\/patients\/[a-f0-9-]{36}$/);
+  await flushQueueAndOpenPatient(page, id);
 
   // No risk icon in header
   await expect(

@@ -71,6 +71,100 @@ export async function pickPatient(dialog: Locator, name = 'García') {
 }
 
 /**
+ * Wait until background /api/sync traffic has been quiet for 2s.
+ * The offline-first store syncs on page load; interacting with
+ * suggestion dropdowns mid-sync can swallow clicks (list re-render),
+ * so suggestion tests settle first.
+ */
+export async function waitForSyncIdle(page: Page, timeout = 30_000) {
+  const start = Date.now();
+  let lastSync = start;
+  const onActivity = (r: { url(): string }) => {
+    if (r.url().includes('/api/sync')) lastSync = Date.now();
+  };
+  page.on('request', onActivity);
+  page.on('response', onActivity);
+  try {
+    while (Date.now() - start < timeout) {
+      await page.waitForTimeout(500);
+      if (Date.now() - lastSync > 2000) return;
+    }
+  } finally {
+    page.off('request', onActivity);
+    page.off('response', onActivity);
+  }
+}
+
+/**
+ * Flush the offline queue via the pending-sync badge, resolve a patient by
+ * last name through the API, and navigate to its detail page. Used after
+ * saving /patients/new (which queues locally instead of redirecting).
+ */
+export async function flushQueueAndOpenPatient(
+  page: Page,
+  lastName: string,
+): Promise<string> {
+  const badge = page.getByTestId('sync-badge');
+  await badge.click({ timeout: 15_000 });
+  await badge.waitFor({ state: 'hidden', timeout: 30_000 });
+  const res = await page.request.get(
+    `/api/patients?q=${encodeURIComponent(lastName)}`,
+  );
+  expect(res.ok()).toBeTruthy();
+  const list = (await res.json()) as { id: string }[];
+  expect(list.length).toBeGreaterThan(0);
+  await page.goto(`/patients/${list[0].id}`);
+  await page.waitForURL(/\/patients\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+  return page.url();
+}
+
+/**
+ * Save a queued form (medical tab, insurer edit, …), flush via the
+ * pending-sync badge, and reload so server-rendered content (risk banners,
+ * lists) reflects the write.
+ */
+export async function saveAndSync(page: Page) {
+  await page.getByRole('button', { name: /guardar|save/i }).click();
+  const badge = page.getByTestId('sync-badge');
+  await badge.click({ timeout: 15_000 });
+  await badge.waitFor({ state: 'hidden', timeout: 30_000 });
+  await page.reload();
+}
+
+/**
+ * Create a patient through the offline-first form (/patients/new queues
+ * locally), force the sync via the pending badge, and return the
+ * server-confirmed detail URL.
+ */
+export async function createPatientAndGetUrl(
+  page: Page,
+  opts: { firstName: string; lastName: string; document?: string },
+): Promise<string> {
+  await page.goto('/patients/new');
+  await page.getByLabel(/nombre|first name/i).fill(opts.firstName);
+  await page.getByLabel(/apellido|last name/i).fill(opts.lastName);
+  if (opts.document) {
+    await page.getByLabel(/documento|id document/i).fill(opts.document);
+  }
+  await page.getByRole('button', { name: /guardar|save/i }).click();
+  await page.waitForURL(/\/(es|en)\/patients$/, { timeout: 15_000 });
+  const badge = page.getByTestId('sync-badge');
+  await badge.click({ timeout: 15_000 });
+  await badge.waitFor({ state: 'hidden', timeout: 30_000 });
+  // The flushed row is server-side now: resolve its id via the API.
+  const res = await page.request.get(
+    `/api/patients?q=${encodeURIComponent(opts.lastName)}`,
+  );
+  expect(res.ok()).toBeTruthy();
+  const list = (await res.json()) as { id: string }[];
+  expect(list.length).toBeGreaterThan(0);
+  const url = `/patients/${list[0].id}`;
+  await page.goto(url);
+  await page.waitForURL(/\/patients\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+  return page.url();
+}
+
+/**
  * Fill the birth-date picker with a `YYYY-MM-DD` value.
  * Desktop (fine pointer) renders Year/Month/Day dropdowns (Radix Select,
  * options in a portal on `page`); touch renders a native date input.

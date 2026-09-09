@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openManualCreate } from './helpers';
+import { openManualCreate, flushQueueAndOpenPatient, saveAndSync } from './helpers';
 
 const ADMIN = { email: 'admin@local', password: 'Admin123!' };
 
@@ -21,7 +21,7 @@ test('medical tab: full clinical form, save, cross-tab preservation, risk banner
   await page.getByLabel(/nombre|first name/i).fill('Clin');
   await page.getByLabel(/apellido|last name/i).fill(lastName);
   await page.getByRole('button', { name: /guardar|save/i }).click();
-  await page.waitForURL(/\/patients\/[a-f0-9-]{36}$/);
+  await flushQueueAndOpenPatient(page, lastName);
 
   // 2. Open the medical tab and fill clinical fields
   // (TagTextarea fields are contentEditable divs — getByLabel doesn't match
@@ -37,8 +37,7 @@ test('medical tab: full clinical form, save, cross-tab preservation, risk banner
   await page.getByLabel(/grupo sanguíneo|blood type/i).fill('A+');
   await page.getByLabel(/tensión arterial|blood pressure/i).fill('120/80');
   await page.locator('[data-field="chronic_conditions"]').fill('Hipertensión');
-  await page.getByRole('button', { name: /guardar|save/i }).click();
-  await page.waitForTimeout(1500);
+  await saveAndSync(page);
 
   // 3. Back to the general tab: risk banner should be up, general data preserved
   await page.getByRole('tab', { name: /general/i }).click();
@@ -70,13 +69,12 @@ test('medical tab: save preserves general fields (no cross-tab data loss)', asyn
   await page.getByLabel(/tel[eé]fono|phone/i).fill('+54 11 5555-9999');
   await page.getByLabel(/email|email/i).fill('cross@example.com');
   await page.getByRole('button', { name: /guardar|save/i }).click();
-  await page.waitForURL(/\/patients\/[a-f0-9-]{36}$/);
+  await flushQueueAndOpenPatient(page, lastName);
 
   // Edit only medical tab
   await page.getByRole('tab', { name: /médico|medical/i }).click();
   await page.getByLabel(/diabetes/i).fill('Tipo 2 controlada');
-  await page.getByRole('button', { name: /guardar|save/i }).click();
-  await page.waitForTimeout(1000);
+  await saveAndSync(page);
 
   // Verify general fields still intact
   await page.getByRole('tab', { name: /general/i }).click();

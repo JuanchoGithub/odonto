@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Link, useRouter } from '@/lib/navigation';
 import { SearchSuggest } from '@/components/ui/search-suggest';
 import type { PatientRow } from '@/server/actions/patients';
+import { useEnsureSeeded } from '@/lib/store/sync';
 
 export function PatientSearch({ initial }: { initial?: string }) {
   const t = useTranslations('common');
   const tNav = useTranslations('patients');
   const router = useRouter();
+  useEnsureSeeded({ deltas: ['patients'] });
 
   return (
     <form
@@ -24,7 +26,16 @@ export function PatientSearch({ initial }: { initial?: string }) {
       <SearchSuggest<PatientRow>
         initial={initial}
         placeholder={t('search')}
-        fetchUrl={(query) => `/api/patients?q=${encodeURIComponent(query)}&limit=8`}
+        fetchItems={async (query) => {
+          // Store-backed type-ahead (zero invocations).
+          const { searchPatientsLocal, ensurePatientsSeeded } = await import('@/lib/store/options');
+          const { getDeltaRows } = await import('@/lib/store/snapshots');
+          await ensurePatientsSeeded();
+          const byId = new Map(getDeltaRows('patients').map((p) => [p.id, p]));
+          return searchPatientsLocal(query, 8)
+            .map((o) => byId.get(o.id))
+            .filter((p): p is PatientRow => !!p && !p.deleted_at);
+        }}
         getHref={(p) => `/patients/${p.id}`}
         optionTestId="patient-suggest-option"
         renderItem={(p) => (

@@ -94,8 +94,8 @@ export async function createAppointment(fd: FormData) {
   const id = uid();
   try {
     await query(
-      `INSERT INTO appointments (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO appointments (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.patient_id,
@@ -107,6 +107,7 @@ export async function createAppointment(fd: FormData) {
         data.notes || null,
         user.id,
         data.created_via,
+        nowIso(),
         nowIso(),
       ],
     );
@@ -199,7 +200,7 @@ export async function updateAppointment(
     `UPDATE appointments SET dentist_id=?, starts_at=?, ends_at=?, status=?, reason=?, notes=?,
       reprogram_count=?, original_starts_at=?,
       cancelled_at=?, cancelled_by=?, cancel_reason=?,
-      no_show_at=?, no_show_by=?, completed_at=? WHERE id=?`,
+      no_show_at=?, no_show_by=?, completed_at=?, updated_at=? WHERE id=?`,
     [
       data.dentist_id,
       data.starts_at,
@@ -215,6 +216,7 @@ export async function updateAppointment(
       noShow ? now : null,
       noShow ? user.id : null,
       completed ? now : null,
+      now,
       data.id,
     ],
   );
@@ -288,7 +290,8 @@ export async function updateAppointmentStatus(
       cancel_reason=CASE WHEN ?='cancelled' THEN ? ELSE NULL END,
       no_show_at=CASE WHEN ?='no_show' THEN ? ELSE NULL END,
       no_show_by=CASE WHEN ?='no_show' THEN ? ELSE NULL END,
-      completed_at=CASE WHEN ?='completed' THEN ? ELSE NULL END
+      completed_at=CASE WHEN ?='completed' THEN ? ELSE NULL END,
+      updated_at=?
      WHERE id=?`,
     [
       next,
@@ -298,6 +301,7 @@ export async function updateAppointmentStatus(
       next, now,
       next, next === 'no_show' ? (opts?.noShowBy ?? user.id) : null,
       next, now,
+      now,
       id,
     ],
   );
@@ -339,8 +343,8 @@ export async function deleteAppointment(id: string, cancelReason?: string) {
   // Soft-cancel instead of hard-delete: preserves history + audit trail.
   const now = nowIso();
   await query(
-    `UPDATE appointments SET status='cancelled', cancelled_at=?, cancelled_by=?, cancel_reason=? WHERE id=?`,
-    [now, user.id, reason, id],
+    `UPDATE appointments SET status='cancelled', cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?`,
+    [now, user.id, reason, now, id],
   );
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'cancel', 'appointment', ?, ?)`,
@@ -438,8 +442,8 @@ export async function sweepOverdueNoShows(
     const now = nowIso();
     if (evidence) {
       await query(
-        `UPDATE appointments SET status='completed', completed_at=? WHERE id=? AND status='scheduled'`,
-        [now, c.id],
+        `UPDATE appointments SET status='completed', completed_at=?, updated_at=? WHERE id=? AND status='scheduled'`,
+        [now, now, c.id],
       );
       await query(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,
@@ -454,8 +458,8 @@ export async function sweepOverdueNoShows(
       attended++;
     } else {
       await query(
-        `UPDATE appointments SET status='no_show', no_show_at=?, no_show_by=? WHERE id=? AND status='scheduled'`,
-        [now, markedBy, c.id],
+        `UPDATE appointments SET status='no_show', no_show_at=?, no_show_by=?, updated_at=? WHERE id=? AND status='scheduled'`,
+        [now, markedBy, now, c.id],
       );
       await query(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,

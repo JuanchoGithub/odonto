@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { CalendarPlus, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,15 +8,17 @@ import { AttendSheet } from '@/components/appointments/attend-sheet';
 import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
 import { updateAppointmentStatus } from '@/server/actions/appointments';
 import { useToast } from '@/components/ui/toaster';
+import { useDeltaRows } from '@/lib/store/snapshots';
+import { runSync, useAutoSync } from '@/lib/store/sync';
 import {
-  listDoctorQueue,
-  listDoctorToday,
-  listDoctorNextUpcoming,
-  type PanelAppt,
-  type NextUpcoming,
-} from '@/server/actions/dashboard';
+  doctorQueue,
+  doctorToday,
+  doctorNextUpcoming,
+  type PanelItem,
+  type NextUpcomingItem,
+} from '@/lib/store/projections';
+import type { PanelAppt } from '@/server/actions/dashboard';
 import { PanelApptCard } from './panel-appt-card';
-import { usePanelRefresh } from './use-panel-refresh';
 
 type Translate = ReturnType<typeof useTranslations>;
 
@@ -52,7 +54,7 @@ function durationLabel(
 function headlineLabel(
   t: Translate,
   locale: string,
-  u: NextUpcoming,
+  u: NextUpcomingItem,
 ): string {
   if (u.days_until === 0)
     return t('nextUpcomingToday', { duration: durationLabel(t, u.minutes_until) });
@@ -75,7 +77,7 @@ function headlineLabel(
 function dayHeaderLabel(
   t: Translate,
   locale: string,
-  u: NextUpcoming,
+  u: NextUpcomingItem,
 ): string {
   if (u.days_until === 0) return t('dayToday');
   if (u.days_until === 1) return t('dayTomorrow');
@@ -90,9 +92,9 @@ function dayHeaderLabel(
 function groupByDay(
   t: Translate,
   locale: string,
-  upcoming: NextUpcoming[],
-): { date: string; label: string; items: NextUpcoming[] }[] {
-  const groups: { date: string; label: string; items: NextUpcoming[] }[] = [];
+  upcoming: NextUpcomingItem[],
+): { date: string; label: string; items: NextUpcomingItem[] }[] {
+  const groups: { date: string; label: string; items: NextUpcomingItem[] }[] = [];
   for (const u of upcoming) {
     const last = groups[groups.length - 1];
     if (last && last.date === u.appt.clinic_date) {
@@ -109,51 +111,52 @@ function groupByDay(
 }
 
 /** Dentist panel: next-hour queue, attend flow, give new turns. */
-export function DoctorPanel({ dentist }: { dentist: { id: string; name: string; slot_minutes?: number | null } }) {
+export function DoctorPanel({
+  dentist,
+  clinicTz,
+}: {
+  dentist: { id: string; name: string; slot_minutes?: number | null };
+  clinicTz: string;
+}) {
   const t = useTranslations('dashboard');
   const locale = useLocale();
-  const [items, setItems] = useState<PanelAppt[]>([]);
-  const [today, setToday] = useState<PanelAppt[]>([]);
-  const [nowHhmm, setNowHhmm] = useState<string | null>(null);
-  const [nextUpcoming, setNextUpcoming] = useState<NextUpcoming[] | null>(null);
+  // All data comes from the offline-first store (5-min delta sync, zero
+  // per-poll server actions). Panels are pure projections over snapshots.
+  const apptRows = useDeltaRows('appointments');
+  useAutoSync();
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const { push } = useToast();
 
-  const load = useCallback(async () => {
-    const [queue, todayRows, upcoming] = await Promise.all([
-      listDoctorQueue().catch(() => null),
-      listDoctorToday().catch(() => null),
-      listDoctorNextUpcoming().catch(() => null),
-    ]);
-    if (upcoming && 'ok' in upcoming) setNextUpcoming(upcoming.next);
-    if (queue && 'ok' in queue) {
-      setItems(queue.items);
-      // Reconcile the open AttendSheet with fresh rows so its status
-      // stepper never works off a stale snapshot.
-      setAttendAppt((prev) => {
-        if (!prev) return prev;
-        return (
-          queue.items.find((r) => r.id === prev.id) ??
-          (todayRows && 'ok' in todayRows
-            ? (todayRows.items.find((r) => r.id === prev.id) ?? prev)
-            : prev)
-        );
-      });
-    }
-    if (todayRows && 'ok' in todayRows) {
-      setToday(todayRows.items);
-      setNowHhmm(todayRows.now_hhmm);
-    }
-    setLoaded(true);
+  const { items, today, nowHhmm, nextUpcoming } = useMemo(() => {
+    const q = doctorQueue(apptRows, clinicTz, dentist.id);
+    const td = doctorToday(apptRows, clinicTz, dentist.id);
+    const nx = doctorNextUpcoming(apptRows, clinicTz, dentist.id);
+    return { items: q, today: td.items, nowHhmm: td.now_hhmm, nextUpcoming: nx };
+  }, [apptRows, clinicTz, dentist.id]);
+
+  const load = useCallback(() => {
+    // Refresh from the server after a write (one delta sync, not N actions).
+    void runSync();
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
-  usePanelRefresh(load);
+    // First paint: resolve loading once the initial sync lands.
+    void runSync().finally(() => setLoaded(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reconcile the open AttendSheet with fresh rows so its status
+  // stepper never works off a stale snapshot.
+  useEffect(() => {
+    setAttendAppt((prev) => {
+      if (!prev) return prev;
+      const all: PanelItem[] = [...items, ...today];
+      return (all.find((r) => r.id === prev.id) as PanelAppt | undefined) ?? prev;
+    });
+  }, [items, today]);
 
   async function markNoShow(id: string) {
     if (armingNoShow !== id) {

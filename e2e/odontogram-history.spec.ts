@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { flushQueueAndOpenPatient } from './helpers';
 
 async function login(page: Page) {
   await page.goto('/login');
@@ -14,8 +15,9 @@ async function createPatientAndOpenOdontogram(page: Page) {
   await page.getByLabel(/first name|nombre/i).fill('HistTest');
   await page.getByLabel(/last name|apellido/i).fill(`Ht${stamp}`);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
-  await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
+  await flushQueueAndOpenPatient(page, `Ht${stamp}`);
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
+  await expect(page.getByTestId('overview-odontogram')).toBeHidden({ timeout: 15_000 });
   await expect(page.getByTestId('odontogram-root')).toBeVisible();
 }
 

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { CalendarClock, LogOut, MessageSquare, MessagesSquare, UserRound } from 'lucide-react';
-import { signOut } from 'next-auth/react';
+import { signOutAndClear } from '@/lib/store/session';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useRouter } from '@/lib/navigation';
 
@@ -117,7 +117,7 @@ function AccountTab({ account }: { account: { name: string; email: string; role:
       </dl>
       <button
         type="button"
-        onClick={() => signOut({ callbackUrl: '/login' })}
+        onClick={() => void signOutAndClear()}
         className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-destructive/40 px-3 py-2 text-base font-medium text-destructive hover:bg-accent"
         data-testid="profile-signout"
       >

@@ -6,19 +6,55 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  createInsurer,
-  updateInsurer,
   type InsurerFormState,
   type InsurerRow,
 } from '@/server/actions/insurers';
+import { useRouter } from '@/lib/navigation';
 
 export function InsurerForm({ insurer }: { insurer?: InsurerRow }) {
   const t = useTranslations('insurers');
   const tCommon = useTranslations('common');
-  const bound = insurer
-    ? updateInsurer.bind(null, insurer.id)
-    : createInsurer;
-  const [state, action, pending] = useActionState<InsurerFormState, FormData>(bound, {});
+  const router = useRouter();
+  const [state, action, pending] = useActionState<InsurerFormState, FormData>(
+    async (prev, fd) => {
+      // Offline-first: queue locally, flush at sync (zero invocations).
+      const {
+        queueInsurerCreate,
+        queueInsurerUpdate,
+      } = await import('@/lib/store/write');
+      if (insurer) {
+        queueInsurerUpdate(
+          insurer.id,
+          {
+            name: String(fd.get('name') ?? ''),
+            plan: fd.get('plan') || null,
+            phone: fd.get('phone') || null,
+            email: fd.get('email') || null,
+            notes: fd.get('notes') || null,
+          },
+          insurer.updated_at ?? null,
+        );
+        return { ok: true };
+      }
+      const name = String(fd.get('name') ?? '').trim();
+      // Client-side uniqueness pre-check (the server re-validates at sync).
+      const { getSnapRows } = await import('@/lib/store/snapshots');
+      const dup = (getSnapRows('insurers') as { name: string }[]).some(
+        (r) => r.name.trim().toLowerCase() === name.toLowerCase(),
+      );
+      if (dup) return { error: t('duplicate') };
+      queueInsurerCreate({
+        name,
+        plan: fd.get('plan') || null,
+        phone: fd.get('phone') || null,
+        email: fd.get('email') || null,
+        notes: fd.get('notes') || null,
+      });
+      router.push('/insurers');
+      return { ok: true };
+    },
+    {},
+  );
 
   return (
     <form action={action} className="space-y-4">

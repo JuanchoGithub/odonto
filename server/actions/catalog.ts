@@ -1,9 +1,9 @@
 'use server';
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
-import { uid, nowIso, amountToCents, normalizeDecimalInput } from '@/lib/utils';
+import type { Role } from '@/lib/schemas/common';
+import { uid, nowIso, amountToCents } from '@/lib/utils';
 
 export type CatalogRow = {
   id: string;
@@ -45,32 +45,32 @@ export async function getConsultaCatalog(): Promise<CatalogRow | null> {
   );
 }
 
-const CatalogSchema = z.object({
-  description: z.string().min(1),
-  code: z.string().optional().nullable(),
-  price: z.preprocess(normalizeDecimalInput, z.coerce.number().min(0).default(0)),
-  tax_kind: z.enum(['standard', 'reduced', 'none']).default('standard'),
-  kind: z.enum(['consulta', 'general']).default('general'),
-});
+import { CatalogSchema, type CatalogData } from '@/lib/schemas/entities';
 
-/** Admin/secretary create a definitive entry (or dentist proposes → provisional). */
-export async function upsertCatalogEntry(fd: FormData) {
-  const user = await requireUser();
-  const parsed = CatalogSchema.safeParse(Object.fromEntries(fd));
-  if (!parsed.success) return { error: 'Invalid' as const };
-  const d = parsed.data;
-  const definitive = can(user.role, 'catalog:write') ? 1 : 0;
-  if (!definitive && !can(user.role, 'catalog:propose')) return { error: 'Forbidden' as const };
+/**
+ * Replayable core (also used by the offline sync flush). No revalidation.
+ * `role` drives definitive-vs-provisional so the sync can replay as the user.
+ */
+export async function upsertCatalogEntryCore(
+  d: CatalogData,
+  userId: string,
+  role: Role,
+  clientId?: string,
+): Promise<{ ok: true; id: string; deduped?: true } | { ok: false; error: string }> {
+  const definitive = can(role, 'catalog:write') ? 1 : 0;
+  if (!definitive && !can(role, 'catalog:propose'))
+    return { ok: false, error: 'Forbidden' };
   // Dedup on normalized description (case-insensitive) to avoid near-duplicates.
   const existing = await queryOne<CatalogRow>(
     `SELECT * FROM treatment_catalog WHERE lower(trim(description)) = lower(trim(?)) AND archived_at IS NULL LIMIT 1`,
     [d.description.trim()],
   );
-  if (existing) return { ok: true as const, id: existing.id, deduped: true as const };
-  const id = uid();
+  if (existing) return { ok: true, id: existing.id, deduped: true };
+  const id =
+    clientId && /^[0-9a-fA-F-]{8,64}$/.test(clientId) ? clientId : uid();
   await query(
-    `INSERT INTO treatment_catalog (id, code, description, default_price_cents, tax_kind, kind, is_definitive, created_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO treatment_catalog (id, code, description, default_price_cents, tax_kind, kind, is_definitive, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       d.code?.trim() || null,
@@ -81,17 +81,55 @@ export async function upsertCatalogEntry(fd: FormData) {
       // unless caller is definitive-capable and explicitly asked for consulta.
       d.kind === 'consulta' && definitive ? 'consulta' : 'general',
       definitive,
-      user.id,
+      userId,
+      nowIso(),
       nowIso(),
     ],
   );
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'treatment_catalog', ?)`,
-    [uid(), user.id, id],
+    [uid(), userId, id],
   );
+  return { ok: true, id };
+}
+
+/** Admin/secretary create a definitive entry (or dentist proposes → provisional). */
+export async function upsertCatalogEntry(fd: FormData) {
+  const user = await requireUser();
+  const parsed = CatalogSchema.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return { error: 'Invalid' as const };
+  const res = await upsertCatalogEntryCore(parsed.data, user.id, user.role);
+  if (!res.ok) return { error: res.error as 'Forbidden' | 'Invalid' };
   revalidatePath('/settings');
   revalidatePath('/treatments');
-  return { ok: true as const, id };
+  return res;
+}
+
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function markCatalogDefinitiveCore(
+  id: string,
+  userId: string,
+  opts?: { price?: number; description?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const existing = await queryOne<CatalogRow>(
+    `SELECT * FROM treatment_catalog WHERE id = ?`,
+    [id],
+  );
+  if (!existing) return { ok: false, error: 'Not found' };
+  const priceCents =
+    opts?.price != null && Number.isFinite(opts.price)
+      ? amountToCents(opts.price)
+      : existing.default_price_cents;
+  const description = opts?.description?.trim() || existing.description;
+  await query(
+    `UPDATE treatment_catalog SET is_definitive = 1, default_price_cents = ?, description = ?, updated_at = ? WHERE id = ?`,
+    [priceCents, description, nowIso(), id],
+  );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'treatment_catalog', ?, ?)`,
+    [uid(), userId, id, JSON.stringify({ is_definitive: 1 })],
+  );
+  return { ok: true };
 }
 
 /** Secretary/admin marks a provisional entry definitive (or edits price). */
@@ -101,24 +139,8 @@ export async function markCatalogDefinitive(
 ) {
   const user = await requireUser();
   if (!can(user.role, 'catalog:write')) return { error: 'Forbidden' as const };
-  const existing = await queryOne<CatalogRow>(
-    `SELECT * FROM treatment_catalog WHERE id = ?`,
-    [id],
-  );
-  if (!existing) return { error: 'Not found' as const };
-  const priceCents =
-    opts?.price != null && Number.isFinite(opts.price)
-      ? amountToCents(opts.price)
-      : existing.default_price_cents;
-  const description = opts?.description?.trim() || existing.description;
-  await query(
-    `UPDATE treatment_catalog SET is_definitive = 1, default_price_cents = ?, description = ? WHERE id = ?`,
-    [priceCents, description, id],
-  );
-  await query(
-    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'treatment_catalog', ?, ?)`,
-    [uid(), user.id, id, JSON.stringify({ is_definitive: 1 })],
-  );
+  const res = await markCatalogDefinitiveCore(id, user.id, opts);
+  if (!res.ok) return { error: res.error as 'Not found' };
   revalidatePath('/settings');
   return { ok: true as const };
 }
@@ -127,15 +149,24 @@ export async function archiveCatalogEntry(id: string) {
   const user = await requireUser();
   if (!can(user.role, 'catalog:write')) return { error: 'Forbidden' as const };
   // Never archive the single definitive consulta — it is the default attach.
+  const res = await archiveCatalogEntryCore(id);
+  if (!res.ok) return { error: res.error as 'Not found' | 'Cannot archive the consulta entry' };
+  revalidatePath('/settings');
+  return { ok: true as const };
+}
+
+/** Replayable core (also used by the offline sync flush). No revalidation. */
+export async function archiveCatalogEntryCore(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const existing = await queryOne<CatalogRow>(
     `SELECT * FROM treatment_catalog WHERE id = ?`,
     [id],
   );
-  if (!existing) return { error: 'Not found' as const };
+  if (!existing) return { ok: false, error: 'Not found' };
   if (existing.kind === 'consulta' && existing.is_definitive) {
-    return { error: 'Cannot archive the consulta entry' as const };
+    return { ok: false, error: 'Cannot archive the consulta entry' };
   }
-  await query(`UPDATE treatment_catalog SET archived_at = ? WHERE id = ?`, [nowIso(), id]);
-  revalidatePath('/settings');
-  return { ok: true as const };
+  await query(`UPDATE treatment_catalog SET archived_at = ?, updated_at = ? WHERE id = ?`, [nowIso(), nowIso(), id]);
+  return { ok: true };
 }

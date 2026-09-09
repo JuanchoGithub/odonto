@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { addDays, startOfWeek, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,9 @@ import {
 import { useToast } from '@/components/ui/toaster';
 import { effectiveExpiryMs } from '@/lib/turn-picker';
 import { es, enUS } from 'date-fns/locale';
+import { useDeltaRows, upsertRow } from '@/lib/store/snapshots';
+import { runSync, useAutoSync, hydrateStore } from '@/lib/store/sync';
+import { weekSlice } from '@/lib/store/projections';
 
 export type DentistRef = { id: string; name: string; color: string | null; slot_minutes?: number | null };
 
@@ -66,7 +69,14 @@ export function WeekCalendar({
     }
     return startOfWeek(new Date(), { weekStartsOn: 1 });
   });
-  const [appts, setAppts] = useState(initial);
+  // Appointments come from the offline-first store (5-min delta sync).
+  // The SSR `initial` week seeds first paint; week/filter changes are local.
+  const storeRows = useDeltaRows('appointments');
+  useAutoSync();
+  useEffect(() => {
+    hydrateStore({ deltas: { appointments: { watermark: '', rows: initial } } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [windowsByDate, setWindowsByDate] = useState<Record<
     string,
     WorkingWindow[]
@@ -99,6 +109,12 @@ export function WeekCalendar({
   );
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Week slice is a local filter over the cached snapshot — navigating weeks
+  // or the dentist filter costs zero function invocations.
+  const appts = useMemo(
+    () => weekSlice(storeRows, weekStart, 'all'),
+    [storeRows, weekStart],
+  );
   const filtered =
     dentistFilter === 'all'
       ? appts
@@ -110,18 +126,13 @@ export function WeekCalendar({
       (dentistFilter === 'all' || l.dentist_id === dentistFilter),
   );
 
-  async function refresh() {
-    const params = new URLSearchParams({ start: weekStart.toISOString() });
-    const res = await fetch(`/api/appointments?${params}`);
-    if (res.ok) {
-      const data = await res.json();
-      setAppts(data);
-    }
+  function refresh() {
+    // One delta sync after a write (authoritative reconcile), not a refetch.
+    void runSync();
   }
 
-  // Refetch appointments + working windows when the week (or filter) changes
+  // Working windows are still server-computed per week/filter (cheap call).
   useEffect(() => {
-    refresh();
     getWeekWindowsAction(
       dentistFilter === 'all' ? null : dentistFilter,
       weekStart.toISOString(),
@@ -158,16 +169,10 @@ export function WeekCalendar({
 
   // Called after a drag (move) or resize (extend) on the grid.
   async function onMoveAppt(appt: ApptRow, start: Date, end: Date) {
-    const snapshot = appts;
     const isoStart = start.toISOString();
     const isoEnd = end.toISOString();
-    setAppts((cur) =>
-      cur.map((a) =>
-        a.id === appt.id
-          ? { ...a, starts_at: isoStart, ends_at: isoEnd }
-          : a,
-      ),
-    );
+    // Optimistic: move the block in the shared store instantly.
+    upsertRow('appointments', { ...appt, starts_at: isoStart, ends_at: isoEnd });
     const fd = new FormData();
     fd.set('id', appt.id);
     fd.set('dentist_id', appt.dentist_id);
@@ -178,7 +183,8 @@ export function WeekCalendar({
     fd.set('notes', appt.notes ?? '');
     const res = await updateAppointment(fd);
     if (res && 'error' in res) {
-      setAppts(snapshot);
+      // Reconcile against the server (reverts the optimistic move).
+      void runSync();
       push({
         title: res.error === 'conflict' ? t('conflict') : tErr('generic'),
         variant: 'destructive',

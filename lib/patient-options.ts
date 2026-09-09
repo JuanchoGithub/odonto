@@ -1,5 +1,3 @@
-import type { PatientRow } from '@/server/actions/patients';
-
 export type PatientOption = {
   id: string;
   name: string;
@@ -8,22 +6,19 @@ export type PatientOption = {
 };
 
 /**
- * Server-side patient search (name, document, phone, email) shared by the
- * appointment dialog picker and the turn-link generator picker.
+ * Patient type-ahead over the offline-first store (cached snapshot, synced
+ * every sync run). Zero function invocations per keystroke. The `signal`
+ * param is kept for call-site compatibility and is a no-op locally.
  */
 export async function fetchPatientOptions(
   q: string,
-  signal: AbortSignal,
+  _signal?: AbortSignal,
 ): Promise<PatientOption[]> {
-  const r = await fetch(`/api/patients?q=${encodeURIComponent(q)}&limit=50`, {
-    signal,
-  });
-  if (!r.ok) return [];
-  const data = await r.json();
-  if (!Array.isArray(data)) return [];
-  return data.map((p: PatientRow) => ({
+  const { searchPatientsLocal, ensurePatientsSeeded } = await import('@/lib/store/options');
+  await ensurePatientsSeeded();
+  return searchPatientsLocal(q, 50).map((p) => ({
     id: p.id,
-    name: `${p.last_name}, ${p.first_name}`,
+    name: p.name,
     phone: p.phone,
     email: p.email,
   }));

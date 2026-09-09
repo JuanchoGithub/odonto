@@ -82,9 +82,9 @@ export async function createInvoice(
 
   await transaction(async (tx) => {
     await tx.execute(
-      `INSERT INTO invoices (id, patient_id, number, issued_at, status, subtotal_cents, tax_cents, total_cents, notes, clinic_id)
-       VALUES (?, ?, ?, ?, 'issued', 0, 0, 0, ?, (SELECT id FROM clinics LIMIT 1))`,
-      [id, d.patient_id, number, nowIso(), d.notes || null],
+      `INSERT INTO invoices (id, patient_id, number, issued_at, status, subtotal_cents, tax_cents, total_cents, notes, clinic_id, updated_at)
+       VALUES (?, ?, ?, ?, 'issued', 0, 0, 0, ?, (SELECT id FROM clinics LIMIT 1), ?)`,
+      [id, d.patient_id, number, nowIso(), d.notes || null, nowIso()],
     );
     let subtotal = 0;
     let taxTotal = 0;
@@ -116,8 +116,8 @@ export async function createInvoice(
       );
     }
     await tx.execute(
-      `UPDATE invoices SET subtotal_cents=?, tax_cents=?, total_cents=? WHERE id=?`,
-      [subtotal, taxTotal, grandTotal, id],
+      `UPDATE invoices SET subtotal_cents=?, tax_cents=?, total_cents=?, updated_at=? WHERE id=?`,
+      [subtotal, taxTotal, grandTotal, nowIso(), id],
     );
     await tx.execute(
       `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'invoice', ?)`,
@@ -166,13 +166,14 @@ export async function recordPayment(fd: FormData) {
         throw new Error('overpayment');
       }
       await tx.execute(
-        `INSERT INTO payments (id, invoice_id, paid_at, method, amount_cents, reference)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [paymentId, d.invoice_id, nowIso(), d.method, amountCents, d.reference || null],
+        `INSERT INTO payments (id, invoice_id, paid_at, method, amount_cents, reference, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [paymentId, d.invoice_id, nowIso(), d.method, amountCents, d.reference || null, nowIso()],
       );
       const newTotal = paidSoFar + amountCents;
-      await tx.execute('UPDATE invoices SET status = ? WHERE id = ?', [
+      await tx.execute('UPDATE invoices SET status = ?, updated_at = ? WHERE id = ?', [
         newTotal >= inv.total_cents ? 'paid' : 'issued',
+        nowIso(),
         d.invoice_id,
       ]);
       await tx.execute(
@@ -386,9 +387,9 @@ export async function buildVisitInvoice(appointmentId: string): Promise<{ ok: tr
       );
       if (dup) throw new Error('already_invoiced');
       await tx.execute(
-        `INSERT INTO invoices (id, patient_id, appointment_id, number, issued_at, status, subtotal_cents, tax_cents, total_cents, notes, clinic_id)
-         VALUES (?, ?, ?, ?, ?, 'issued', 0, 0, 0, ?, (SELECT id FROM clinics LIMIT 1))`,
-        [id, preview.patient_id, appointmentId, number, nowIso(), 'Visita'],
+        `INSERT INTO invoices (id, patient_id, appointment_id, number, issued_at, status, subtotal_cents, tax_cents, total_cents, notes, clinic_id, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'issued', 0, 0, 0, ?, (SELECT id FROM clinics LIMIT 1), ?)`,
+        [id, preview.patient_id, appointmentId, number, nowIso(), 'Visita', nowIso()],
       );
       for (const ln of preview.lines) {
         await tx.execute(
@@ -398,8 +399,8 @@ export async function buildVisitInvoice(appointmentId: string): Promise<{ ok: tr
         );
       }
       await tx.execute(
-        `UPDATE invoices SET subtotal_cents=?, tax_cents=?, total_cents=? WHERE id=?`,
-        [preview.subtotal_cents, preview.tax_cents, preview.total_cents, id],
+        `UPDATE invoices SET subtotal_cents=?, tax_cents=?, total_cents=?, updated_at=? WHERE id=?`,
+        [preview.subtotal_cents, preview.tax_cents, preview.total_cents, nowIso(), id],
       );
       await tx.execute(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'create', 'invoice', ?, ?)`,
@@ -445,8 +446,8 @@ export async function ensureConsultaForAppointment(appointmentId: string, actorI
   const id = uid();
   const now = nowIso();
   await query(
-    `INSERT INTO treatments (id, patient_id, appointment_id, description, code, cost_cents, tax_kind, status, performed_by, performed_at, created_at)
-     VALUES (?, ?, ?, ?, 'CONSULTA', ?, ?, 'done', ?, ?, ?)`,
+    `INSERT INTO treatments (id, patient_id, appointment_id, description, code, cost_cents, tax_kind, status, performed_by, performed_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'CONSULTA', ?, ?, 'done', ?, ?, ?, ?)`,
     [
       id,
       appt.patient_id,
@@ -455,6 +456,7 @@ export async function ensureConsultaForAppointment(appointmentId: string, actorI
       catalog?.default_price_cents ?? 5000000,
       catalog?.tax_kind ?? 'standard',
       actorId ?? null,
+      now,
       now,
       now,
     ],

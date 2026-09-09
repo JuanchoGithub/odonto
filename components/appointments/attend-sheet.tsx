@@ -20,6 +20,7 @@ import {
   type VisitPreview,
 } from '@/server/actions/billing';
 import { createTreatment } from '@/server/actions/treatments';
+import { useCatalogRows } from '@/lib/store/options';
 import { useToast } from '@/components/ui/toaster';
 import { AttendTemplateSheet } from './attend-template-sheet';
 import { useWhatsapp } from '@/components/whatsapp-provider';
@@ -260,7 +261,15 @@ function VisitBilling({
   const [preview, setPreview] = useState<VisitPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [billing, setBilling] = useState(false);
-  const [catalog, setCatalog] = useState<CatalogOption[]>([]);
+  // Catalog comes from the offline-first store (zero invocations).
+  const catalog: CatalogOption[] = useCatalogRows().map((c) => ({
+    id: c.id,
+    code: c.code,
+    description: c.description,
+    default_price_cents: c.default_price_cents,
+    tax_kind: c.tax_kind,
+    is_definitive: Number(c.is_definitive),
+  }));
   const [q, setQ] = useState('');
   const [price, setPrice] = useState('');
   const [adding, setAdding] = useState(false);
@@ -278,10 +287,6 @@ function VisitBilling({
   useEffect(() => {
     if (open) {
       refresh();
-      fetch('/api/catalog')
-        .then((r) => (r.ok ? r.json() : []))
-        .then((rows) => setCatalog(Array.isArray(rows) ? rows : []))
-        .catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, appointment.id, appointment.status]);

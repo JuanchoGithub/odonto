@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Link, usePathname, useRouter } from '@/lib/navigation';
 import { useTranslations } from 'next-intl';
-import { signOut } from 'next-auth/react';
+import { signOutAndClear } from '@/lib/store/session';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -116,7 +116,7 @@ export function BottomNav({
             })}
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={() => void signOutAndClear()}
               className="flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-2 text-base font-medium text-destructive hover:bg-accent"
             >
               <LogOut className="h-5 w-5" />

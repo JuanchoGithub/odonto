@@ -10,6 +10,7 @@ import {
   type PatientOption,
 } from '@/lib/patient-options';
 import { useServerSearch } from '@/lib/hooks/use-server-search';
+import { useEnsureSeeded } from '@/lib/store/sync';
 
 type Props = {
   value: string;
@@ -56,6 +57,9 @@ export function PatientCombobox({
   // pick/clear/blur). Used to never clobber in-progress typing when the
   // parent value changes.
   const typingRef = useRef(false);
+
+  // Ensure the patients snapshot is seeded so type-ahead works on fresh sessions.
+  useEnsureSeeded({ deltas: ['patients'] });
 
   const fetchPatients = useCallback(
     (q: string, signal: AbortSignal) => fetchPatientOptions(q, signal),

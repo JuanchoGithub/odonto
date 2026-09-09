@@ -13,6 +13,7 @@ import { ThemeProvider } from '@/components/theme/theme-provider';
 import { WhatsappProvider } from '@/components/whatsapp-provider';
 import { getWhatsappContextData } from '@/server/actions/whatsapp';
 import { buildUserWhatsappMap } from '@/lib/whatsapp';
+import { SyncLoop } from '@/components/sync-loop';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -92,8 +93,9 @@ export default async function LocaleLayout({
           clinic={{ countryCode: whatsapp.countryCode, templates: whatsapp.templates }}
           byUser={Object.fromEntries(whatsappByUser)}
         >
-          <Toaster>
-            <ThemeProvider>
+            <Toaster>
+              {session?.user ? <SyncLoop /> : null}
+              <ThemeProvider>
             <div className="min-h-dvh flex flex-col">
               {session?.user ? (
                 <TopNav

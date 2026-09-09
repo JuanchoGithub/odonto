@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,20 +9,24 @@ import type { Currency, AppLocale } from '@/lib/schemas/common';
 import { AttendSheet } from '@/components/appointments/attend-sheet';
 import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
 import { updateAppointmentStatus } from '@/server/actions/appointments';
-import {
-  listSecretarySchedule,
-  listFollowUps,
-  listPanelUnpaid,
-  listPanelRecentPayments,
-  type PanelAppt,
-  type SecretarySchedule,
-  type FollowUps,
-  type PanelUnpaidInvoice,
-  type PanelPayment,
+import type {
+  PanelAppt,
+  SecretarySchedule,
+  FollowUps,
+  PanelUnpaidInvoice,
+  PanelPayment,
 } from '@/server/actions/dashboard';
 import { useToast } from '@/components/ui/toaster';
 import { PanelApptCard } from './panel-appt-card';
-import { usePanelRefresh } from './use-panel-refresh';
+import { useDeltaRows } from '@/lib/store/snapshots';
+import { runSync, useAutoSync } from '@/lib/store/sync';
+import {
+  secretarySchedule,
+  followUps,
+  unpaidInvoices,
+  recentPayments,
+  type PanelItem,
+} from '@/lib/store/projections';
 
 function dayLabel(date: string): string {
   const [y, m, d] = date.split('-').map(Number);
@@ -43,56 +47,72 @@ export function SecretaryPanel({
   currency,
   locale,
   clinicDefaultDuration,
+  clinicTz,
 }: {
   dentists: { id: string; name: string; slot_minutes?: number | null }[];
   currency: string;
   locale: string;
   clinicDefaultDuration?: number;
+  clinicTz: string;
 }) {
   const t = useTranslations('dashboard');
   const tBilling = useTranslations('billing');
   const tErr = useTranslations('errors');
   const { push } = useToast();
-  const [schedule, setSchedule] = useState<SecretarySchedule | null>(null);
-  const [followUps, setFollowUps] = useState<FollowUps | null>(null);
-  const [unpaid, setUnpaid] = useState<PanelUnpaidInvoice[]>([]);
-  const [recentPayments, setRecentPayments] = useState<PanelPayment[]>([]);
+  // All data comes from the offline-first store (5-min delta sync, zero
+  // per-poll server actions). Panels are pure projections over snapshots.
+  const apptRows = useDeltaRows('appointments');
+  const invoiceRows = useDeltaRows('invoices');
+  const paymentRows = useDeltaRows('payments');
+  useAutoSync();
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
   const [armingComplete, setArmingComplete] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  const load = useCallback(async () => {
-    const [sched, fups, unp, pays] = await Promise.all([
-      listSecretarySchedule().catch(() => null),
-      listFollowUps().catch(() => null),
-      listPanelUnpaid().catch(() => null),
-      listPanelRecentPayments().catch(() => null),
-    ]);
-    if (sched && 'ok' in sched) setSchedule(sched.schedule);
-    if (fups && 'ok' in fups) setFollowUps(fups.followUps);
-    if (unp && 'ok' in unp) setUnpaid(unp.items);
-    if (pays && 'ok' in pays) setRecentPayments(pays.items);
-    setAttendAppt((prev) => {
-      if (!prev) return prev;
-      const all = [
-        ...(sched && 'ok' in sched
-          ? [...sched.schedule.today, ...sched.schedule.restOfWeek.flatMap((g) => g.items)]
-          : []),
-        ...(fups && 'ok' in fups
-          ? [...fups.followUps.late, ...fups.followUps.noShow, ...fups.followUps.notCompleted]
-          : []),
-      ];
-      return all.find((r) => r.id === prev.id) ?? prev;
-    });
-    setLoaded(true);
+  const schedule: SecretarySchedule = useMemo(
+    () => secretarySchedule(apptRows, clinicTz),
+    [apptRows, clinicTz],
+  );
+  const followUpGroups: FollowUps = useMemo(
+    () => followUps(apptRows, clinicTz) as unknown as FollowUps,
+    [apptRows, clinicTz],
+  );
+  const unpaid: PanelUnpaidInvoice[] = useMemo(
+    () => unpaidInvoices(invoiceRows, paymentRows) as unknown as PanelUnpaidInvoice[],
+    [invoiceRows, paymentRows],
+  );
+  const recentPays: PanelPayment[] = useMemo(
+    () => recentPayments(paymentRows) as unknown as PanelPayment[],
+    [paymentRows],
+  );
+
+  const load = useCallback(() => {
+    // Refresh from the server after a write (one delta sync, not N actions).
+    void runSync();
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
-  usePanelRefresh(load);
+    // First paint: resolve loading once the initial sync lands.
+    void runSync().finally(() => setLoaded(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reconcile the open AttendSheet with fresh rows.
+  useEffect(() => {
+    setAttendAppt((prev) => {
+      if (!prev) return prev;
+      const all: PanelItem[] = [
+        ...schedule.today,
+        ...schedule.restOfWeek.flatMap((g) => g.items),
+        ...followUpGroups.late,
+        ...followUpGroups.noShow,
+        ...followUpGroups.notCompleted,
+      ];
+      return (all.find((r) => r.id === prev.id) as PanelAppt | undefined) ?? prev;
+    });
+  }, [schedule, followUpGroups]);
 
   async function markNoShow(id: string) {
     if (armingNoShow !== id) {
@@ -194,7 +214,7 @@ export function SecretaryPanel({
         </section>
       ) : null}
 
-      {followUps ? (
+      {loaded ? (
         <section aria-label={t('followUps')} data-testid="panel-followups">
           <h2 className="mb-2 text-lg font-semibold">{t('followUps')}</h2>
           <div className="space-y-4">
@@ -202,7 +222,7 @@ export function SecretaryPanel({
               title={t('late')}
               testid="panel-followup-late"
               empty={t('emptyFollowUp')}
-              items={followUps.late}
+              items={followUpGroups.late}
               onAttend={setAttendAppt}
               onRefresh={load}
             />
@@ -210,7 +230,7 @@ export function SecretaryPanel({
               title={t('noShow')}
               testid="panel-followup-noshow"
               empty={t('emptyFollowUp')}
-              items={followUps.noShow}
+              items={followUpGroups.noShow}
               onAttend={setAttendAppt}
               onRefresh={load}
               extra={(a) => (
@@ -231,7 +251,7 @@ export function SecretaryPanel({
               title={t('notCompleted')}
               testid="panel-followup-incomplete"
               empty={t('emptyFollowUp')}
-              items={followUps.notCompleted}
+              items={followUpGroups.notCompleted}
               onAttend={setAttendAppt}
               onRefresh={load}
               extra={(a) => (
@@ -294,13 +314,13 @@ export function SecretaryPanel({
             ))}
           </ul>
         )}
-        {recentPayments.length > 0 ? (
+        {recentPays.length > 0 ? (
           <div className="mt-3">
             <h3 className="mb-1 text-sm font-medium text-muted-foreground">
               {t('recentPayments')}
             </h3>
             <ul className="space-y-2">
-              {recentPayments.map((p) => (
+              {recentPays.map((p) => (
                 <li
                   key={p.id}
                   data-testid="panel-payment-row"

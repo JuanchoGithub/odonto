@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { fillBirthDate } from './helpers';
+import { fillBirthDate, flushQueueAndOpenPatient } from './helpers';
 
 const DENTIST = { email: 'doc@local', password: 'Doctor123!' };
 const RECEPTIONIST = { email: 'front@local', password: 'Front123!' };
@@ -18,8 +18,11 @@ async function createPatientAndOpenOdontogram(page: Page) {
   await page.getByLabel(/first name|nombre/i).fill('OdontoTest');
   await page.getByLabel(/last name|apellido/i).fill(`Od${stamp}`);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
-  await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
+  await flushQueueAndOpenPatient(page, `Od${stamp}`);
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
+  // The overview tab mounts an odontogram preview; wait for it to detach
+  // so chart locators resolve strictly to the active tab.
+  await expect(page.getByTestId('overview-odontogram')).toBeHidden({ timeout: 15_000 });
   await expect(page.getByTestId('odontogram-root')).toBeVisible();
   return stamp;
 }
@@ -36,6 +39,7 @@ async function expectAfterReload(
   for (let i = 0; i < tries; i++) {
     await page.reload();
     await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
+    await expect(page.getByTestId('overview-odontogram')).toBeHidden({ timeout: 15_000 });
     await expect(page.getByTestId('odontogram-root')).toBeVisible();
     try {
       await fn();
@@ -585,10 +589,11 @@ test('odontogram: under-10 patient shows only the kid chart', async ({ page }) =
   young.setFullYear(young.getFullYear() - 5);
   const youngDate = young.toISOString().slice(0, 10);
   await page.getByLabel(/first name|nombre/i).fill('Young');
-  await page.getByLabel(/last name|apellido/i).fill(`Kid${Date.now()}`);
+  const kidLast = `Kid${Date.now()}`;
+  await page.getByLabel(/last name|apellido/i).fill(kidLast);
   await fillBirthDate(page, page, youngDate);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
-  await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
+  await flushQueueAndOpenPatient(page, kidLast);
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
 
   await expect(page.getByTestId('chart-kid')).toBeVisible();
@@ -603,10 +608,11 @@ test('odontogram: 11yo patient shows kid first then adult', async ({ page }) => 
   date.setFullYear(date.getFullYear() - 11);
   const iso = date.toISOString().slice(0, 10);
   await page.getByLabel(/first name|nombre/i).fill('Mid');
-  await page.getByLabel(/last name|apellido/i).fill(`Mid${Date.now()}`);
+  const midLast = `Mid${Date.now()}`;
+  await page.getByLabel(/last name|apellido/i).fill(midLast);
   await fillBirthDate(page, page, iso);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
-  await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
+  await flushQueueAndOpenPatient(page, midLast);
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
 
   // Both charts are visible
@@ -636,10 +642,11 @@ test('odontogram: >12yo patient with no kid history shows only adult', async ({
   date.setFullYear(date.getFullYear() - 30);
   const iso = date.toISOString().slice(0, 10);
   await page.getByLabel(/first name|nombre/i).fill('Adult');
-  await page.getByLabel(/last name|apellido/i).fill(`Ad${Date.now()}`);
+  const adLast = `Ad${Date.now()}`;
+  await page.getByLabel(/last name|apellido/i).fill(adLast);
   await fillBirthDate(page, page, iso);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
-  await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
+  await flushQueueAndOpenPatient(page, adLast);
   await page.getByRole('tab', { name: /odontograma|odontogram/i }).click();
 
   await expect(page.getByTestId('chart-adult')).toBeVisible();

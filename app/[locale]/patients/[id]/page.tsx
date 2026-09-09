@@ -137,7 +137,7 @@ export default async function PatientDetailPage({
             </CardHeader>
             <CardContent>
               <ClinicalAlertBanner patient={patient} className="mb-4" />
-              <PatientForm patient={patient} mode="general" />
+              <PatientForm patient={patient} mode="general" queueMode />
             </CardContent>
           </Card>
         </TabsContent>
@@ -148,7 +148,7 @@ export default async function PatientDetailPage({
             </CardHeader>
             <CardContent>
               <ClinicalAlertBanner patient={patient} className="mb-4" />
-              <PatientForm patient={patient} mode="medical" />
+              <PatientForm patient={patient} mode="medical" queueMode />
             </CardContent>
           </Card>
         </TabsContent>

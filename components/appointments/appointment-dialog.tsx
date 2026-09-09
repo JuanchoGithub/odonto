@@ -25,9 +25,9 @@ import { useRouter } from '@/lib/navigation';
 import { format } from 'date-fns';
 import type { PatientRow } from '@/server/actions/patients';
 import { PatientForm } from '@/components/patients/patient-form';
-import { createPatientInline } from '@/server/actions/patients';
 import type { Role } from '@/lib/schemas/common';
 import { WhatsappButton } from '@/components/ui/whatsapp-button';
+import { usePatientOptions } from '@/lib/store/options';
 import { useWhatsapp } from '@/components/whatsapp-provider';
 
 const STATUS_OPTIONS = [
@@ -102,9 +102,8 @@ export function AppointmentDialog({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [forceMode, setForceMode] = useState(false);
-  const [patients, setPatients] = useState<
-    { id: string; name: string; phone: string | null; email: string | null }[]
-  >([]);
+  // Patient display names from the offline-first store (zero invocations).
+  const patients = usePatientOptions();
   const [patientId, setPatientId] = useState<string>(appointment.patient_id);
   const [dentistId, setDentistId] = useState<string>(appointment.dentist_id);
   const [status, setStatus] = useState<string>(appointment.status);
@@ -120,24 +119,11 @@ export function AppointmentDialog({
 
   const editing = appointment;
 
-  // Patient display names for the locked header (contact info).
+  // Reset transient state when the dialog opens.
   useEffect(() => {
     if (!open) return;
     setError(null);
     setConfirmDelete(false);
-    fetch('/api/patients?limit=200')
-      .then((r) => r.json())
-      .then((data) =>
-        setPatients(
-          data.map((p: PatientRow) => ({
-            id: p.id,
-            name: `${p.last_name}, ${p.first_name}`,
-            phone: p.phone,
-            email: p.email,
-          })),
-        ),
-      )
-      .catch(() => setPatients([]));
   }, [open]);
 
   // Reset form state whenever another appointment is opened for edit.
@@ -666,7 +652,7 @@ export function NewPatientFullDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/50" />
-        <Dialog.Content className="fixed inset-x-0 bottom-0 z-[60] w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-3xl sm:max-h-[95vh]">
+          <Dialog.Content data-testid="new-patient-dialog" className="fixed inset-x-0 bottom-0 z-[60] w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-3xl sm:max-h-[95vh]">
           <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -681,14 +667,8 @@ export function NewPatientFullDialog({
           </div>
           <PatientForm
             mode="quick"
-            action={async (_prev, fd) => {
-              const res = await createPatientInline({}, fd);
-              if (res.ok) {
-                onCreated(res.patient);
-                return { ok: true };
-              }
-              return { error: res.error };
-            }}
+            queueMode
+            onCreated={onCreated}
           />
           <div className="mt-4 flex justify-end">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

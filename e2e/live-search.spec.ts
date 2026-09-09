@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { login, openManualCreate } from './helpers';
+import { login, openManualCreate, waitForSyncIdle } from './helpers';
 
 test('patients page shows suggestions while typing and opens the patient', async ({
   page,
 }) => {
   await login(page);
   await page.goto('/patients');
+  await waitForSyncIdle(page);
 
   const input = page.locator('input[name="q"]');
   await input.fill('García');
@@ -30,6 +31,7 @@ test('appointment patient picker searches the server (phone match)', async ({
   page,
 }) => {
   await login(page);
+  await waitForSyncIdle(page);
 
   // Create a patient with a unique phone number via the API.
   const stamp = String(Date.now()).slice(-6);
@@ -71,6 +73,7 @@ test('insurers page shows suggestions while typing and opens the insurer', async
   expect(res.ok()).toBeTruthy();
 
   await page.goto('/insurers');
+  await waitForSyncIdle(page);
   await page.locator('input[name="q"]').fill('SeguroFind');
 
   const option = page

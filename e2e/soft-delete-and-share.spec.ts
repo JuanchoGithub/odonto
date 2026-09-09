@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { flushQueueAndOpenPatient } from './helpers';
 
 test('soft delete patient with confirmation and undo', async ({ page }) => {
   await page.goto('/login');
@@ -13,7 +14,7 @@ test('soft delete patient with confirmation and undo', async ({ page }) => {
   await page.getByLabel(/first name|nombre/i).fill('ForDelete');
   await page.getByLabel(/last name|apellido/i).fill(`SoftDel${stamp}`);
   await page.getByRole('button', { name: /^save$|^guardar$/i }).click();
-  await page.waitForURL(/\/patients\/[0-9a-f-]{36}/, { timeout: 15_000 });
+  await flushQueueAndOpenPatient(page, `SoftDel${stamp}`);
 
   // Click Delete → confirm dialog appears
   await page.getByTestId('delete-patient').click();

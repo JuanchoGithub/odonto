@@ -22,6 +22,12 @@ import {
   type PatientRow,
 } from '@/server/actions/patients';
 import { listAllMedicalTags } from '@/server/actions/medical-tags';
+import {
+  queuePatientCreate,
+  queuePatientUpdate,
+  patientPayloadFromFormData,
+} from '@/lib/store/write';
+import { useRouter } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
 type Mode = 'general' | 'medical' | 'full' | 'quick';
@@ -46,6 +52,7 @@ export function PatientForm({
   action,
   onCreated,
   mode = 'general',
+  queueMode = false,
 }: {
   patient?: PatientRow;
   action?: (prev: PatientFormState, fd: FormData) => Promise<PatientFormState>;
@@ -56,6 +63,11 @@ export function PatientForm({
    * via the inline dialog).
    */
   onCreated?: (p: PatientRow) => void;
+  /**
+   * Offline-first: queue the write locally and flush at the next sync
+   * instead of calling a server action (zero invocations on save).
+   */
+  queueMode?: boolean;
   /**
    * 'general' — demographics, contact, insurance, notes (default).
    * 'medical' — clinical history, allergies, conditions, meds, vitals.
@@ -71,6 +83,7 @@ export function PatientForm({
 }) {
   const t = useTranslations('patients');
   const tc = useTranslations('common');
+  const router = useRouter();
   const isGeneral = mode === 'general';
   const isMedical = mode === 'medical';
   const isQuick = mode === 'quick';
@@ -118,6 +131,52 @@ export function PatientForm({
 
   const [state, formAction, pending] = useActionState<PatientFormState, FormData>(
     async (prev, fd) => {
+      if (queueMode) {
+        // Offline-first path: optimistic local write, DB flush at sync.
+        const payload = patientPayloadFromFormData(fd);
+        if (!patient) {
+          const id = queuePatientCreate(fd);
+          if (onCreated) {
+            onCreated({
+              id,
+              first_name: String(payload.first_name ?? ''),
+              last_name: String(payload.last_name ?? ''),
+              document_id: (payload.document_id as string) || null,
+              birth_date: (payload.birth_date as string) || null,
+              gender: (payload.gender as string) || null,
+              phone: (payload.phone as string) || null,
+              email: (payload.email as string) || null,
+              address: (payload.address as string) || null,
+              insurance_provider: (payload.insurance_provider as string) || null,
+              insurance_number: (payload.insurance_number as string) || null,
+              insurer_id: (payload.insurer_id as string) || null,
+              insurance_plan: (payload.insurance_plan as string) || null,
+              medical_history: (payload.medical_history as string) || null,
+              allergies: (payload.allergies as string) || null,
+              notes: (payload.notes as string) || null,
+              deleted_at: null,
+              chronic_conditions: (payload.chronic_conditions as string) || null,
+              contagious_diseases: (payload.contagious_diseases as string) || null,
+              current_medications: (payload.current_medications as string) || null,
+              allergies_medication: (payload.allergies_medication as string) || null,
+              blood_pressure: (payload.blood_pressure as string) || null,
+              blood_type: (payload.blood_type as string) || null,
+              diabetes: (payload.diabetes as string) || null,
+              pregnant: (payload.pregnant as string) || null,
+              last_medical_update: (payload.last_medical_update as string) || null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          } else {
+            // Standalone create (e.g. /patients/new): land on the list —
+            // the row is in the store + queue and syncs in the background.
+            router.push('/patients');
+          }
+          return { ok: true };
+        }
+        queuePatientUpdate(patient.id, fd, patient.updated_at ?? null);
+        return { ok: true };
+      }
       const res = await baseBound(prev, fd);
       if (res.ok && !patient && onCreated) {
         onCreated({

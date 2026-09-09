@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
@@ -36,6 +36,7 @@ import {
 } from '@/server/actions/patients';
 import type { PatientOption } from '@/lib/patient-options';
 import { PatientCombobox } from '@/components/patients/patient-combobox';
+import { usePatientOptions, searchPatientsLocal } from '@/lib/store/options';
 import {
   PatientContact,
   NewPatientFullDialog,
@@ -123,9 +124,6 @@ export function AddAppointmentDialog({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [forceMode, setForceMode] = useState(false);
-  const [patients, setPatients] = useState<
-    { id: string; name: string; phone: string | null; email: string | null }[]
-  >([]);
   const [patientId, setPatientId] = useState('');
   const [newPatientOpen, setNewPatientOpen] = useState(false);
   const [dentistId, setDentistId] = useState(
@@ -146,23 +144,28 @@ export function AddAppointmentDialog({
   const [links, setLinks] = useState<TurnPickerLinkListItem[]>([]);
   const [copied, setCopied] = useState(false);
 
-  // Load the fallback patient list each time the dialog opens.
-  useEffect(() => {
-    if (!open) return;
-    fetch('/api/patients?limit=200')
-      .then((r) => r.json())
-      .then((data) =>
-        setPatients(
-          data.map((p: PatientRow) => ({
-            id: p.id,
-            name: `${p.last_name}, ${p.first_name}`,
-            phone: p.phone,
-            email: p.email,
-          })),
-        ),
-      )
-      .catch(() => setPatients([]));
-  }, [open ]);
+  // Patient list comes from the offline-first store (zero invocations).
+  // Locally-created patients are kept in `extraPatients` until the sync
+  // confirms them, then the store row takes over by id.
+  const storePatientOptions = usePatientOptions();
+  const [extraPatients, setExtraPatients] = useState<
+    { id: string; name: string; phone: string | null; email: string | null }[]
+  >([]);
+  const patients = useMemo(() => {
+    const ids = new Set(storePatientOptions.map((p) => p.id));
+    return [
+      ...storePatientOptions,
+      ...extraPatients.filter((p) => !ids.has(p.id)),
+    ];
+  }, [storePatientOptions, extraPatients]);
+  const pushExtraPatient = useCallback(
+    (opt: { id: string; name: string; phone: string | null; email: string | null }) => {
+      setExtraPatients((list) =>
+        list.some((x) => x.id === opt.id) ? list : [...list, opt],
+      );
+    },
+    [],
+  );
 
   // Reset all state when the dialog OPENS — never while open. Server
   // revalidation (e.g. after inline patient creation) gives parents new
@@ -226,37 +229,28 @@ export function AddAppointmentDialog({
     setNewPatientOpen(false);
     if (p.id) {
       setPatientId(p.id);
-      setPatients((list) => [
-        ...list,
-        {
-          id: p.id,
-          name: `${p.last_name}, ${p.first_name}`,
-          phone: p.phone,
-          email: p.email,
-        },
-      ]);
+      pushExtraPatient({
+        id: p.id,
+        name: `${p.last_name}, ${p.first_name}`,
+        phone: p.phone,
+        email: p.email,
+      });
       return;
     }
-    try {
-      const r = await fetch(`/api/patients?q=${encodeURIComponent(p.last_name)}`);
-      const list: PatientRow[] = await r.json();
-      const match = list.find(
-        (x) => x.first_name === p.first_name && x.last_name === p.last_name,
-      );
-      if (match) {
-        setPatientId(match.id);
-        setPatients((prev) => [
-          ...prev,
-          {
-            id: match.id,
-            name: `${match.last_name}, ${match.first_name}`,
-            phone: match.phone,
-            email: match.email,
-          },
-        ]);
-      }
-    } catch {
-      /* ignore */
+    // Inline (queued) create: match the optimistic store row by name.
+    const match = searchPatientsLocal(p.last_name, 200).find(
+      (x) =>
+        x.name === `${p.last_name}, ${p.first_name}` ||
+        x.name.includes(p.first_name),
+    );
+    if (match) {
+      setPatientId(match.id);
+      pushExtraPatient({
+        id: match.id,
+        name: match.name,
+        phone: match.phone,
+        email: match.email,
+      });
     }
   }
 
@@ -320,6 +314,13 @@ export function AddAppointmentDialog({
     setError(null);
     setLoading(true);
     try {
+      // Offline-first: a just-created (queued) patient must exist server-side
+      // before the appointment FK references it. Flush once if needed.
+      const { ensurePatientSynced } = await import('@/lib/store/write');
+      if (!(await ensurePatientSynced(patientId))) {
+        setError(t('patientNotFound'));
+        return;
+      }
       // Timezone-aware ISO instants (naive y-m-d/HH:mm caused TZ ambiguity).
       const startLocal = new Date(`${dateVal}T${timeVal}:00`);
       const endLocal = new Date(startLocal.getTime() + Number(durVal) * 60000);
@@ -356,6 +357,43 @@ export function AddAppointmentDialog({
         return;
       }
       setForceMode(false);
+      // Optimistic: insert the block into the shared store instantly (the
+      // background sync reconciles authoritative rows seconds later).
+      if (res && 'ok' in res) {
+        try {
+          const { upsertRow } = await import('@/lib/store/snapshots');
+          const opt = patients.find((p) => p.id === patientId);
+          const dent = dentists.find((d) => d.id === dentistId);
+          upsertRow('appointments', {
+            id: res.id,
+            patient_id: patientId,
+            dentist_id: dentistId,
+            starts_at: startLocal.toISOString(),
+            ends_at: endLocal.toISOString(),
+            status: 'scheduled',
+            reason: reason || null,
+            notes: notes || null,
+            reprogram_count: 0,
+            original_starts_at: null,
+            cancelled_at: null,
+            cancelled_by: null,
+            cancel_reason: null,
+            no_show_at: null,
+            no_show_by: null,
+            completed_at: null,
+            patient_name: opt ? opt.name : '',
+            dentist_name: dent ? dent.name : '',
+            dentist_color: null,
+            created_by: currentUserId ?? null,
+            created_via: createdVia,
+            creator_name: null,
+            patient_phone: opt?.phone ?? null,
+            patient_email: opt?.email ?? null,
+          });
+        } catch {
+          // Best-effort; the sync will populate the row.
+        }
+      }
       onOpenChange(false);
       if (onCreated) onCreated();
       else router.refresh();
@@ -398,11 +436,7 @@ export function AddAppointmentDialog({
                 selectedName={selectedName}
                 onChange={(id, opt) => {
                   setPatientId(id);
-                  if (opt) {
-                    setPatients((list) =>
-                      list.some((x) => x.id === id) ? list : [...list, opt],
-                    );
-                  }
+                  if (opt) pushExtraPatient(opt);
                 }}
                 onCreateNew={() => setNewPatientOpen(true)}
                 inputTestId="appt-patient-input"

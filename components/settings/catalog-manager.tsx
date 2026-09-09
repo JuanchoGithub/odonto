@@ -1,49 +1,71 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  listCatalog,
-  upsertCatalogEntry,
-  markCatalogDefinitive,
-  archiveCatalogEntry,
-  type CatalogRow,
-} from '@/server/actions/catalog';
+import type { CatalogRow } from '@/server/actions/catalog';
 import { useRouter } from '@/lib/navigation';
+import { useSnapRows } from '@/lib/store/snapshots';
+import { runSync, useAutoSync } from '@/lib/store/sync';
 
 export function CatalogManager() {
   const t = useTranslations('settings');
-  const [rows, setRows] = useState<CatalogRow[] | null>(null);
   const [desc, setDesc] = useState('');
   const [price, setPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const router = useRouter();
+  // Catalog comes from the offline-first store (zero invocations).
+  const snapRows = useSnapRows('catalog');
+  useAutoSync();
+  const rows: CatalogRow[] | null = useMemo(
+    () =>
+      (snapRows as unknown as CatalogRow[]).filter(
+        (r) => !(r as unknown as { archived_at: string | null }).archived_at,
+      ),
+    [snapRows],
+  );
 
-  async function refresh() {
-    const data = await listCatalog({ includeArchived: false });
-    setRows(data);
+  function refresh() {
+    void runSync();
   }
-
-  useEffect(() => {
-    refresh();
-  }, []);
 
   async function add() {
     if (!desc.trim()) return;
     setSaving(true);
-    const fd = new FormData();
-    fd.set('description', desc.trim());
-    fd.set('price', price.trim() === '' ? '0' : price.trim());
-    fd.set('tax_kind', 'standard');
-    fd.set('kind', 'general');
-    await upsertCatalogEntry(fd);
-    setDesc('');
-    setPrice('');
-    setSaving(false);
-    await refresh();
+    try {
+      // Offline-first: queue locally, flush at sync (zero invocations).
+      const { queueCatalogCreate } = await import('@/lib/store/write');
+      queueCatalogCreate({
+        description: desc.trim(),
+        code: null,
+        price: Number(price.trim().replace(',', '.')) || 0,
+        tax_kind: 'standard',
+        kind: 'general',
+      });
+      setDesc('');
+      setPrice('');
+    } finally {
+      setSaving(false);
+    }
     router.refresh();
+  }
+
+  async function approve(id: string) {
+    const { queueCatalogDefinitive } = await import('@/lib/store/write');
+    const row = rows?.find((r) => r.id === id);
+    queueCatalogDefinitive(
+      id,
+      {},
+      (row as unknown as { updated_at?: string } | undefined)?.updated_at ?? null,
+    );
+    refresh();
+  }
+
+  async function archive(id: string) {
+    const { queueCatalogArchive } = await import('@/lib/store/write');
+    queueCatalogArchive(id);
+    refresh();
   }
 
   if (!rows) return <p className="text-sm text-muted-foreground">…</p>;
@@ -68,12 +90,12 @@ export function CatalogManager() {
               </span>
             </span>
             {!r.is_definitive ? (
-              <Button size="sm" onClick={() => markCatalogDefinitive(r.id).then(refresh)}>
+              <Button size="sm" onClick={() => approve(r.id)}>
                 {t('catalogApprove')}
               </Button>
             ) : null}
             {r.kind !== 'consulta' ? (
-              <Button size="sm" variant="ghost" onClick={() => archiveCatalogEntry(r.id).then(refresh)}>
+              <Button size="sm" variant="ghost" onClick={() => archive(r.id)}>
                 {t('catalogArchive')}
               </Button>
             ) : null}

@@ -20,7 +20,7 @@ export default async function NewPatientPage({
           <CardTitle>{t('new')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <PatientForm />
+          <PatientForm queueMode />
         </CardContent>
       </Card>
     </div>
