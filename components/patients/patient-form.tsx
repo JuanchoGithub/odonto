@@ -1,5 +1,5 @@
 'use client';
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,8 @@ import {
   patientPayloadFromFormData,
 } from '@/lib/store/write';
 import { useRouter } from '@/lib/navigation';
+import { useDeltaRows } from '@/lib/store/snapshots';
+import { useEnsureSeeded } from '@/lib/store/sync';
 import { cn } from '@/lib/utils';
 
 type Mode = 'general' | 'medical' | 'full' | 'quick';
@@ -97,11 +99,20 @@ export function PatientForm({
     plan: patient?.insurance_plan ?? '',
   });
 
+  useEnsureSeeded({ deltas: ['patients'] });
+
   const [dictionaries, setDictionaries] = useState<Record<string, string[]>>({});
   useEffect(() => {
     listAllMedicalTags().then(setDictionaries).catch(() => {});
   }, []);
   const dictFor = (field: string) => dictionaries[field] ?? [];
+
+  const storePatients = useDeltaRows('patients');
+  const patientFromStore = useMemo(
+    () => storePatients.find((p) => p.id === (patient?.id ?? '')) ?? patient,
+    [storePatients, patient],
+  );
+  const mergedPatient = patientFromStore ?? patient;
 
   // Quick-intake age shorthand (source of truth for birth_date in quick mode).
   const [birthIso, setBirthIso] = useState(patient?.birth_date ?? '');
@@ -175,6 +186,7 @@ export function PatientForm({
           return { ok: true };
         }
         queuePatientUpdate(patient.id, fd, patient.updated_at ?? null);
+        router.refresh();
         return { ok: true };
       }
       const res = await baseBound(prev, fd);
@@ -219,36 +231,38 @@ export function PatientForm({
     <form action={formAction} className="space-y-4">
       {/* ==== Hidden inputs: preserve the OTHER mode's values on submit ====
           (Not needed in 'full' mode, where everything is visible.) */}
-      {isMedical ? (
+      const mergedPatient = patientFromStore ?? patient;
+
+{isMedical ? (
         <>
-          <input type="hidden" name="first_name" value={patient?.first_name ?? ''} />
-          <input type="hidden" name="last_name" value={patient?.last_name ?? ''} />
-          <input type="hidden" name="document_id" value={patient?.document_id ?? ''} />
-          <input type="hidden" name="birth_date" value={patient?.birth_date ?? ''} />
-          <input type="hidden" name="gender" value={patient?.gender ?? ''} />
-          <input type="hidden" name="phone" value={patient?.phone ?? ''} />
-          <input type="hidden" name="email" value={patient?.email ?? ''} />
-          <input type="hidden" name="address" value={patient?.address ?? ''} />
-          <input type="hidden" name="insurance_provider" value={patient?.insurance_provider ?? ''} />
-          <input type="hidden" name="insurance_number" value={patient?.insurance_number ?? ''} />
-          <input type="hidden" name="insurer_id" value={patient?.insurer_id ?? ''} />
-          <input type="hidden" name="insurance_plan" value={patient?.insurance_plan ?? ''} />
-          <input type="hidden" name="notes" value={patient?.notes ?? ''} />
+          <input type="hidden" name="first_name" value={mergedPatient?.first_name ?? ''} />
+          <input type="hidden" name="last_name" value={mergedPatient?.last_name ?? ''} />
+          <input type="hidden" name="document_id" value={mergedPatient?.document_id ?? ''} />
+          <input type="hidden" name="birth_date" value={mergedPatient?.birth_date ?? ''} />
+          <input type="hidden" name="gender" value={mergedPatient?.gender ?? ''} />
+          <input type="hidden" name="phone" value={mergedPatient?.phone ?? ''} />
+          <input type="hidden" name="email" value={mergedPatient?.email ?? ''} />
+          <input type="hidden" name="address" value={mergedPatient?.address ?? ''} />
+          <input type="hidden" name="insurance_provider" value={mergedPatient?.insurance_provider ?? ''} />
+          <input type="hidden" name="insurance_number" value={mergedPatient?.insurance_number ?? ''} />
+          <input type="hidden" name="insurer_id" value={mergedPatient?.insurer_id ?? ''} />
+          <input type="hidden" name="insurance_plan" value={mergedPatient?.insurance_plan ?? ''} />
+          <input type="hidden" name="notes" value={mergedPatient?.notes ?? ''} />
         </>
       ) : null}
       {isGeneral ? (
         <>
-          <input type="hidden" name="medical_history" value={patient?.medical_history ?? ''} />
-          <input type="hidden" name="allergies" value={patient?.allergies ?? ''} />
-          <input type="hidden" name="chronic_conditions" value={patient?.chronic_conditions ?? ''} />
-          <input type="hidden" name="contagious_diseases" value={patient?.contagious_diseases ?? ''} />
-          <input type="hidden" name="current_medications" value={patient?.current_medications ?? ''} />
-          <input type="hidden" name="allergies_medication" value={patient?.allergies_medication ?? ''} />
-          <input type="hidden" name="blood_pressure" value={patient?.blood_pressure ?? ''} />
-          <input type="hidden" name="blood_type" value={patient?.blood_type ?? ''} />
-          <input type="hidden" name="diabetes" value={patient?.diabetes ?? ''} />
-          <input type="hidden" name="pregnant" value={patient?.pregnant ?? ''} />
-          <input type="hidden" name="last_medical_update" value={patient?.last_medical_update ?? ''} />
+          <input type="hidden" name="medical_history" value={mergedPatient?.medical_history ?? ''} />
+          <input type="hidden" name="allergies" value={mergedPatient?.allergies ?? ''} />
+          <input type="hidden" name="chronic_conditions" value={mergedPatient?.chronic_conditions ?? ''} />
+          <input type="hidden" name="contagious_diseases" value={mergedPatient?.contagious_diseases ?? ''} />
+          <input type="hidden" name="current_medications" value={mergedPatient?.current_medications ?? ''} />
+          <input type="hidden" name="allergies_medication" value={mergedPatient?.allergies_medication ?? ''} />
+          <input type="hidden" name="blood_pressure" value={mergedPatient?.blood_pressure ?? ''} />
+          <input type="hidden" name="blood_type" value={mergedPatient?.blood_type ?? ''} />
+          <input type="hidden" name="diabetes" value={mergedPatient?.diabetes ?? ''} />
+          <input type="hidden" name="pregnant" value={mergedPatient?.pregnant ?? ''} />
+          <input type="hidden" name="last_medical_update" value={mergedPatient?.last_medical_update ?? ''} />
         </>
       ) : null}
 
@@ -260,15 +274,15 @@ export function PatientForm({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="first_name">{t('firstName')}</Label>
-              <Input id="first_name" name="first_name" defaultValue={patient?.first_name} required autoComplete="given-name" />
+              <Input id="first_name" name="first_name" defaultValue={mergedPatient?.first_name} required autoComplete="given-name" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="last_name">{t('lastName')}</Label>
-              <Input id="last_name" name="last_name" defaultValue={patient?.last_name} required autoComplete="family-name" />
+              <Input id="last_name" name="last_name" defaultValue={mergedPatient?.last_name} required autoComplete="family-name" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">{tc('phone')}</Label>
-              <Input id="phone" name="phone" defaultValue={patient?.phone ?? ''} type="tel" inputMode="tel" autoComplete="tel" />
+              <Input id="phone" name="phone" defaultValue={mergedPatient?.phone ?? ''} type="tel" inputMode="tel" autoComplete="tel" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="patient_age">{t('age')}</Label>
@@ -292,7 +306,7 @@ export function PatientForm({
                 type="email"
                 inputMode="email"
                 autoComplete="email"
-                defaultValue={patient?.email ?? ''}
+                defaultValue={mergedPatient?.email ?? ''}
               />
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -318,11 +332,11 @@ export function PatientForm({
             <div className="grid gap-4 py-3 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="document_id">{t('documentId')}</Label>
-                <Input id="document_id" name="document_id" defaultValue={patient?.document_id ?? ''} inputMode="numeric" />
+                <Input id="document_id" name="document_id" defaultValue={mergedPatient?.document_id ?? ''} inputMode="numeric" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="gender">{t('gender')}</Label>
-                <GenderSelect defaultValue={patient?.gender ?? ''} />
+                <GenderSelect defaultValue={mergedPatient?.gender ?? ''} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="birth_date_exact">{t('birthDate')}</Label>

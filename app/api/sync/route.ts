@@ -74,7 +74,11 @@ async function currentVersion(
 }
 
 function conflicted(base: string | null, current: string | null): boolean {
-  return !!base && !!current && current > base;
+  if (!base || !current) return false;
+  const baseMs = Date.parse(base);
+  const curMs = Date.parse(current);
+  if (isNaN(baseMs) || isNaN(curMs)) return current > base;
+  return curMs - baseMs > 2000;
 }
 
 export async function POST(req: NextRequest) {
