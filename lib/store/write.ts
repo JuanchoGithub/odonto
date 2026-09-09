@@ -1,15 +1,25 @@
 'use client';
 
-import { buildOp, enqueueOp, getQueue } from './mutations';
+import { buildOp, enqueueOp, getQueue, type MutationOp } from './mutations';
 import { getDeltaRows } from './snapshots';
 import { runSync } from './sync';
 
 /**
- * Batched-write entry points. Payloads mirror the server zod schemas
- * field-for-field (kept in sync manually — see server/actions/*Schema).
- * Creates use client-generated ids adopted by the server, so queued rows
- * keep referential integrity before the flush.
+ * Write-through entry points. Every write applies optimistically to the
+ * local snapshots (instant availability in the UI — patients show up in
+ * pickers, etc.) AND flushes to the DB immediately via a sync. IDs are
+ * client-generated (crypto.randomUUID) and adopted by the server, so a
+ * freshly-created row can be referenced by other writes (e.g. an
+ * appointment → just-created patient) without a round-trip for a UUID.
+ * If offline, the write stays in the queue and flushes on the next sync.
  */
+
+/** Enqueue + flush now. Returns the (final) client-generated row id. */
+function enqueueAndFlush(op: MutationOp): string {
+  enqueueOp(op);
+  void runSync();
+  return op.rowId;
+}
 
 const PATIENT_FIELDS = [
   'first_name',
@@ -88,24 +98,23 @@ export function patientOptionFromPayload(
   };
 }
 
-/** Queue a patient create. Returns the (final) client-generated id. */
+/** Queue + immediately flush a patient create. Returns the (final) client-generated id. */
 export function queuePatientCreate(fd: FormData): string {
   const op = buildOp('patient', 'create', patientPayloadFromFormData(fd));
-  enqueueOp(op);
-  return op.rowId;
+  return enqueueAndFlush(op);
 }
 
-/** Queue a patient update. baseVersion = row.updated_at when editing began. */
+/** Queue + immediately flush a patient update. baseVersion = row.updated_at when editing began. */
 export function queuePatientUpdate(
   id: string,
   fd: FormData,
   baseVersion: string | null,
 ): void {
-  enqueueOp(buildOp('patient', 'update', patientPayloadFromFormData(fd), id, baseVersion));
+  enqueueAndFlush(buildOp('patient', 'update', patientPayloadFromFormData(fd), id, baseVersion));
 }
 
 export function queuePatientDelete(id: string, baseVersion: string | null): void {
-  enqueueOp(buildOp('patient', 'delete', {}, id, baseVersion));
+  enqueueAndFlush(buildOp('patient', 'delete', {}, id, baseVersion));
 }
 
 export function queueInsurerCreate(fields: Record<string, unknown>): string {
@@ -116,8 +125,7 @@ export function queueInsurerCreate(fields: Record<string, unknown>): string {
     email: (fields.email as string) || null,
     notes: (fields.notes as string) || null,
   });
-  enqueueOp(op);
-  return op.rowId;
+  return enqueueAndFlush(op);
 }
 
 export function queueInsurerUpdate(
@@ -125,7 +133,7 @@ export function queueInsurerUpdate(
   fields: Record<string, unknown>,
   baseVersion: string | null,
 ): void {
-  enqueueOp(
+  enqueueAndFlush(
     buildOp(
       'insurer',
       'update',
@@ -143,7 +151,7 @@ export function queueInsurerUpdate(
 }
 
 export function queueInsurerDelete(id: string): void {
-  enqueueOp(buildOp('insurer', 'delete', {}, id, null));
+  enqueueAndFlush(buildOp('insurer', 'delete', {}, id, null));
 }
 
 export function queueCatalogCreate(fields: Record<string, unknown>): string {
@@ -154,8 +162,7 @@ export function queueCatalogCreate(fields: Record<string, unknown>): string {
     tax_kind: String(fields.tax_kind ?? 'standard'),
     kind: String(fields.kind ?? 'general'),
   });
-  enqueueOp(op);
-  return op.rowId;
+  return enqueueAndFlush(op);
 }
 
 export function queueCatalogDefinitive(
@@ -163,11 +170,11 @@ export function queueCatalogDefinitive(
   opts: { price?: number; description?: string },
   baseVersion: string | null,
 ): void {
-  enqueueOp(buildOp('catalog', 'update', { ...opts }, id, baseVersion));
+  enqueueAndFlush(buildOp('catalog', 'update', { ...opts }, id, baseVersion));
 }
 
 export function queueCatalogArchive(id: string): void {
-  enqueueOp(buildOp('catalog', 'delete', {}, id, null));
+  enqueueAndFlush(buildOp('catalog', 'delete', {}, id, null));
 }
 
 export function queueTreatmentCreate(fields: Record<string, unknown>): string {
@@ -184,8 +191,7 @@ export function queueTreatmentCreate(fields: Record<string, unknown>): string {
     tax_kind: String(fields.tax_kind ?? 'standard'),
     status: String(fields.status ?? 'planned'),
   });
-  enqueueOp(op);
-  return op.rowId;
+  return enqueueAndFlush(op);
 }
 
 export function queueTreatmentStatus(
@@ -193,7 +199,7 @@ export function queueTreatmentStatus(
   status: string,
   baseVersion: string | null,
 ): void {
-  enqueueOp(buildOp('treatment', 'update', { status }, id, baseVersion));
+  enqueueAndFlush(buildOp('treatment', 'update', { status }, id, baseVersion));
 }
 
 /**
