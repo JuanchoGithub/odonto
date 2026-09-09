@@ -207,8 +207,8 @@ export async function bookViaPicker(
     wonRace = true;
     await tx.execute(
       `INSERT INTO appointments
-         (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at)
-       VALUES (?, ?, ?, ?, ?, 'scheduled', ?, NULL, ?, 'shared', ?)`,
+         (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         apptId,
         link.patient_id,
@@ -217,6 +217,7 @@ export async function bookViaPicker(
         end.toISOString(),
         'self-booked',
         link.created_by,
+        nowIso(),
         nowIso(),
       ],
     );
@@ -232,6 +233,8 @@ export async function bookViaPicker(
     );
   });
   if (!wonRace) return { ok: false, reason: 'consumed' };
+  revalidatePath(`/patients/${link.patient_id}`);
+  revalidatePath('/appointments');
   return { ok: true, startsAt: start.toISOString(), endsAt: end.toISOString() };
 }
 
