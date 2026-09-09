@@ -7,7 +7,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   updateAppointment,
-  getWeekWindowsAction,
   type ApptRow,
   type PendingLinkRow,
 } from '@/server/actions/appointments';
@@ -17,7 +16,7 @@ import {
   type CreatedVia,
 } from './add-appointment-dialog';
 import { AttendSheet } from './attend-sheet';
-import { TimeGrid, type WorkingWindow } from './time-grid';
+import { TimeGrid } from './time-grid';
 import { AppointmentList } from './appointment-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -31,7 +30,8 @@ import { useToast } from '@/components/ui/toaster';
 import { effectiveExpiryMs } from '@/lib/turn-picker';
 import { es, enUS } from 'date-fns/locale';
 import { useDeltaRows, upsertRow } from '@/lib/store/snapshots';
-import { runSync, useAutoSync, hydrateStore } from '@/lib/store/sync';
+import { runSync, useEnsureSeeded, hydrateStore } from '@/lib/store/sync';
+import { useWeekWindows } from '@/lib/store/schedules';
 import { weekSlice } from '@/lib/store/projections';
 
 export type DentistRef = { id: string; name: string; color: string | null; slot_minutes?: number | null };
@@ -69,18 +69,15 @@ export function WeekCalendar({
     }
     return startOfWeek(new Date(), { weekStartsOn: 1 });
   });
-  // Appointments come from the offline-first store (5-min delta sync).
+  // Appointments come from the offline-first store (15-min delta sync).
   // The SSR `initial` week seeds first paint; week/filter changes are local.
+  // SyncLoop owns the timer; this view seeds-on-empty only (no mount sync).
   const storeRows = useDeltaRows('appointments');
-  useAutoSync();
+  useEnsureSeeded({ deltas: ['appointments'], snaps: ['schedules'] });
   useEffect(() => {
     hydrateStore({ deltas: { appointments: { watermark: '', rows: initial } } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [windowsByDate, setWindowsByDate] = useState<Record<
-    string,
-    WorkingWindow[]
-  > | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogStart, setDialogStart] = useState<string | null>(null);
   const [dialogEnd, setDialogEnd] = useState<string | null>(null);
@@ -108,6 +105,14 @@ export function WeekCalendar({
     isDentistViewer && viewer ? viewer.id : 'all',
   );
 
+  // Working windows come from the synced schedules snapshot (zero
+  // invocations): week/filter changes recompute locally. Null = unseeded
+  // (render unshaded until the seed sync lands).
+  const windowsByDate = useWeekWindows(
+    dentistFilter === 'all' ? null : dentistFilter,
+    weekStart,
+  );
+
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   // Week slice is a local filter over the cached snapshot — navigating weeks
   // or the dentist filter costs zero function invocations.
@@ -130,21 +135,6 @@ export function WeekCalendar({
     // One delta sync after a write (authoritative reconcile), not a refetch.
     void runSync();
   }
-
-  // Working windows are still server-computed per week/filter (cheap call).
-  useEffect(() => {
-    getWeekWindowsAction(
-      dentistFilter === 'all' ? null : dentistFilter,
-      weekStart.toISOString(),
-    )
-      .then((rows) => {
-        const m: Record<string, WorkingWindow[]> = {};
-        for (const r of rows) m[r.date] = r.windows;
-        setWindowsByDate(m);
-      })
-      .catch(() => setWindowsByDate(null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart.toISOString(), dentistFilter]);
 
   function openCreate(
     start: Date | null,

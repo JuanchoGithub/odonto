@@ -9,7 +9,7 @@ import { AddAppointmentDialog } from '@/components/appointments/add-appointment-
 import { updateAppointmentStatus } from '@/server/actions/appointments';
 import { useToast } from '@/components/ui/toaster';
 import { useDeltaRows } from '@/lib/store/snapshots';
-import { runSync, useAutoSync } from '@/lib/store/sync';
+import { runSync, useEnsureSeeded } from '@/lib/store/sync';
 import {
   doctorQueue,
   doctorToday,
@@ -120,10 +120,11 @@ export function DoctorPanel({
 }) {
   const t = useTranslations('dashboard');
   const locale = useLocale();
-  // All data comes from the offline-first store (5-min delta sync, zero
+  // All data comes from the offline-first store (15-min delta sync, zero
   // per-poll server actions). Panels are pure projections over snapshots.
+  // SyncLoop owns the timer; this view seeds-on-empty only (no mount sync).
   const apptRows = useDeltaRows('appointments');
-  useAutoSync();
+  useEnsureSeeded({ deltas: ['appointments'] });
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -143,10 +144,15 @@ export function DoctorPanel({
   }, []);
 
   useEffect(() => {
-    // First paint: resolve loading once the initial sync lands.
-    void runSync().finally(() => setLoaded(true));
+    // First paint resolves from the store (SSR-seeded or sync-seeded).
+    // No mount sync: SyncLoop owns the 15-min timer.
+    if (apptRows.length > 0) setLoaded(true);
+    else {
+      const t = setTimeout(() => setLoaded(true), 2500);
+      return () => clearTimeout(t);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [apptRows.length]);
 
   // Reconcile the open AttendSheet with fresh rows so its status
   // stepper never works off a stale snapshot.
@@ -255,6 +261,7 @@ export function DoctorPanel({
               </ul>
               <Link
                 href="/appointments"
+                prefetch={false}
                 className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
               >
                 {t('viewAll')}

@@ -39,10 +39,12 @@ export default async function LocaleLayout({
 
   const messages = await getMessages();
   const session = await auth();
-  const clinic = await queryOne<Clinic>(
-    'SELECT id, name, currency, locale FROM clinics LIMIT 1',
-  );
-  const whatsapp = await getWhatsappContextData();
+  // Parallelize the independent data loads (clinic + whatsapp) so the
+  // layout shell isn't a sequential waterfall of Turso round-trips.
+  const [clinic, whatsapp] = await Promise.all([
+    queryOne<Clinic>('SELECT id, name, currency, locale FROM clinics LIMIT 1'),
+    getWhatsappContextData(),
+  ]);
 
   // Block app until clinic is configured
   const strippedPath = '';

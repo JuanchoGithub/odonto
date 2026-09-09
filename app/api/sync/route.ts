@@ -43,7 +43,7 @@ import {
  */
 
 type DeltaKind = 'appointments' | 'patients' | 'invoices' | 'payments' | 'treatments';
-type SnapshotKind = 'insurers' | 'catalog';
+type SnapshotKind = 'insurers' | 'catalog' | 'schedules';
 
 type MutationOp = {
   id: string;
@@ -442,6 +442,51 @@ export async function POST(req: NextRequest) {
         `SELECT * FROM treatment_catalog ORDER BY kind DESC, description ASC LIMIT 500`,
       );
       snapshots.catalog = { fingerprint, rows };
+    }
+  }
+
+  // Working-schedule tables for calendar shading, synced as one envelope.
+  // Tables carry created_at (no updated_at): DELETE+INSERT saves bump
+  // MAX(created_at), deletes bump COUNT, tz edits bump the tz segment —
+  // any schedule change invalidates the fingerprint.
+  if (snaps.includes('schedules') && can(role, 'appointments:read')) {
+    const tzRow = await queryOne<{ timezone: string }>(
+      `SELECT timezone FROM clinics LIMIT 1`,
+    );
+    const tz = tzRow?.timezone ?? 'UTC';
+    const [bizFp, schedFp, dentExFp, clinExFp] = await Promise.all([
+      queryOne<{ m: string | null; n: number }>(
+        `SELECT MAX(id) as m, COUNT(*) as n FROM clinic_business_hours`,
+      ),
+      queryOne<{ m: string | null; n: number }>(
+        `SELECT MAX(created_at) as m, COUNT(*) as n FROM dentist_schedules`,
+      ),
+      queryOne<{ m: string | null; n: number }>(
+        `SELECT MAX(created_at) as m, COUNT(*) as n FROM dentist_exceptions`,
+      ),
+      queryOne<{ m: string | null; n: number }>(
+        `SELECT MAX(created_at) as m, COUNT(*) as n FROM clinic_exceptions`,
+      ),
+    ]);
+    const fingerprint = [tz, bizFp?.m ?? '', bizFp?.n ?? 0, schedFp?.m ?? '', schedFp?.n ?? 0, dentExFp?.m ?? '', dentExFp?.n ?? 0, clinExFp?.m ?? '', clinExFp?.n ?? 0].join('|');
+    if (fingerprint !== (fingerprints.schedules ?? '')) {
+      const cutoff = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+      const [businessHours, dentistSchedules, dentistExceptions, clinicExceptions] =
+        await Promise.all([
+          query(`SELECT day_of_week, start_time, end_time FROM clinic_business_hours`),
+          query(
+            `SELECT dentist_id, day_of_week, start_time, end_time, effective_from, effective_to FROM dentist_schedules LIMIT 2000`,
+          ),
+          query(
+            `SELECT dentist_id, date, kind, start_time, end_time FROM dentist_exceptions WHERE date >= ? LIMIT 2000`,
+            [cutoff],
+          ),
+          query(`SELECT date FROM clinic_exceptions WHERE date >= ? LIMIT 500`, [cutoff]),
+        ]);
+      snapshots.schedules = {
+        fingerprint,
+        rows: [{ tz, businessHours, dentistSchedules, dentistExceptions, clinicExceptions }],
+      };
     }
   }
 

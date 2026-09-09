@@ -67,7 +67,7 @@ export function TopNav({
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30 pt-safe">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+          <Link href="/dashboard" prefetch={false} className="flex items-center gap-2 font-semibold">
             <Activity className="h-5 w-5 text-primary" />
             <span>{tc('appName')}</span>
             {clinicName ? (
@@ -87,6 +87,7 @@ export function TopNav({
                 <Link
                   key={l.href}
                   href={l.href}
+                  prefetch={false}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground',

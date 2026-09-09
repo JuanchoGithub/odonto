@@ -1,4 +1,5 @@
 'use server';
+import { cache } from 'react';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
@@ -368,13 +369,14 @@ export async function getDentistDefaultDuration(
 }
 
 /** Clinic-wide default (single-row v1 schema; null-safe). */
-export async function getClinicDefaultDuration(): Promise<number> {
+/** Clinic default slot length, per-request memoized (layout + page share one query). */
+export const getClinicDefaultDuration: () => Promise<number> = cache(async () => {
   await requireUser();
   const row = await queryOne<{ default_slot_minutes: number | null }>(
     'SELECT default_slot_minutes FROM clinics LIMIT 1',
   );
   return row?.default_slot_minutes ?? 15;
-}
+});
 
 /** Dentist may edit own; admin may edit any. */
 export async function saveDefaultDuration(

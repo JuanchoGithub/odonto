@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { format, type Locale } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
@@ -22,6 +22,8 @@ import {
 } from '@/server/actions/appointments';
 import { useToast } from '@/components/ui/toaster';
 import type { Role } from '@/lib/schemas/common';
+import { useDeltaRows } from '@/lib/store/snapshots';
+import { runSync, useEnsureSeeded } from '@/lib/store/sync';
 
 function statusVariant(s: string) {
   return s === 'completed'
@@ -50,21 +52,32 @@ export function PatientAppointments({
   const tErr = useTranslations('errors');
   const localeStr = useLocale();
   const dateFnsLocale: Locale = localeStr.startsWith('en') ? enUS : es;
-  const [rows, setRows] = useState<ApptRow[] | null>(null);
+  // Appointments come from the synced delta (zero invocations); filter locally.
+  const storeRows = useDeltaRows('appointments');
+  useEnsureSeeded({ deltas: ['appointments'] });
+  const [ready, setReady] = useState(storeRows.length > 0);
+  useEffect(() => {
+    if (storeRows.length > 0) setReady(true);
+    else {
+      const timer = setTimeout(() => setReady(true), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [storeRows.length]);
+  const rows: ApptRow[] | null = useMemo(() => {
+    if (!ready) return null;
+    return storeRows
+      .filter((a) => a.patient_id === patientId)
+      .sort((a, b) => (a.starts_at < b.starts_at ? 1 : -1));
+  }, [ready, storeRows, patientId]);
   const [editing, setEditing] = useState<ApptRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { push } = useToast();
   const now = Date.now();
 
-  async function refresh() {
-    const res = await fetch(`/api/appointments?patient_id=${patientId}`);
-    if (res.ok) setRows(await res.json());
+  function refresh() {
+    // Authoritative reconcile after a write (one delta sync, not a refetch).
+    void runSync();
   }
-
-  useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientId]);
 
   function openEdit(a: ApptRow) {
     setEditing(a);

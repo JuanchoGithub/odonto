@@ -1,4 +1,5 @@
 'use server';
+import { cache } from 'react';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { query, queryOne } from '@/lib/db';
@@ -171,8 +172,9 @@ export async function getUserWhatsappOverride(userId: string): Promise<{
  * so it intentionally does NOT require auth — the pages that render the
  * data are gated separately. The payload is clinic + user WhatsApp template
  * config only, not sensitive patient data.
+ * Per-request memoized (layout + page share one query).
  */
-export async function getWhatsappContextData(): Promise<{
+export const getWhatsappContextData: () => Promise<{
   countryCode: string;
   templates: WhatsappTemplate[];
   users: {
@@ -182,7 +184,7 @@ export async function getWhatsappContextData(): Promise<{
     whatsapp_templates: string | null;
     whatsapp_default_country_code: string | null;
   }[];
-}> {
+}> = cache(async () => {
   const clinic = await queryOne<{
     whatsapp_default_country_code: string;
     whatsapp_templates: string;
@@ -200,7 +202,7 @@ export async function getWhatsappContextData(): Promise<{
      FROM users WHERE deleted_at IS NULL AND id != 'system' ORDER BY name`,
   );
   return { countryCode, templates, users };
-}
+});
 
 /** Make sure the two built-in templates are always present and in canonical order. */
 function ensureBuiltins(templates: WhatsappTemplate[]): WhatsappTemplate[] {

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,12 +16,13 @@ import {
 import { Plus, X } from 'lucide-react';
 import { createInvoice, type InvoiceFormState } from '@/server/actions/billing';
 import { useActionState } from 'react';
-import { useRouter } from '@/lib/navigation';
 import { formatMoney, formatDate } from '@/lib/format';
 import { normalizeDecimalInput } from '@/lib/utils';
 import { Link } from '@/lib/navigation';
 import { Badge } from '@/components/ui/badge';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
+import { useDeltaRows } from '@/lib/store/snapshots';
+import { runSync, useEnsureSeeded } from '@/lib/store/sync';
 
 /** Parse a locale-typed decimal ("12,50" or "12.50") without NaN poisoning state. */
 function toDecimalNumber(raw: string) {
@@ -40,7 +41,6 @@ export function PatientInvoices({
 }) {
   const t = useTranslations('billing');
   const [open, setOpen] = useState(false);
-  const router = useRouter();
 
   return (
     <Card>
@@ -62,7 +62,9 @@ export function PatientInvoices({
           open={open}
           onOpenChange={(o) => {
             setOpen(o);
-            if (!o) router.refresh();
+            // New invoice lands via the next delta sync (store re-renders
+            // this list); no router.refresh — saves a function invocation.
+            if (!o) void runSync();
           }}
           patientId={patientId}
           currency={currency}
@@ -84,12 +86,30 @@ function InvoicesList({
 }) {
   const t = useTranslations('billing');
   const tCommon = useTranslations('common');
-  const [rows, setRows] = useState<InvoiceRow[] | null>(null);
+  // Invoices come from the synced delta (zero invocations); filter locally.
+  const storeRows = useDeltaRows('invoices');
+  useEnsureSeeded({ deltas: ['invoices'] });
+  const [ready, setReady] = useState(storeRows.length > 0);
   useEffect(() => {
-    fetch(`/api/invoices?patient_id=${patientId}`)
-      .then((r) => r.json())
-      .then(setRows);
-  }, [patientId]);
+    if (storeRows.length > 0) setReady(true);
+    else {
+      const timer = setTimeout(() => setReady(true), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [storeRows.length]);
+  const rows: InvoiceRow[] | null = useMemo(() => {
+    if (!ready) return null;
+    return storeRows
+      .filter((r) => r.patient_id === patientId)
+      .map((r) => ({
+        id: r.id,
+        number: r.number,
+        issued_at: r.issued_at,
+        status: r.status,
+        total_cents: r.total_cents,
+      }))
+      .sort((a, b) => (a.issued_at < b.issued_at ? 1 : -1));
+  }, [ready, storeRows, patientId]);
   if (!rows) return <p className="text-sm text-muted-foreground">…</p>;
   if (rows.length === 0)
     return <p className="text-sm text-muted-foreground py-6 text-center">—</p>;
@@ -99,6 +119,7 @@ function InvoicesList({
         {rows.map((r) => (
           <li key={r.id}>
             <Link
+              prefetch={false}
               href={`/billing/${r.id}`}
               className="flex min-h-[64px] items-start gap-3 rounded-xl border bg-card p-3 active:bg-accent"
               data-testid="invoice-list-row"
@@ -144,7 +165,7 @@ function InvoicesList({
             {rows.map((r) => (
               <tr key={r.id} className="border-b">
                 <td className="py-2 pr-4">
-                  <Link href={`/billing/${r.id}`} className="hover:underline">
+                  <Link href={`/billing/${r.id}`} prefetch={false} className="hover:underline">
                     {r.number}
                   </Link>
                 </td>

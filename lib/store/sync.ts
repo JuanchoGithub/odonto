@@ -33,11 +33,12 @@ export { useStoreVersion };
 
 /**
  * Sync orchestrator. One POST /api/sync per run carries the mutation queue
- * (push) plus watermarks/fingerprints (pull). Hot appointment/invoice/payment
- * deltas run every 5 min; full snapshots run daily and on demand.
+ * (push) plus watermarks/fingerprints (pull). Deltas + snapshots run every
+ * 15 min; the app shell owns the timer (SyncLoop). Views never sync on
+ * mount — they read the store and seed-on-empty only.
  */
 
-const HOT_MS = 5 * 60_000;
+const HOT_MS = 15 * 60_000;
 
 type AppliedOp = {
   opId: string;
@@ -86,7 +87,7 @@ async function doSync(scope: 'hot' | 'full'): Promise<{ ok: boolean; error?: str
   const mutations = getQueue();
   // Every sync checks ALL delta watermarks + snapshot fingerprints: ~7 tiny
   // indexed queries, rows transferred only on change. Cross-device freshness
-  // is 5 min for every kind with no extra invocations. The scope param is
+  // is 15 min for every kind with no extra invocations. The scope param is
   // kept for call-site compatibility.
   void scope;
   const kinds = [...DELTA_KINDS];
@@ -186,28 +187,31 @@ export function hydrateStore(initial: Parameters<typeof hydrateFromServer>[0]): 
 }
 
 /**
- * Auto-sync hook. One incremental sync every 5 min while visible (all
- * watermarks + fingerprints checked, rows only on change), plus an instant
- * sync on tab foreground. No polling while hidden.
+ * Auto-sync hook. One incremental sync every 15 min while visible (all
+ * watermarks + fingerprints checked, rows only on change), plus a gated
+ * sync on tab foreground (skipped when the last sync is fresh, unless
+ * queued mutations are waiting to flush). No sync on mount, no polling
+ * while hidden. Mount exactly once (SyncLoop in the app shell).
  */
 export function useAutoSync(): void {
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
     let mounted = true;
 
-    const tick = () => {
-      if (!mounted || document.hidden) return;
+    const shouldSync = () => {
+      if (getQueue().length > 0) return true;
       const { lastHotSyncAt } = getLastSync();
-      if (!lastHotSyncAt || Date.now() - Date.parse(lastHotSyncAt) > HOT_MS) {
-        void runSync();
-      }
-    };
-    const onVis = () => {
-      if (!document.hidden) void runSync();
+      return !lastHotSyncAt || Date.now() - Date.parse(lastHotSyncAt) > HOT_MS;
     };
 
-    // Initial sync on mount (SSR already seeded first paint).
-    void runSync();
+    const tick = () => {
+      if (!mounted || document.hidden) return;
+      if (shouldSync()) void runSync();
+    };
+    const onVis = () => {
+      if (!document.hidden && shouldSync()) void runSync();
+    };
+
     timer = setInterval(tick, HOT_MS);
     document.addEventListener('visibilitychange', onVis);
     return () => {

@@ -22,7 +22,7 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
 import { useDeltaRows } from '@/lib/store/snapshots';
-import { runSync, useAutoSync, useEnsureSeeded } from '@/lib/store/sync';
+import { runSync, useEnsureSeeded } from '@/lib/store/sync';
 
 export function PatientTreatments({
   patientId,
@@ -37,9 +37,9 @@ export function PatientTreatments({
   const [open, setOpen] = useState(false);
   const router = useRouter();
   // Treatments come from the offline-first store (zero invocations).
+  // SyncLoop owns the timer; this view seeds-on-empty only (no mount sync).
   useEnsureSeeded({ deltas: ['treatments'] });
   const storeTreatments = useDeltaRows('treatments');
-  useAutoSync();
   const list: TreatmentRow[] | null = useMemo(
     () =>
       storeTreatments

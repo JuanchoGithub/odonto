@@ -103,6 +103,7 @@ export function BottomNav({
                 <Link
                   key={l.href}
                   href={l.href}
+                  prefetch={false}
                   onClick={() => setMoreOpen(false)}
                   className={cn(
                     'flex min-h-[48px] items-center gap-3 rounded-xl px-3 py-2 text-base font-medium hover:bg-accent',
@@ -156,6 +157,7 @@ export function BottomNav({
             ) : (
               <Link
                 href="/patients/new"
+                prefetch={false}
                 aria-label="New"
                 className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
               >
@@ -214,6 +216,7 @@ function TabLink({
   return (
     <Link
       href={href}
+      prefetch={false}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'flex min-h-[64px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium',

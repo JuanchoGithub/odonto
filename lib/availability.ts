@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { query, queryOne } from './db';
 
 /**
@@ -147,12 +148,13 @@ function resolveWindowsForDate(
   return { windows: [], source: null };
 }
 
-export async function getClinicTimezone(): Promise<string> {
+/** Clinic timezone, per-request memoized (layout + page share one query). */
+export const getClinicTimezone: () => Promise<string> = cache(async () => {
   const row = await queryOne<{ timezone: string }>(
     'SELECT timezone FROM clinics LIMIT 1',
   );
   return row?.timezone ?? 'UTC';
-}
+});
 
 /**
  * All bookable slots for a dentist in [fromDate, toDate] (clinic-local dates),

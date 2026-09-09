@@ -31,7 +31,29 @@ export type DeltaKind =
   | 'treatments';
 
 /** Fingerprint-synced kinds: tiny master tables, full replace on change. */
-export type SnapshotKind = 'insurers' | 'catalog';
+export type SnapshotKind = 'insurers' | 'catalog' | 'schedules';
+
+/** Working-schedule tables for calendar shading (synced as one envelope). */
+export type SchedulesSnapshot = {
+  tz: string;
+  businessHours: { day_of_week: number; start_time: string; end_time: string }[];
+  dentistSchedules: {
+    dentist_id: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    effective_from: string | null;
+    effective_to: string | null;
+  }[];
+  dentistExceptions: {
+    dentist_id: string;
+    date: string;
+    kind: string;
+    start_time: string | null;
+    end_time: string | null;
+  }[];
+  clinicExceptions: { date: string }[];
+};
 
 export type KindRow = {
   appointments: ApptRow;
@@ -41,6 +63,7 @@ export type KindRow = {
   treatments: TreatmentRow;
   insurers: InsurerRow;
   catalog: CatalogRow;
+  schedules: SchedulesSnapshot;
 };
 
 export const DELTA_KINDS: DeltaKind[] = [
@@ -50,7 +73,7 @@ export const DELTA_KINDS: DeltaKind[] = [
   'payments',
   'treatments',
 ];
-export const SNAPSHOT_KINDS: SnapshotKind[] = ['insurers', 'catalog'];
+export const SNAPSHOT_KINDS: SnapshotKind[] = ['insurers', 'catalog', 'schedules'];
 
 /** Hot kinds sync every 5 min; cold kinds sync daily / on demand. */
 export const HOT_DELTA_KINDS: DeltaKind[] = ['appointments', 'invoices', 'payments'];
@@ -65,6 +88,7 @@ const ROW_CAPS: Record<DeltaKind | SnapshotKind, number> = {
   treatments: 2000,
   insurers: 500,
   catalog: 500,
+  schedules: 1,
 };
 
 type DeltaEntry = { watermark: string; rows: unknown[] };
@@ -102,6 +126,15 @@ function load(): PersistedStore {
     if (raw) {
       const parsed = JSON.parse(raw) as PersistedStore;
       if (parsed && parsed.v === 1 && parsed.deltas && parsed.snaps) {
+        // Forward-fill kinds added after the cache was written (no wipe).
+        for (const k of DELTA_KINDS) {
+          if (!parsed.deltas[k]) parsed.deltas[k] = { watermark: '', rows: [] };
+        }
+        for (const k of SNAPSHOT_KINDS) {
+          if (!(parsed.snaps as Record<string, SnapEntry>)[k]) {
+            (parsed.snaps as Record<string, SnapEntry>)[k] = { fingerprint: '', rows: [] };
+          }
+        }
         mem = parsed;
         return mem;
       }
@@ -230,7 +263,11 @@ export function getWatermarks(): Record<DeltaKind, string> {
 
 export function getFingerprints(): Record<SnapshotKind, string> {
   const s = load();
-  return { insurers: s.snaps.insurers.fingerprint, catalog: s.snaps.catalog.fingerprint };
+  return {
+    insurers: s.snaps.insurers.fingerprint,
+    catalog: s.snaps.catalog.fingerprint,
+    schedules: (s.snaps as Record<string, SnapEntry>).schedules?.fingerprint ?? '',
+  };
 }
 
 export function setLastSync(at: string, hot: boolean): void {

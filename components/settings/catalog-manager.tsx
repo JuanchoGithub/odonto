@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import type { CatalogRow } from '@/server/actions/catalog';
 import { useRouter } from '@/lib/navigation';
 import { useSnapRows } from '@/lib/store/snapshots';
-import { runSync, useAutoSync } from '@/lib/store/sync';
+import { runSync, useEnsureSeeded } from '@/lib/store/sync';
 
 export function CatalogManager() {
   const t = useTranslations('settings');
@@ -16,8 +16,9 @@ export function CatalogManager() {
   const [saving, setSaving] = useState(false);
   const router = useRouter();
   // Catalog comes from the offline-first store (zero invocations).
+  // SyncLoop owns the timer; this view seeds-on-empty only (no mount sync).
   const snapRows = useSnapRows('catalog');
-  useAutoSync();
+  useEnsureSeeded({ snaps: ['catalog'] });
   const rows: CatalogRow[] | null = useMemo(
     () =>
       (snapRows as unknown as CatalogRow[]).filter(

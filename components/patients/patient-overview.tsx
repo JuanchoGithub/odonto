@@ -195,6 +195,7 @@ export async function PatientOverview({
               )}
             </div>
             <Link
+              prefetch={false}
               href={`/patients/${patient.id}?tab=invoices`}
               className="inline-block text-sm text-primary hover:underline"
             >
@@ -218,6 +219,7 @@ export async function PatientOverview({
               : ''}{' '}
             ·{' '}
             <Link
+              prefetch={false}
               href={`/patients/${patient.id}?tab=medical`}
               className="text-primary hover:underline"
             >
@@ -233,6 +235,7 @@ export async function PatientOverview({
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">{t('tabs.appointments')}</CardTitle>
             <Link
+              prefetch={false}
               href={`/patients/${patient.id}?tab=appointments`}
               className="text-sm text-primary hover:underline"
             >
@@ -271,6 +274,7 @@ export async function PatientOverview({
                 {t('tabs.treatments')} ({data.openTreatmentCount})
               </CardTitle>
               <Link
+                prefetch={false}
                 href={`/patients/${patient.id}?tab=treatments`}
                 className="text-sm text-primary hover:underline"
               >
@@ -316,6 +320,7 @@ export async function PatientOverview({
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">{t('tabs.odontogram')}</CardTitle>
             <Link
+              prefetch={false}
               href={`/patients/${patient.id}?tab=odontogram`}
               className="text-sm text-primary hover:underline"
             >

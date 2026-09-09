@@ -19,7 +19,7 @@ import type {
 import { useToast } from '@/components/ui/toaster';
 import { PanelApptCard } from './panel-appt-card';
 import { useDeltaRows } from '@/lib/store/snapshots';
-import { runSync, useAutoSync } from '@/lib/store/sync';
+import { runSync, useEnsureSeeded } from '@/lib/store/sync';
 import {
   secretarySchedule,
   followUps,
@@ -59,12 +59,13 @@ export function SecretaryPanel({
   const tBilling = useTranslations('billing');
   const tErr = useTranslations('errors');
   const { push } = useToast();
-  // All data comes from the offline-first store (5-min delta sync, zero
+  // All data comes from the offline-first store (15-min delta sync, zero
   // per-poll server actions). Panels are pure projections over snapshots.
+  // SyncLoop owns the timer; this view seeds-on-empty only (no mount sync).
   const apptRows = useDeltaRows('appointments');
   const invoiceRows = useDeltaRows('invoices');
   const paymentRows = useDeltaRows('payments');
-  useAutoSync();
+  useEnsureSeeded({ deltas: ['appointments', 'invoices', 'payments'] });
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
@@ -94,10 +95,16 @@ export function SecretaryPanel({
   }, []);
 
   useEffect(() => {
-    // First paint: resolve loading once the initial sync lands.
-    void runSync().finally(() => setLoaded(true));
+    // First paint resolves from the store (SSR-seeded or sync-seeded).
+    // No mount sync: SyncLoop owns the 15-min timer.
+    if (apptRows.length > 0 || invoiceRows.length > 0 || paymentRows.length > 0)
+      setLoaded(true);
+    else {
+      const t = setTimeout(() => setLoaded(true), 2500);
+      return () => clearTimeout(t);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [apptRows.length, invoiceRows.length, paymentRows.length]);
 
   // Reconcile the open AttendSheet with fresh rows.
   useEffect(() => {
@@ -304,6 +311,7 @@ export function SecretaryPanel({
                     {money(inv.total_cents - inv.paid_cents)}
                   </div>
                   <Link
+                    prefetch={false}
                     href={`/billing/${inv.id}`}
                     className="text-sm text-primary underline"
                   >
