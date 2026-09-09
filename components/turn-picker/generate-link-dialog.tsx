@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
 import { X, Copy, Check, Link2, Share } from 'lucide-react';
@@ -82,8 +82,15 @@ export function GenerateTurnLinkDialog({
   const [links, setLinks] = useState<TurnPickerLinkListItem[]>([]);
   const [touchedSlot, setTouchedSlot] = useState(false);
 
+  // Reset the form only when the dialog transitions from closed → open.
+  // Deps like `dentists` are recreated by the parent (revalidatePath after
+  // generation re-renders the server page), so we must not reset on those —
+  // doing so would clear the freshly-generated link immediately.
+  const prevOpen = useRef(open);
   useEffect(() => {
-    if (!open) return;
+    const wasOpen = prevOpen.current;
+    prevOpen.current = open;
+    if (wasOpen || !open) return;
     setUrl(null);
     setError(null);
     setTouchedSlot(false);
@@ -95,7 +102,8 @@ export function GenerateTurnLinkDialog({
       setDentistId(dentists[0]?.id ?? '');
     }
     if (fixedPatientId) setPatientId(fixedPatientId);
-  }, [open, fixedPatientId, defaultDentistId, viewerRole, currentUserId, dentists]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Re-sync the default slot when the dentist changes — unless the user
   // has already picked a value explicitly. Per-dentist > clinic default > 15.
