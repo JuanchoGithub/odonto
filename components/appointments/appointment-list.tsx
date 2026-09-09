@@ -2,8 +2,11 @@
 import { useMemo } from 'react';
 import { format, type Locale } from 'date-fns';
 import { useTranslations } from 'next-intl';
-import { Phone, Pencil } from 'lucide-react';
+import { Phone, Pencil, Copy, Send, Ban } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toaster';
+import { revokeTurnPickerLink } from '@/server/actions/turn-picker';
 import {
   Table,
   TableBody,
@@ -99,6 +102,80 @@ function DentistCell({
         {name}
       </span>
     </TableCell>
+  );
+}
+
+/** Copy / WhatsApp / Revoke actions for a pending shared turn link. */
+function PendingLinkActions({
+  l,
+  onChanged,
+}: {
+  l: PendingLinkRow;
+  onChanged?: () => void;
+}) {
+  const t = useTranslations('turnPicker');
+  const { push } = useToast();
+  const url = () => `${window.location.origin}/pick-turn/${l.token}`;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url());
+      push({ title: t('copied'), variant: 'success' });
+    } catch {
+      push({ title: t('copyFailed'), variant: 'destructive' });
+    }
+  }
+
+  function whatsapp() {
+    const msg = t('whatsappMessage', { name: l.patient_name, link: url() });
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
+  async function revoke() {
+    if (!window.confirm(t('revokeConfirm'))) return;
+    const res = await revokeTurnPickerLink(l.id);
+    if (res.ok) {
+      push({ title: t('revoked'), variant: 'success' });
+      onChanged?.();
+    }
+  }
+
+  return (
+    <div
+      className="flex shrink-0 items-center gap-0.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9"
+        onClick={copy}
+        aria-label={t('copyLink')}
+        title={t('copyLink')}
+      >
+        <Copy className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9"
+        onClick={whatsapp}
+        aria-label={t('whatsapp')}
+        title={t('whatsapp')}
+      >
+        <Send className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 text-destructive"
+        onClick={revoke}
+        aria-label={t('revoke')}
+        title={t('revoke')}
+      >
+        <Ban className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }
 
@@ -334,12 +411,15 @@ export function AppointmentList({
           <h3 className="text-sm font-semibold mb-2">{labels.pendingTitle}</h3>
           <ul className="space-y-2 md:hidden">
             {pending.map((l) => (
-              <li key={l.id}>
+              <li
+                key={l.id}
+                className="flex min-h-[64px] w-full items-center gap-2 rounded-xl border border-dashed bg-card p-2.5 active:bg-accent"
+              >
                 <button
                   type="button"
                   data-testid="pending-link-row"
                   onClick={() => onCopyLink(l.token)}
-                  className="flex min-h-[64px] w-full items-center gap-3 rounded-xl border border-dashed bg-card p-3 text-left active:bg-accent"
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-0.5 text-left"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-semibold">
@@ -349,8 +429,9 @@ export function AppointmentList({
                       {l.slot_minutes} min · {l.dentist_name}
                     </span>
                   </span>
-                  <Badge variant="warning" className="shrink-0">{labels.pending}</Badge>
                 </button>
+                <Badge variant="warning" className="shrink-0">{labels.pending}</Badge>
+                <PendingLinkActions l={l} onChanged={onChanged} />
               </li>
             ))}
           </ul>
@@ -392,7 +473,10 @@ export function AppointmentList({
                       id={l.dentist_id}
                     />
                     <TableCell>
-                      <Badge variant="warning">{labels.pending}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="warning">{labels.pending}</Badge>
+                        <PendingLinkActions l={l} onChanged={onChanged} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
