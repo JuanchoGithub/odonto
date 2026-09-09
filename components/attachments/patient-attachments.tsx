@@ -87,7 +87,7 @@ export function PatientAttachments({
             </Select>
           </div>
           <label className="flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-md border border-input bg-background px-3 text-sm text-muted-foreground sm:w-auto sm:flex-1">
-            {fileRef.current?.files?.[0]?.name ?? t('upload')}
+            {fileRef.current?.files?.[0]?.name ?? t('chooseFile')}
             <input
               ref={fileRef}
               type="file"

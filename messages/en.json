@@ -514,6 +514,7 @@
   "attachments": {
     "title": "Attachments",
     "upload": "Upload file",
+    "chooseFile": "Choose file",
     "kind": "Type",
     "kinds": {
       "xray": "X-ray",

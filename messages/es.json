@@ -512,6 +512,7 @@
   "attachments": {
     "title": "Adjuntos",
     "upload": "Subir archivo",
+    "chooseFile": "Elegir archivo",
     "kind": "Tipo",
     "kinds": {
       "xray": "Radiografía",
