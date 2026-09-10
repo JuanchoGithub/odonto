@@ -328,11 +328,8 @@ export function WeekCalendar({
               contact: t('contact'),
               pendingTitle: t('pendingLinks'),
               pending: t('status.pending'),
-              call: t('call'),
-              edit: t('edit'),
             }}
             statusLabel={(s) => t(`status.${s}`)}
-            attendLabel={t('attend')}
             onOpenAppt={openEdit}
             onAttend={(a) => setAttendAppt(a)}
             onChanged={refresh}
@@ -385,6 +382,7 @@ export function WeekCalendar({
           startHhmm={attendStartHhmm}
           isTodayActive={attendIsTodayActive}
           onRefresh={refresh}
+          onEdit={openEdit}
         />
       </CardContent>
     </Card>

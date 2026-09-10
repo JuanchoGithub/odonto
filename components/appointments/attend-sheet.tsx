@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
 import { format } from 'date-fns';
-import { X, Phone, FileText, ChevronRight, MessageCircle, Receipt } from 'lucide-react';
+import { X, Phone, Pencil, FileText, ChevronRight, MessageCircle, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -40,6 +40,7 @@ export function AttendSheet({
   startHhmm,
   isTodayActive,
   onRefresh,
+  onEdit,
 }: {
   appointment: ApptRow | null;
   open: boolean;
@@ -53,6 +54,8 @@ export function AttendSheet({
   isTodayActive?: boolean;
   /** Optional callback when WhatsApp updated the patient phone so the parent can refresh. */
   onRefresh?: () => void;
+  /** Optional callback to open the edit dialog (reschedule / cancel) for this appointment. */
+  onEdit?: (a: ApptRow) => void;
 }) {
   const t = useTranslations('appointments');
   const tPatients = useTranslations('patients');
@@ -152,6 +155,22 @@ export function AttendSheet({
             </div>
             <Badge variant="default">{t(`status.${appointment.status}`)}</Badge>
           </div>
+
+          {onEdit ? (
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="attend-edit"
+              onClick={() => {
+                onOpenChange(false);
+                onEdit(appointment);
+              }}
+              className="mt-2 min-h-[48px] w-full text-base"
+            >
+              <Pencil className="h-5 w-5" />
+              {t('edit')}
+            </Button>
+          ) : null}
 
           {appointment.patient_phone ? (
             <a
