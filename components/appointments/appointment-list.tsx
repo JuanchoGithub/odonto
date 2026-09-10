@@ -42,7 +42,18 @@ function statusVariant(s: string) {
         : ('default' as const);
 }
 
-/** "Rescheduled ×N" chip shown next to the status badge. */
+/** Subtle row tint for terminal states (mobile cards). Active states use the default card background. */
+function statusRowTint(s: string) {
+  return s === 'completed'
+    ? 'bg-emerald-50 dark:bg-emerald-950/40'
+    : s === 'cancelled'
+      ? 'bg-red-50 dark:bg-red-950/40'
+      : s === 'no_show'
+        ? 'bg-amber-50 dark:bg-amber-950/40'
+        : '';
+}
+
+/** "Rescheduled ×N" chip shown next to the reason on mobile line 2. */
 function ReprogramBadge({ count }: { count: number | null }) {
   const t = useTranslations('appointments');
   if (!count || count < 1) return null;
@@ -207,9 +218,10 @@ export function AppointmentList({
     <div className="space-y-6" data-testid="day-agenda">
       {sorted.length > 0 ? (
         <>
-{/* Mobile cards: compact 3-line rows (name+time / date+WhatsApp / status+reason).
-              Tapping an attendable row opens the attend sheet (edit lives
-              there); other rows open the edit dialog directly. */}
+          {/* Mobile cards: compact 2-line rows (name+time / date+reason+WhatsApp).
+              Terminal states tint the row instead of a badge (see
+              statusRowTint); the status stays available to screen readers
+              via aria-label and on the sheet/dialog the card opens. */}
           <ul className="space-y-2 md:hidden">
             {sorted.map((a) => {
               const start = new Date(a.starts_at);
@@ -225,6 +237,7 @@ export function AppointmentList({
                     role={tapAttend ? 'button' : undefined}
                     tabIndex={tapAttend ? 0 : undefined}
                     data-testid="appt-list-row"
+                    aria-label={`${a.patient_name}, ${format(start, 'HH:mm')}, ${statusLabel(a.status)}`}
                     onClick={
                       tapAttend ? () => onAttend!(a) : () => onOpenAppt(a)
                     }
@@ -235,7 +248,7 @@ export function AppointmentList({
                         else onOpenAppt(a);
                       }
                     }}
-                    className={`flex min-h-[64px] w-full gap-2 rounded-xl border bg-card px-2.5 py-2 text-left ${
+                    className={`flex min-h-[64px] w-full gap-2 rounded-xl border px-2.5 py-2 text-left ${statusRowTint(a.status) || 'bg-card'} ${
                       tapAttend ? 'cursor-pointer active:bg-accent' : ''
                     }`}
                   >
@@ -248,10 +261,12 @@ export function AppointmentList({
                           {format(start, 'HH:mm')}
                         </span>
                       </span>
-                      <span className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className="mt-0.5 flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                           {format(start, 'EEE d MMM', { locale })}
+                          {a.reason ? ` · ${a.reason}` : null}
                         </span>
+                        <ReprogramBadge count={a.reprogram_count} />
                         {a.clinic_date && a.start_hhmm ? (
                           <WhatsappButton
                             patientId={a.patient_id}
@@ -273,17 +288,6 @@ export function AppointmentList({
                             className="border-0"
                             testId={`list-whatsapp-${a.id}`}
                           />
-                        ) : null}
-                      </span>
-                      <span className="mt-1 flex items-center gap-2">
-                        <Badge variant={statusVariant(a.status)} className="shrink-0">
-                          {statusLabel(a.status)}
-                        </Badge>
-                        <ReprogramBadge count={a.reprogram_count} />
-                        {a.reason ? (
-                          <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-                            {a.reason}
-                          </span>
                         ) : null}
                       </span>
                     </span>
