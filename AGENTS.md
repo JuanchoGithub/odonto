@@ -243,7 +243,8 @@ TURSO_URL=libsql://<db>-<org>.turso.io
 TURSO_TOKEN=<turso-platform-auth-token>
 AUTH_SECRET=<openssl rand -base64 32>
 AUTH_URL=https://midentista.vercel.app
-BLOB_READ_WRITE_TOKEN=<vercel-blob-rw-token>
+BLOB_READ_WRITE_TOKEN=<vercel-blob-rw-token>            # main store (PRIVATE — attachments)
+BLOB_CALENDAR_READ_WRITE_TOKEN=<calendar-store-rw-token> # dedicated PUBLIC store for dentist ICS feeds
 CRON_SECRET=<openssl rand -base64 32>   # guards /api/cron/* (auto no-show sweep)
 ```
 

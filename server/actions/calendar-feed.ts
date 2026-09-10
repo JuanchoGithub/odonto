@@ -90,11 +90,15 @@ export async function refreshDentistCalendar(dentistId: string): Promise<void> {
     // Fixed pathname + no random suffix: the same public URL is overwritten
     // on every write, so the subscribed phone sees updates. Short edge cache
     // (SDK 0.27 has no allowOverwrite flag; same-pathname put overwrites).
+    // Feeds live in the dedicated PUBLIC calendar store (the main store is
+    // private) — explicit token wins, otherwise the SDK falls back to
+    // BLOB_READ_WRITE_TOKEN.
     const blob = await put(feedPathname(dentistId, dent.token), ics, {
       access: 'public',
       contentType: 'text/calendar; charset=utf-8',
       addRandomSuffix: false,
       cacheControlMaxAge: 300,
+      token: process.env.BLOB_CALENDAR_READ_WRITE_TOKEN,
     });
     if (blob.url !== dent.url) {
       await query('UPDATE users SET calendar_url = ? WHERE id = ?', [
