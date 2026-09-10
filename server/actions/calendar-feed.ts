@@ -102,8 +102,10 @@ export async function refreshDentistCalendar(dentistId: string): Promise<void> {
         dentistId,
       ]);
     }
-  } catch {
-    // Best-effort; the appointment write already succeeded.
+  } catch (e) {
+    // Best-effort; the appointment write already succeeded. Log server-side
+    // so Vercel logs show the real cause (e.g. private Blob store, bad token).
+    console.error('[calendar-feed] refresh failed', dentistId, e);
   }
 }
 
