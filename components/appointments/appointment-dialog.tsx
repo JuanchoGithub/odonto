@@ -479,49 +479,53 @@ export function AppointmentDialog({
                 </Button>
               </div>
             ) : null}
-            <div className="flex items-center gap-2">
-              <div className="flex-1 flex items-center gap-2">
-                {confirmDelete ? (
-                  <>
-                    <Select
-                      value={cancelReason}
-                      onValueChange={setCancelReason}
-                    >
-                      <SelectTrigger
-                        data-testid="appt-delete-reason"
-                        className="h-9 w-full max-w-[180px]"
-                        title={t('cancelReasonLabel')}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CANCEL_REASONS.map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {t(`cancelReason.${r}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={onDelete}
-                      disabled={loading}
-                      data-testid="appt-delete-confirm"
-                    >
-                      {tCommon('delete')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setConfirmDelete(false)}
-                    >
-                      {tCommon('cancel')}
-                    </Button>
-                  </>
-                ) : (
+            {confirmDelete ? (
+              <div
+                className="flex flex-wrap items-center gap-2"
+                data-testid="appt-delete-bar"
+              >
+                <Select
+                  value={cancelReason}
+                  onValueChange={setCancelReason}
+                >
+                  <SelectTrigger
+                    data-testid="appt-delete-reason"
+                    className="h-9 min-w-0 flex-1"
+                    title={t('cancelReasonLabel')}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CANCEL_REASONS.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {t(`cancelReason.${r}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={onDelete}
+                  disabled={loading}
+                  data-testid="appt-delete-confirm"
+                >
+                  {tCommon('delete')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmDelete(false)}
+                  data-testid="appt-delete-cancel"
+                >
+                  {tCommon('cancel')}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2">
                   <Button
                     type="button"
                     variant="ghost"
@@ -532,26 +536,26 @@ export function AppointmentDialog({
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
-                )}
-              </div>
-              <Dialog.Close asChild>
-                <Button type="button" variant="outline">
-                  {tCommon('cancel')}
+                </div>
+                <Dialog.Close asChild>
+                  <Button type="button" variant="outline">
+                    {tCommon('cancel')}
+                  </Button>
+                </Dialog.Close>
+                <Button
+                  type="submit"
+                  variant={forceMode ? 'warning' : 'default'}
+                  disabled={loading}
+                  data-testid="appt-save"
+                >
+                  {loading
+                    ? tCommon('loading')
+                    : forceMode
+                      ? t('saveOutsideHours')
+                      : tCommon('save')}
                 </Button>
-              </Dialog.Close>
-              <Button
-                type="submit"
-                variant={forceMode ? 'warning' : 'default'}
-                disabled={loading}
-                data-testid="appt-save"
-              >
-                {loading
-                  ? tCommon('loading')
-                  : forceMode
-                    ? t('saveOutsideHours')
-                    : tCommon('save')}
-              </Button>
-            </div>
+              </div>
+            )}
           </form>
         </Dialog.Content>
       </Dialog.Portal>
