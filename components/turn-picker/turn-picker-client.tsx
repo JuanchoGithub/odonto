@@ -30,6 +30,9 @@ const T = {
     conflict:
       'Ese horario ya no está disponible. Elegí otro.',
     expired: 'Este enlace expiró',
+    consumed: 'Este enlace ya fue utilizado',
+    revoked: 'Este enlace fue revocado',
+    error: 'Algo salió mal. Intentá de nuevo o contactá a la clínica.',
     loading: 'Cargando disponibilidad…',
     expires: (d: string) => `Este enlace vence el ${d}`,
     backToDays: '← Cambiar día',
@@ -51,6 +54,9 @@ const T = {
     booked: (when: string) => `Done! Your appointment is booked for ${when}`,
     conflict: 'That slot is no longer available. Pick another.',
     expired: 'This link expired',
+    consumed: 'This link has already been used',
+    revoked: 'This link was revoked',
+    error: 'Something went wrong. Try again or contact the clinic.',
     loading: 'Loading availability…',
     expires: (d: string) => `This link expires on ${d}`,
     backToDays: '← Change day',
@@ -86,7 +92,7 @@ export function TurnPickerClient({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [state, setState] = useState<
-    'idle' | 'booking' | 'booked' | 'conflict' | 'error'
+    'idle' | 'booking' | 'booked' | 'conflict' | 'expired' | 'consumed' | 'revoked' | 'error'
   >('idle');
   const [bookedLabel, setBookedLabel] = useState('');
 
@@ -119,6 +125,7 @@ export function TurnPickerClient({
   async function confirm() {
     if (!selectedSlot) return;
     setState('booking');
+    let data: { startsAt?: string; error?: string };
     try {
       const r = await fetch(
         `/api/turn-picker/${encodeURIComponent(token)}/book`,
@@ -128,7 +135,12 @@ export function TurnPickerClient({
           body: JSON.stringify({ slotStart: selectedSlot }),
         },
       );
-      const data = await r.json();
+      try {
+        data = await r.json();
+      } catch {
+        setState('error');
+        return;
+      }
       if (r.ok && data.startsAt) {
         const label = `${dayLabel(
           data.startsAt.slice(0, 10),
@@ -153,8 +165,12 @@ export function TurnPickerClient({
           const dd = await rr.json();
           setSlots(dd.slots ?? []);
         }
-      } else if (data.error === 'expired' || data.error === 'consumed') {
-        setState('error');
+      } else if (data.error === 'expired') {
+        setState('expired');
+      } else if (data.error === 'consumed') {
+        setState('consumed');
+      } else if (data.error === 'revoked') {
+        setState('revoked');
       } else {
         setState('error');
       }
@@ -258,8 +274,17 @@ export function TurnPickerClient({
                 {state === 'conflict' ? (
                   <p className="text-sm text-destructive">{t.conflict}</p>
                 ) : null}
-                {state === 'error' ? (
+                {state === 'expired' ? (
                   <p className="text-sm text-destructive">{t.expired}</p>
+                ) : null}
+                {state === 'consumed' ? (
+                  <p className="text-sm text-destructive">{t.consumed}</p>
+                ) : null}
+                {state === 'revoked' ? (
+                  <p className="text-sm text-destructive">{t.revoked}</p>
+                ) : null}
+                {state === 'error' ? (
+                  <p className="text-sm text-destructive">{t.error}</p>
                 ) : null}
               </CardContent>
             </Card>

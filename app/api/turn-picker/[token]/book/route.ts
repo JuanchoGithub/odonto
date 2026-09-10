@@ -25,7 +25,14 @@ export async function POST(
   if (typeof slotStart !== 'string') {
     return NextResponse.json({ error: 'invalid' }, { status: 400 });
   }
-  const result = await bookViaPicker(token, slotStart);
+  let result: Awaited<ReturnType<typeof bookViaPicker>>;
+  try {
+    result = await bookViaPicker(token, slotStart);
+  } catch {
+    // Never leak a bare 500: the public client maps unknown failures to
+    // the "expired" copy, so report server faults distinctly.
+    return NextResponse.json({ error: 'unavailable' }, { status: 503 });
+  }
   if (!result.ok) {
     const status =
       result.reason === 'invalid'
@@ -34,7 +41,9 @@ export async function POST(
           ? 410
           : result.reason === 'expired'
             ? 410
-            : 409;
+            : result.reason === 'revoked'
+              ? 410
+              : 409;
     return NextResponse.json({ error: result.reason }, { status });
   }
   return NextResponse.json(result, { status: 201 });

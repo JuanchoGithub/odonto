@@ -6,6 +6,7 @@ import { query, queryOne, transaction } from '@/lib/db';
 import { requireUser, can } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 import { getSlots, getClinicTimezone, wallClockInTz, isWithinWorkingHours } from '@/lib/availability';
+import { SYSTEM_USER_ID } from '@/lib/system-user';
 import { effectiveExpiryMs, linkStatus, type LinkStatus } from '@/lib/turn-picker';
 export type { LinkStatus } from '@/lib/turn-picker';
 
@@ -193,9 +194,21 @@ export async function bookViaPicker(
   );
   if (!withinHours) return { ok: false, reason: 'conflict' };
 
+  // Attribute the booking to the staffer who created the link. If that
+  // user was hard-deleted, hardDeleteUser() already reassigned history to
+  // the system user — but resolve defensively so a stale created_by can
+  // never violate the created_by RESTRICT FK (see 0018_fk_constraints.sql).
+  const creator = link.created_by
+    ? await queryOne<{ id: string }>('SELECT id FROM users WHERE id = ?', [
+        link.created_by,
+      ])
+    : null;
+  const attributedTo = creator?.id ?? SYSTEM_USER_ID;
+
   // Atomic consume + insert inside one transaction. rowsAffected tells us
   // whether we won the race — no SELECT re-check (which both racers pass).
   const apptId = uid();
+  const now = nowIso();
   let wonRace = false;
   await transaction(async (tx) => {
     const res = await tx.execute(
@@ -215,10 +228,13 @@ export async function bookViaPicker(
         link.dentist_id,
         start.toISOString(),
         end.toISOString(),
-        'self-booked',
-        link.created_by,
-        nowIso(),
-        nowIso(),
+        'scheduled',
+        null,
+        null,
+        attributedTo,
+        'shared',
+        now,
+        now,
       ],
     );
     await tx.execute(
@@ -226,7 +242,7 @@ export async function bookViaPicker(
        VALUES (?, ?, 'book_via_picker', 'appointment', ?, ?)`,
       [
         uid(),
-        link.created_by,
+        attributedTo,
         apptId,
         JSON.stringify({ token_prefix: link.token.slice(0, 8), patient_id: link.patient_id }),
       ],
