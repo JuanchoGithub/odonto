@@ -5,9 +5,11 @@ import { CalendarPlus, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from '@/lib/navigation';
 import { AttendSheet } from '@/components/appointments/attend-sheet';
+import { AppointmentDialog } from '@/components/appointments/appointment-dialog';
 import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
 import { SubscribeCalendarButton } from '@/components/appointments/subscribe-calendar-button';
 import { updateAppointmentStatus } from '@/server/actions/appointments';
+import type { ApptRow } from '@/server/actions/appointments';
 import { useToast } from '@/components/ui/toaster';
 import { useDeltaRows } from '@/lib/store/snapshots';
 import { runSync, useEnsureSeeded } from '@/lib/store/sync';
@@ -128,6 +130,8 @@ export function DoctorPanel({
   const apptRows = useDeltaRows('appointments');
   useEnsureSeeded({ deltas: ['appointments'] });
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
+  const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -144,6 +148,11 @@ export function DoctorPanel({
     // Refresh from the server after a write (one delta sync, not N actions).
     void runSync();
   }, []);
+
+  function openEdit(a: ApptRow) {
+    setEditingAppt(a);
+    setEditOpen(true);
+  }
 
   useEffect(() => {
     // First paint resolves from the store (SSR-seeded or sync-seeded).
@@ -351,7 +360,22 @@ export function DoctorPanel({
             === wallClock(new Date().toISOString(), clinicTz).date
         }
         onRefresh={load}
+        onEdit={openEdit}
       />
+      {editingAppt ? (
+        <AppointmentDialog
+          open={editOpen}
+          onOpenChange={(o) => {
+            setEditOpen(o);
+            if (!o) setEditingAppt(null);
+          }}
+          dentists={[dentist]}
+          appointment={editingAppt}
+          onCreated={load}
+          currentUserId={dentist.id}
+          viewerRole="dentist"
+        />
+      ) : null}
       <AddAppointmentDialog
         open={addOpen}
         onOpenChange={setAddOpen}

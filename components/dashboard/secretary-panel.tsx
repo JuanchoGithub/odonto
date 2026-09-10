@@ -7,8 +7,10 @@ import { Link } from '@/lib/navigation';
 import { formatMoney } from '@/lib/format';
 import type { Currency, AppLocale } from '@/lib/schemas/common';
 import { AttendSheet } from '@/components/appointments/attend-sheet';
+import { AppointmentDialog } from '@/components/appointments/appointment-dialog';
 import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
 import { updateAppointmentStatus } from '@/server/actions/appointments';
+import type { ApptRow } from '@/server/actions/appointments';
 import type {
   PanelAppt,
   SecretarySchedule,
@@ -68,6 +70,8 @@ export function SecretaryPanel({
   const paymentRows = useDeltaRows('payments');
   useEnsureSeeded({ deltas: ['appointments', 'invoices', 'payments'] });
   const [attendAppt, setAttendAppt] = useState<PanelAppt | null>(null);
+  const [editingAppt, setEditingAppt] = useState<ApptRow | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [armingNoShow, setArmingNoShow] = useState<string | null>(null);
   const [armingComplete, setArmingComplete] = useState<string | null>(null);
@@ -94,6 +98,11 @@ export function SecretaryPanel({
     // Refresh from the server after a write (one delta sync, not N actions).
     void runSync();
   }, []);
+
+  function openEdit(a: ApptRow) {
+    setEditingAppt(a);
+    setEditOpen(true);
+  }
 
   useEffect(() => {
     // First paint resolves from the store (SSR-seeded or sync-seeded).
@@ -371,7 +380,20 @@ export function SecretaryPanel({
             === wallClock(new Date().toISOString(), clinicTz).date
         }
         onRefresh={load}
+        onEdit={openEdit}
       />
+      {editingAppt ? (
+        <AppointmentDialog
+          open={editOpen}
+          onOpenChange={(o) => {
+            setEditOpen(o);
+            if (!o) setEditingAppt(null);
+          }}
+          dentists={dentists}
+          appointment={editingAppt}
+          onCreated={load}
+        />
+      ) : null}
       <AddAppointmentDialog
         open={addOpen}
         onOpenChange={setAddOpen}
