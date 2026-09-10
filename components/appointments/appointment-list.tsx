@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toaster';
 import { revokeTurnPickerLink } from '@/server/actions/turn-picker';
-import { waMeUrl } from '@/lib/whatsapp';
+import { openTurnPickerWhatsapp } from '@/lib/turn-picker-whatsapp';
 import {
   Table,
   TableBody,
@@ -129,14 +129,11 @@ function PendingLinkActions({
 
   function whatsapp() {
     const msg = t('whatsappMessage', { name: l.patient_name, link: url() });
-    // Open a direct chat with the patient when we have their phone; fall back
-    // to a generic share picker when the number is unknown.
-    const direct = waMeUrl(l.patient_phone, msg, countryCode);
-    if (direct) {
-      window.open(direct, '_blank');
-      return;
-    }
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    openTurnPickerWhatsapp({
+      phone: l.patient_phone,
+      message: msg,
+      countryCode,
+    });
   }
 
   async function revoke() {

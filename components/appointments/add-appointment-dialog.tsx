@@ -9,7 +9,7 @@ import {
   ChevronLeft,
   Copy,
   Check,
-  Share,
+  Send,
   Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,8 @@ import {
 } from './appointment-dialog';
 import { useToast } from '@/components/ui/toaster';
 import { useRouter } from '@/lib/navigation';
+import { useWhatsapp } from '@/components/whatsapp-provider';
+import { openTurnPickerWhatsapp } from '@/lib/turn-picker-whatsapp';
 import type { Role } from '@/lib/schemas/common';
 
 export type CreatedVia = 'manual' | 'click' | 'drag';
@@ -119,6 +121,7 @@ export function AddAppointmentDialog({
   const tTp = useTranslations('turnPicker');
   const router = useRouter();
   const { push } = useToast();
+  const { countryCode } = useWhatsapp();
 
   const [phase, setPhase] = useState<Phase>('choice');
   const [error, setError] = useState<string | null>(null);
@@ -290,20 +293,18 @@ export function AddAppointmentDialog({
     }
   }
 
-  async function share() {
+  function whatsapp() {
     if (!url) return;
-    const nav = navigator as Navigator & {
-      share?: (d: { title?: string; text?: string; url?: string }) => Promise<void>;
-    };
-    if (typeof nav.share === 'function') {
-      try {
-        await nav.share({ title: 'Odonto', url });
-        return;
-      } catch {
-        return; // user dismissed — not an error
-      }
-    }
-    copy(true);
+    const selected = patients.find((p) => p.id === patientId);
+    const msg = tTp('whatsappMessage', {
+      name: selected?.name ?? '',
+      link: url,
+    });
+    openTurnPickerWhatsapp({
+      phone: selected?.phone ?? null,
+      message: msg,
+      countryCode,
+    });
   }
 
   async function saveManual(force = false) {
@@ -635,8 +636,8 @@ export function AddAppointmentDialog({
                         <Copy className="h-4 w-4" />
                       )}
                     </Button>
-                    <Button variant="outline" size="icon" onClick={share} aria-label={tTp('shareVia')}>
-                      <Share className="h-4 w-4" />
+                    <Button variant="outline" size="icon" onClick={whatsapp} aria-label={tTp('whatsapp')} title={tTp('whatsapp')}>
+                      <Send className="h-4 w-4" />
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">{tTp('idleNotice')}</p>

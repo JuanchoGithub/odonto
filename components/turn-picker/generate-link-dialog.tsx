@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
-import { X, Copy, Check, Link2, Share, Send, Ban } from 'lucide-react';
+import { X, Copy, Check, Link2, Send, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,7 +26,7 @@ import { PatientCombobox } from '@/components/patients/patient-combobox';
 import type { Role } from '@/lib/schemas/common';
 import { useToast } from '@/components/ui/toaster';
 import { useWhatsapp } from '@/components/whatsapp-provider';
-import { waMeUrl } from '@/lib/whatsapp';
+import { openTurnPickerWhatsapp } from '@/lib/turn-picker-whatsapp';
 
 const ALLOWED_LINK_DURATIONS = [15, 30, 45, 60, 90, 120];
 
@@ -173,20 +173,14 @@ export function GenerateTurnLinkDialog({
     }
   }
 
-  async function share() {
+  function whatsapp() {
     if (!url) return;
-    const nav = navigator as Navigator & {
-      share?: (d: { title?: string; text?: string; url?: string }) => Promise<void>;
-    };
-    if (typeof nav.share === 'function') {
-      try {
-        await nav.share({ title: 'Odonto', url });
-        return;
-      } catch {
-        return; // user dismissed — not an error
-      }
-    }
-    copy(true);
+    const msg = t('whatsappMessage', { name: patientName ?? '', link: url });
+    openTurnPickerWhatsapp({
+      phone: patientPhone ?? null,
+      message: msg,
+      countryCode,
+    });
   }
 
   async function copyLink(token: string) {
@@ -202,13 +196,11 @@ export function GenerateTurnLinkDialog({
   function sendWhatsApp(token: string) {
     const linkUrl = `${window.location.origin}/pick-turn/${token}`;
     const msg = t('whatsappMessage', { name: patientName ?? '', link: linkUrl });
-    // Direct chat with the patient when we have a phone; otherwise a share picker.
-    const direct = waMeUrl(patientPhone, msg, countryCode);
-    if (direct) {
-      window.open(direct, '_blank');
-      return;
-    }
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    openTurnPickerWhatsapp({
+      phone: patientPhone ?? null,
+      message: msg,
+      countryCode,
+    });
   }
 
   async function revokeLink(linkId: string) {
@@ -329,8 +321,8 @@ export function GenerateTurnLinkDialog({
                       <Copy className="h-4 w-4" />
                     )}
                   </Button>
-                  <Button variant="outline" size="icon" onClick={share} aria-label={t('shareVia')}>
-                    <Share className="h-4 w-4" />
+                  <Button variant="outline" size="icon" onClick={whatsapp} aria-label={t('whatsapp')} title={t('whatsapp')}>
+                    <Send className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">{t('idleNotice')}</p>
