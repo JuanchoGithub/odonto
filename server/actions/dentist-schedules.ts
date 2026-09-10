@@ -255,8 +255,8 @@ export async function saveWeeklySchedule(
     const dec = d.decisions[o.id]!;
     if (dec.action === 'cancel') {
       await query(
-        `UPDATE appointments SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?, cancel_reason = 'schedule_change' WHERE id = ?`,
-        [nowIso(), user.id, o.id],
+        `UPDATE appointments SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?, cancel_reason = 'schedule_change', updated_at = ? WHERE id = ?`,
+        [nowIso(), user.id, nowIso(), o.id],
       );
       await query(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'cancel', 'appointment', ?, ?)`,
@@ -289,8 +289,8 @@ export async function saveWeeklySchedule(
       await query(
         `UPDATE appointments SET starts_at = ?, ends_at = ?,
           reprogram_count = COALESCE(reprogram_count, 0) + 1,
-          original_starts_at = COALESCE(original_starts_at, ?) WHERE id = ?`,
-        [dec.new_starts_at, dec.new_ends_at, prev?.starts_at ?? o.starts_at, o.id],
+          original_starts_at = COALESCE(original_starts_at, ?), updated_at = ? WHERE id = ?`,
+        [dec.new_starts_at, dec.new_ends_at, prev?.starts_at ?? o.starts_at, nowIso(), o.id],
       );
       await query(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'reschedule', 'appointment', ?, ?)`,
@@ -408,7 +408,7 @@ export async function saveClinicDefaultDuration(
   await requireRole(['admin']);
   const parsed = ClinicDefaultDurationSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, error: 'invalid' };
-  await query('UPDATE clinics SET default_slot_minutes = ?', [parsed.data.slot_minutes]);
+  await query('UPDATE clinics SET default_slot_minutes = ?, updated_at = ?', [parsed.data.slot_minutes, nowIso()]);
   revalidatePath('/settings/schedules');
   return { ok: true };
 }
