@@ -146,6 +146,11 @@ export function AddAppointmentDialog({
   const [url, setUrl] = useState<string | null>(null);
   const [links, setLinks] = useState<TurnPickerLinkListItem[]>([]);
   const [copied, setCopied] = useState(false);
+  const [whatsappSent, setWhatsappSent] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'generateAnother' | 'close'>(
+    'generateAnother',
+  );
 
   // Patient list comes from the offline-first store (zero invocations).
   // Locally-created patients are kept in `extraPatients` until the sync
@@ -193,6 +198,8 @@ export function AddAppointmentDialog({
     setUrl(null);
     setLinks([]);
     setCopied(false);
+    setWhatsappSent(false);
+    setReminderOpen(false);
     setTouchedDur(false);
     const s = defaultStart ? new Date(defaultStart) : new Date();
     const e = defaultEnd
@@ -271,6 +278,7 @@ export function AddAppointmentDialog({
         return;
       }
       setUrl(`${window.location.origin}${res.url}`);
+      setWhatsappSent(false);
       setPhase('link');
       listLinksForPatient(patientId).then(setLinks).catch(() => {});
     } catch {
@@ -305,6 +313,41 @@ export function AddAppointmentDialog({
       message: msg,
       countryCode,
     });
+    setWhatsappSent(true);
+    setReminderOpen(false);
+  }
+
+  function goGenerateAnother() {
+    if (!whatsappSent) {
+      setPendingAction('generateAnother');
+      setReminderOpen(true);
+      return;
+    }
+    setUrl(null);
+    setError(null);
+    setWhatsappSent(false);
+    setPhase('choice');
+  }
+
+  function goDone() {
+    if (!whatsappSent) {
+      setPendingAction('close');
+      setReminderOpen(true);
+      return;
+    }
+    onOpenChange(false);
+  }
+
+  function confirmLeave() {
+    setReminderOpen(false);
+    if (pendingAction === 'generateAnother') {
+      setUrl(null);
+      setError(null);
+      setWhatsappSent(false);
+      setPhase('choice');
+    } else {
+      onOpenChange(false);
+    }
   }
 
   async function saveManual(force = false) {
@@ -647,17 +690,11 @@ export function AddAppointmentDialog({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setUrl(null);
-                      setError(null);
-                      setPhase('choice');
-                    }}
+                    onClick={goGenerateAnother}
                   >
                     {tTp('generateAnother')}
                   </Button>
-                  <Dialog.Close asChild>
-                    <Button>{tCommon('done')}</Button>
-                  </Dialog.Close>
+                  <Button onClick={goDone}>{tCommon('done')}</Button>
                 </div>
               </div>
             ) : null}
@@ -692,6 +729,79 @@ export function AddAppointmentDialog({
         onOpenChange={setNewPatientOpen}
         onCreated={onPatientCreated}
       />
+      <ReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        onCopy={() => copy()}
+        onWhatsapp={whatsapp}
+        onCancel={() => setReminderOpen(false)}
+        onDone={confirmLeave}
+        copied={copied}
+      />
+    </Dialog.Root>
+  );
+}
+
+function ReminderDialog({
+  open,
+  onOpenChange,
+  onCopy,
+  onWhatsapp,
+  onCancel,
+  onDone,
+  copied,
+}: {
+  open: boolean;
+  onOpenChange: (b: boolean) => void;
+  onCopy: () => void;
+  onWhatsapp: () => void;
+  onCancel: () => void;
+  onDone: () => void;
+  copied: boolean;
+}) {
+  const t = useTranslations('turnPicker');
+  const tCommon = useTranslations('common');
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/50" />
+        <Dialog.Content
+          data-testid="share-reminder-dialog"
+          className="fixed inset-x-0 bottom-0 z-[70] w-full bg-background border-t rounded-t-2xl shadow-xl p-4 pb-safe max-h-[92dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border sm:rounded-lg sm:p-6 sm:pb-6 sm:max-w-md sm:max-h-[90vh]"
+        >
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted sm:hidden" aria-hidden />
+          <Dialog.Title className="text-lg font-semibold mb-2">
+            {t('reminderTitle')}
+          </Dialog.Title>
+          <p className="text-sm text-muted-foreground mb-4">{t('reminderBody')}</p>
+          <div className="flex items-center gap-2 mb-4">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onCopy}
+              aria-label={t('copyUrl')}
+            >
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onWhatsapp}
+              aria-label={t('whatsapp')}
+              title={t('whatsapp')}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onCancel}>
+              {tCommon('cancel')}
+            </Button>
+            <Button onClick={onDone}>{tCommon('done')}</Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
     </Dialog.Root>
   );
 }

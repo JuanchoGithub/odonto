@@ -563,6 +563,8 @@
     "revoked": "Enlace revocado",
     "revokeConfirm": "¿Revocar este enlace? El paciente ya no podrá usarlo.",
     "whatsappMessage": "Hola {name}, sentite libre de elegir un turno disponible usando este enlace: {link}",
+    "reminderTitle": "¿Compartiste el enlace?",
+    "reminderBody": "Todavía no enviaste el enlace al paciente. Recordá compartirlo para que pueda reservar su turno.",
     "publicTitle": "Reservá tu turno",
     "publicSubtitle": "Elegí día y horario disponible",
     "noSlots": "No hay horarios disponibles en los próximos días",

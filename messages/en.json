@@ -564,6 +564,8 @@
     "revoked": "Link revoked",
     "revokeConfirm": "Revoke this link? The patient will no longer be able to use it.",
     "whatsappMessage": "Hello {name}, feel free to select an available turn using this link: {link}",
+    "reminderTitle": "Did you share the link?",
+    "reminderBody": "You haven't sent the link to the patient yet. Remember to share it so they can book their appointment.",
     "publicTitle": "Book your appointment",
     "publicSubtitle": "Pick a day and time",
     "noSlots": "No available slots in the next days",
