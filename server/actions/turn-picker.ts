@@ -251,6 +251,12 @@ export async function bookViaPicker(
   if (!wonRace) return { ok: false, reason: 'consumed' };
   revalidatePath(`/patients/${link.patient_id}`);
   revalidatePath('/appointments');
+  try {
+    const { refreshDentistCalendars } = await import('./calendar-feed');
+    await refreshDentistCalendars([link.dentist_id]);
+  } catch {
+    // Best-effort; the booking already succeeded.
+  }
   return { ok: true, startsAt: start.toISOString(), endsAt: end.toISOString() };
 }
 

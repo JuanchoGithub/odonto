@@ -275,7 +275,17 @@
     "whatsappPhonePlaceholder": "Teléfono",
     "whatsappCustom": "Personalizado",
     "whatsappSaved": "Configuración de WhatsApp guardada",
-    "whatsappAuto": "Sugerida"
+    "whatsappAuto": "Sugerida",
+    "subscribeTitle": "Suscribirse en iPhone",
+    "subscribeLoading": "Preparando calendario…",
+    "subscribeDesc": "Agregá tu agenda móvil de 6 semanas (últimas 4 + próximas 2) a la app Calendario del iPhone. Se actualiza sola.",
+    "subscribeStep1": "Tocá “Suscribirse en este iPhone” abajo.",
+    "subscribeStep2": "Confirmá “Suscribirse” cuando se abra la app Calendario.",
+    "subscribeStep3": "Tus turnos aparecen en un calendario nuevo y se mantienen actualizados.",
+    "subscribeCopy": "Copiar enlace",
+    "subscribeCopied": "Enlace del calendario copiado",
+    "subscribeOpen": "Suscribirse en este iPhone",
+    "subscribeError": "No se pudo preparar el calendario. Intentá de nuevo."
   },
   "odontogram": {
     "title": "Odontograma",

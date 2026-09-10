@@ -275,7 +275,17 @@
     "whatsappPhonePlaceholder": "Phone",
     "whatsappCustom": "Custom",
     "whatsappSaved": "WhatsApp settings saved",
-    "whatsappAuto": "Suggested"
+    "whatsappAuto": "Suggested",
+    "subscribeTitle": "Subscribe on iPhone",
+    "subscribeLoading": "Preparing calendar…",
+    "subscribeDesc": "Add your rolling 6-week schedule (last 4 weeks + next 2) to the iPhone Calendar app. It refreshes automatically.",
+    "subscribeStep1": "Tap “Subscribe on this iPhone” below.",
+    "subscribeStep2": "Confirm “Subscribe” when the Calendar app opens.",
+    "subscribeStep3": "Your appointments appear under a new calendar and stay up to date.",
+    "subscribeCopy": "Copy link",
+    "subscribeCopied": "Calendar link copied",
+    "subscribeOpen": "Subscribe on this iPhone",
+    "subscribeError": "Could not prepare the calendar. Try again."
   },
   "odontogram": {
     "title": "Odontogram",

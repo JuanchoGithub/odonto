@@ -15,6 +15,7 @@ import {
   AddAppointmentDialog,
   type CreatedVia,
 } from './add-appointment-dialog';
+import { SubscribeCalendarButton } from './subscribe-calendar-button';
 import { AttendSheet } from './attend-sheet';
 import { TimeGrid } from './time-grid';
 import { AppointmentList } from './appointment-list';
@@ -104,6 +105,10 @@ export function WeekCalendar({
   const [dentistFilter, setDentistFilter] = useState<string>(
     isDentistViewer && viewer ? viewer.id : 'all',
   );
+  // iPhone calendar subscription is per-dentist: dentists always see their
+  // own feed; staff see the feed of the filtered dentist (never "all").
+  const subscribeDentistId =
+    isDentistViewer && viewer ? viewer.id : dentistFilter !== 'all' ? dentistFilter : null;
 
   // Working windows come from the synced schedules snapshot (zero
   // invocations): week/filter changes recompute locally. Null = unseeded
@@ -253,6 +258,9 @@ export function WeekCalendar({
               <Plus className="h-4 w-4" />
               {t('new')}
             </Button>
+            {subscribeDentistId ? (
+              <SubscribeCalendarButton dentistId={subscribeDentistId} />
+            ) : null}
           </div>
         </div>
         <TabsContent value="calendar">

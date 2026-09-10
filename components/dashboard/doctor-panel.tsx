@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Link } from '@/lib/navigation';
 import { AttendSheet } from '@/components/appointments/attend-sheet';
 import { AddAppointmentDialog } from '@/components/appointments/add-appointment-dialog';
+import { SubscribeCalendarButton } from '@/components/appointments/subscribe-calendar-button';
 import { updateAppointmentStatus } from '@/server/actions/appointments';
 import { useToast } from '@/components/ui/toaster';
 import { useDeltaRows } from '@/lib/store/snapshots';
@@ -225,6 +226,10 @@ export function DoctorPanel({
           <CalendarPlus className="mr-2 h-5 w-5" />
           {t('addTurn')}
         </Button>
+      </div>
+      {/* Visible on all sizes: doctors subscribe from their iPhones. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <SubscribeCalendarButton dentistId={dentist.id} />
       </div>
 
       <section aria-label={t('nextHour')}>

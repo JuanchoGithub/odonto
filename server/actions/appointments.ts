@@ -65,6 +65,19 @@ function forbidden() {
   return { error: 'forbidden' as const };
 }
 
+/**
+ * Best-effort refresh of the per-dentist subscribable ICS feeds (Blob).
+ * Never throws; appointment writes must not fail because the feed did.
+ */
+async function refreshCalendars(ids: (string | null | undefined)[]) {
+  try {
+    const { refreshDentistCalendars } = await import('./calendar-feed');
+    await refreshDentistCalendars(ids);
+  } catch {
+    // Best-effort; the appointment write already succeeded.
+  }
+}
+
 export async function createAppointment(fd: FormData) {
   const user = await requireUser();
   if (!can(user.role, 'appointments:write')) return forbidden();
@@ -122,6 +135,7 @@ export async function createAppointment(fd: FormData) {
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id) VALUES (?, ?, 'create', 'appointment', ?)`,
     [uid(), user.id, id],
   );
+  await refreshCalendars([data.dentist_id]);
   revalidatePath('/appointments');
   return { ok: true, id };
 }
@@ -254,6 +268,7 @@ export async function updateAppointment(
       // Best-effort; update already succeeded.
     }
   }
+  await refreshCalendars([data.dentist_id, existing.dentist_id]);
   revalidatePath('/appointments');
   return { ok: true, id: data.id, reprogrammed: timeChanged };
 }
@@ -267,8 +282,8 @@ export async function updateAppointmentStatus(
   if (!can(user.role, 'appointments:write')) return { error: 'forbidden' as const };
   const parsed = ApptStatusSchema.safeParse(status);
   if (!parsed.success) return { error: 'invalid' as const };
-  const existing = await queryOne<{ id: string; status: string }>(
-    'SELECT id, status FROM appointments WHERE id = ?',
+  const existing = await queryOne<{ id: string; status: string; dentist_id: string }>(
+    'SELECT id, status, dentist_id FROM appointments WHERE id = ?',
     [id],
   );
   if (!existing) return { error: 'not_found' as const };
@@ -330,6 +345,7 @@ export async function updateAppointmentStatus(
       // Best-effort; status flip already succeeded.
     }
   }
+  await refreshCalendars([existing.dentist_id]);
   revalidatePath('/appointments');
   return { ok: true as const };
 }
@@ -342,6 +358,10 @@ export async function deleteAppointment(id: string, cancelReason?: string) {
     : null;
   // Soft-cancel instead of hard-delete: preserves history + audit trail.
   const now = nowIso();
+  const doomed = await queryOne<{ dentist_id: string }>(
+    'SELECT dentist_id FROM appointments WHERE id = ?',
+    [id],
+  );
   await query(
     `UPDATE appointments SET status='cancelled', cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?`,
     [now, user.id, reason, now, id],
@@ -350,6 +370,7 @@ export async function deleteAppointment(id: string, cancelReason?: string) {
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'cancel', 'appointment', ?, ?)`,
     [uid(), user.id, id, JSON.stringify({ via: 'deleteAppointment', cancel_reason: reason })],
   );
+  await refreshCalendars([doomed?.dentist_id]);
   revalidatePath('/appointments');
   return { ok: true as const };
 }
@@ -428,8 +449,8 @@ export async function sweepOverdueNoShows(
   // no_show_by / audit_log.user_id are FKs to users(id), so automated writes
   // attribute to 'system' instead of a magic string or NULL.
   const cutoff = new Date(Date.now() - graceMin * 60000).toISOString();
-  const candidates = await query<{ id: string; patient_id: string; starts_at: string; ends_at: string }>(
-    `SELECT id, patient_id, starts_at, ends_at FROM appointments
+  const candidates = await query<{ id: string; patient_id: string; dentist_id: string; starts_at: string; ends_at: string }>(
+    `SELECT id, patient_id, dentist_id, starts_at, ends_at FROM appointments
      WHERE status = 'scheduled' AND datetime(ends_at) <= datetime(?)
      ORDER BY ends_at LIMIT 200`,
     [cutoff],
@@ -437,6 +458,7 @@ export async function sweepOverdueNoShows(
   let noShows = 0;
   let attended = 0;
   const ids: string[] = [];
+  const touchedDentists = new Set<string>();
   for (const c of candidates) {
     const evidence = await findAttendanceEvidence(c.patient_id, c.starts_at, c.ends_at);
     const now = nowIso();
@@ -468,7 +490,9 @@ export async function sweepOverdueNoShows(
       noShows++;
     }
     ids.push(c.id);
+    touchedDentists.add(c.dentist_id);
   }
+  await refreshCalendars([...touchedDentists]);
   return { checked: candidates.length, noShows, attended, ids };
 }
 
