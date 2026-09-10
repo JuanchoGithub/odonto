@@ -27,6 +27,7 @@ import {
   recentPayments,
   type PanelItem,
 } from '@/lib/store/projections';
+import { wallClock } from '@/lib/store/time';
 
 function dayLabel(date: string): string {
   const [y, m, d] = date.split('-').map(Number);
@@ -361,6 +362,14 @@ export function SecretaryPanel({
         onAdvanced={load}
         clinicDate={attendAppt?.clinic_date}
         startHhmm={attendAppt?.start_hhmm}
+        isTodayActive={
+          !!attendAppt
+          && (attendAppt.status === 'scheduled'
+            || attendAppt.status === 'arrived'
+            || attendAppt.status === 'in_chair')
+          && attendAppt.clinic_date
+            === wallClock(new Date().toISOString(), clinicTz).date
+        }
         onRefresh={load}
       />
       <AddAppointmentDialog

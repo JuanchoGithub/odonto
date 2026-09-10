@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/toaster';
 import { CountryCodeSelect } from './country-code-select';
 import {
   BUILTIN_TEMPLATES,
+  BUILTIN_TEMPLATE_IDS,
   fillTemplate,
   newTemplateId,
   templateBody,
@@ -79,7 +80,21 @@ export function WhatsappTemplatesEditor({
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
-      const err = await onSave(countryCode, templates);
+      // Builtins are always on with canonical scope; force locally too so a
+      // stale disabled row can never be persisted even if server hardening lags.
+      const hardened = templates.map((tpl) =>
+        BUILTIN_TEMPLATE_IDS.has(tpl.id)
+          ? {
+              ...tpl,
+              enabled: 1 as const,
+              applies_to:
+                tpl.id === 'builtin_confirmation'
+                  ? ('upcoming' as const)
+                  : ('past' as const),
+            }
+          : tpl,
+      );
+      const err = await onSave(countryCode, hardened);
       if (err) {
         push({ title: err, variant: 'destructive' });
         return;
@@ -209,39 +224,47 @@ export function WhatsappTemplatesEditor({
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">{t('whatsappAppliesTo')}</Label>
-                  <select
-                    value={tpl.applies_to}
-                    onChange={(e) =>
-                      updateTemplate(tpl.id, {
-                        applies_to: e.target.value as WhatsappTemplate['applies_to'],
-                      })
-                    }
-                    className="flex h-10 min-h-[40px] w-full rounded-md border border-input bg-background px-3 text-sm"
-                    data-testid={`${testIdPrefix}-tpl-applies-${tpl.id}`}
-                  >
-                    <option value="upcoming">{t('whatsappAppliesUpcoming')}</option>
-                    <option value="past">{t('whatsappAppliesPast')}</option>
-                    <option value="any">{t('whatsappAppliesAny')}</option>
-                  </select>
-                </div>
-                <label className="inline-flex items-center gap-2 text-sm pt-5">
-                  <input
-                    type="checkbox"
-                    checked={Number(tpl.enabled) === 1}
-                    onChange={(e) =>
-                      updateTemplate(tpl.id, {
-                        enabled: e.target.checked ? 1 : 0,
-                      })
-                    }
-                    data-testid={`${testIdPrefix}-tpl-enabled-${tpl.id}`}
-                    className="h-4 w-4"
-                  />
-                  {Number(tpl.enabled) === 1
-                    ? t('whatsappEnabled')
-                    : t('whatsappDisabled')}
-                </label>
+                {BUILTIN_TEMPLATE_IDS.has(tpl.id) ? (
+                  <p className="text-xs text-muted-foreground pt-5">
+                    {t('whatsappAlwaysOn')}
+                  </p>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">{t('whatsappAppliesTo')}</Label>
+                      <select
+                        value={tpl.applies_to}
+                        onChange={(e) =>
+                          updateTemplate(tpl.id, {
+                            applies_to: e.target.value as WhatsappTemplate['applies_to'],
+                          })
+                        }
+                        className="flex h-10 min-h-[40px] w-full rounded-md border border-input bg-background px-3 text-sm"
+                        data-testid={`${testIdPrefix}-tpl-applies-${tpl.id}`}
+                      >
+                        <option value="upcoming">{t('whatsappAppliesUpcoming')}</option>
+                        <option value="past">{t('whatsappAppliesPast')}</option>
+                        <option value="any">{t('whatsappAppliesAny')}</option>
+                      </select>
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-sm pt-5">
+                      <input
+                        type="checkbox"
+                        checked={Number(tpl.enabled) === 1}
+                        onChange={(e) =>
+                          updateTemplate(tpl.id, {
+                            enabled: e.target.checked ? 1 : 0,
+                          })
+                        }
+                        data-testid={`${testIdPrefix}-tpl-enabled-${tpl.id}`}
+                        className="h-4 w-4"
+                      />
+                      {Number(tpl.enabled) === 1
+                        ? t('whatsappEnabled')
+                        : t('whatsappDisabled')}
+                    </label>
+                  </>
+                )}
               </div>
             </li>
           ))}
@@ -281,7 +304,7 @@ export function WhatsappTemplatesEditor({
 }
 
 function isBuiltIn(id: string): boolean {
-  return id === 'builtin_confirmation' || id === 'builtin_no_show';
+  return BUILTIN_TEMPLATE_IDS.has(id);
 }
 
 function pickPreview(

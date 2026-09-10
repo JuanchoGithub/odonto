@@ -32,8 +32,9 @@ import { effectiveExpiryMs } from '@/lib/turn-picker';
 import { es, enUS } from 'date-fns/locale';
 import { useDeltaRows, upsertRow } from '@/lib/store/snapshots';
 import { runSync, useEnsureSeeded, hydrateStore } from '@/lib/store/sync';
-import { useWeekWindows } from '@/lib/store/schedules';
-import { weekSlice } from '@/lib/store/projections';
+import { useWeekWindows, useSchedulesSnapshot } from '@/lib/store/schedules';
+import { weekSlice, withClinicClock } from '@/lib/store/projections';
+import { wallClock } from '@/lib/store/time';
 
 export type DentistRef = { id: string; name: string; color: string | null; slot_minutes?: number | null };
 
@@ -44,6 +45,7 @@ export function WeekCalendar({
   initialWeekStart,
   viewer,
   clinicDefaultDuration,
+  clinicTz,
 }: {
   initial: ApptRow[];
   dentists: DentistRef[];
@@ -53,6 +55,8 @@ export function WeekCalendar({
   viewer?: { id: string; role: string };
   /** Clinic-wide fallback default for new-turn duration. */
   clinicDefaultDuration?: number;
+  /** Clinic IANA timezone (SSR). Falls back to the schedules snapshot. */
+  clinicTz?: string;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -125,10 +129,38 @@ export function WeekCalendar({
     () => weekSlice(storeRows, weekStart, 'all'),
     [storeRows, weekStart],
   );
-  const filtered =
+  const filteredRaw =
     dentistFilter === 'all'
       ? appts
       : appts.filter((a) => a.dentist_id === dentistFilter);
+  // Clinic wall-clock for WhatsApp + today detection. SSR `clinicTz` wins;
+  // schedules snapshot is the offline fallback (same source as shading).
+  const schedulesSnap = useSchedulesSnapshot();
+  const tz = clinicTz ?? schedulesSnap?.tz ?? 'UTC';
+  const todayDate = useMemo(
+    () => wallClock(new Date().toISOString(), tz).date,
+    [tz],
+  );
+  // Decorate with clinic-local date/HH:MM so the list cards and AttendSheet
+  // never fall back to a UTC slice (store rows are raw deltas).
+  const filtered = useMemo(
+    () => withClinicClock(filteredRaw, tz),
+    [filteredRaw, tz],
+  );
+  // AttendSheet context: clinic-local fields + same-day flag for the
+  // WhatsApp template filter (today-active shows both confirmation + no-show).
+  const attendClinicDate = attendAppt
+    ? (attendAppt.clinic_date ?? wallClock(attendAppt.starts_at, tz).date)
+    : undefined;
+  const attendStartHhmm = attendAppt
+    ? (attendAppt.start_hhmm ?? wallClock(attendAppt.starts_at, tz).hhmm)
+    : undefined;
+  const attendIsTodayActive = !!attendAppt
+    && (attendAppt.status === 'scheduled'
+      || attendAppt.status === 'arrived'
+      || attendAppt.status === 'in_chair')
+    && !!attendClinicDate
+    && attendClinicDate === todayDate;
   const now = Date.now();
   const filteredPending = pendingLinks.filter(
     (l) =>
@@ -349,6 +381,9 @@ export function WeekCalendar({
             if (!o) setAttendAppt(null);
           }}
           onAdvanced={refresh}
+          clinicDate={attendClinicDate}
+          startHhmm={attendStartHhmm}
+          isTodayActive={attendIsTodayActive}
           onRefresh={refresh}
         />
       </CardContent>

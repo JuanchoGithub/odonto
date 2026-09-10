@@ -38,6 +38,7 @@ export function AttendSheet({
   onAdvanced,
   clinicDate,
   startHhmm,
+  isTodayActive,
   onRefresh,
 }: {
   appointment: ApptRow | null;
@@ -48,6 +49,8 @@ export function AttendSheet({
   clinicDate?: string;
   /** Clinic-local HH:MM. Required for WhatsApp template rendering. */
   startHhmm?: string;
+  /** Active turn on the same clinic day → WhatsApp shows both templates. */
+  isTodayActive?: boolean;
   /** Optional callback when WhatsApp updated the patient phone so the parent can refresh. */
   onRefresh?: () => void;
 }) {
@@ -228,6 +231,7 @@ export function AttendSheet({
         }}
         status={appointment.status}
         isFuture={isFuture}
+        isTodayActive={isTodayActive}
         templates={templates}
         countryCode={countryCode}
         dentistId={appointment.dentist_id}

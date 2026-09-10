@@ -18,6 +18,7 @@ import {
   type PanelItem,
   type NextUpcomingItem,
 } from '@/lib/store/projections';
+import { wallClock } from '@/lib/store/time';
 import type { PanelAppt } from '@/server/actions/dashboard';
 import { PanelApptCard } from './panel-appt-card';
 
@@ -341,6 +342,14 @@ export function DoctorPanel({
         onAdvanced={load}
         clinicDate={attendAppt?.clinic_date}
         startHhmm={attendAppt?.start_hhmm}
+        isTodayActive={
+          !!attendAppt
+          && (attendAppt.status === 'scheduled'
+            || attendAppt.status === 'arrived'
+            || attendAppt.status === 'in_chair')
+          && attendAppt.clinic_date
+            === wallClock(new Date().toISOString(), clinicTz).date
+        }
         onRefresh={load}
       />
       <AddAppointmentDialog

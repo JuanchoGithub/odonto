@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/toaster';
 import {
   fillTemplate,
+  filterTemplatesForSheet,
   pickAutoTemplate,
   templateBody,
   templateLabel,
@@ -33,6 +34,8 @@ type AttendTemplateSheetProps = {
   };
   status: string;
   isFuture: boolean;
+  /** Active turn on the same clinic day → show both upcoming + past. */
+  isTodayActive?: boolean;
   templates: WhatsappTemplate[];
   countryCode: string;
   /** Resolve this dentist's per-user override when set. */
@@ -57,6 +60,7 @@ export function AttendTemplateSheet({
   context,
   status,
   isFuture,
+  isTodayActive = false,
   templates,
   countryCode,
   dentistId,
@@ -81,20 +85,14 @@ export function AttendTemplateSheet({
       : { templates, countryCode };
 
   const filtered = useMemo(() => {
-    const enabled = effective.templates.filter((tpl) => Number(tpl.enabled) === 1);
-    // Match the auto-pick preference exactly: keep "any" templates plus
-    // those whose `applies_to` matches the context, so the user is never
-    // shown a confirmation template when the patient missed their turn.
-    const past = isFuture === false || status === 'no_show' || status === 'cancelled';
-    return enabled.filter((tpl) => {
-      if (tpl.applies_to === 'any') return true;
-      return past ? tpl.applies_to === 'past' : tpl.applies_to === 'upcoming';
+    return filterTemplatesForSheet(effective.templates, status, isFuture, {
+      isTodayActive,
     });
-  }, [effective.templates, isFuture, status]);
+  }, [effective.templates, isFuture, status, isTodayActive]);
 
   const auto = useMemo(
-    () => pickAutoTemplate(effective.templates, status, isFuture),
-    [effective.templates, status, isFuture],
+    () => pickAutoTemplate(effective.templates, status, isFuture, { isTodayActive }),
+    [effective.templates, status, isFuture, isTodayActive],
   );
 
   function fillBody(body: string): string {
@@ -177,7 +175,7 @@ export function AttendTemplateSheet({
 
             {filtered.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                {t('emptyList')}
+                {t('whatsappEmptyTemplates')}
               </p>
             ) : (
               <ul className="space-y-2">

@@ -9,6 +9,7 @@ import {
   parseTemplates,
   serializeTemplates,
   BUILTIN_TEMPLATES,
+  BUILTIN_APPLIES_TO,
   buildUserWhatsappMap,
   type WhatsappTemplate,
 } from '@/lib/whatsapp';
@@ -204,7 +205,10 @@ export const getWhatsappContextData: () => Promise<{
   return { countryCode, templates, users };
 });
 
-/** Make sure the two built-in templates are always present and in canonical order. */
+/** Make sure the two built-in templates are always present, enabled, and in
+ *  canonical order/scope. Content (labels/bodies) stays editable; `kind`,
+ *  `enabled`, and `applies_to` are forced so the AttendSheet can never end up
+ *  with zero buttons. */
 function ensureBuiltins(templates: WhatsappTemplate[]): WhatsappTemplate[] {
   const byId = new Map(templates.map((t) => [t.id, t] as const));
   for (const built of BUILTIN_TEMPLATES) {
@@ -212,8 +216,13 @@ function ensureBuiltins(templates: WhatsappTemplate[]): WhatsappTemplate[] {
     if (!existing) {
       byId.set(built.id, built);
     } else {
-      // Built-in kind is fixed (we don't let admin flip confirmation ↔ no_show).
-      byId.set(built.id, { ...existing, kind: built.kind });
+      // Built-in kind/scope/enabled are fixed (admins edit text only).
+      byId.set(built.id, {
+        ...existing,
+        kind: built.kind,
+        enabled: 1,
+        applies_to: BUILTIN_APPLIES_TO[built.id] ?? existing.applies_to,
+      });
     }
   }
   const order = ['builtin_confirmation', 'builtin_no_show'];

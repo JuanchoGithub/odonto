@@ -252,6 +252,7 @@ export function pickAutoTemplate(
   templates: WhatsappTemplate[],
   status: string,
   isFuture: boolean,
+  opts?: { isTodayActive?: boolean },
 ): WhatsappTemplate {
   const enabled = templates.filter((t) => Number(t.enabled) === 1);
   const pool = enabled.length > 0 ? enabled : BUILTIN_TEMPLATES;
@@ -260,10 +261,56 @@ export function pickAutoTemplate(
   if (status === 'no_show' || status === 'cancelled') {
     return pastFirst ?? upcomingFirst ?? pool[0]!;
   }
+  // Same-day active turn: suggest the confirmation even though the start
+  // time already passed (matches the sheet showing both templates).
+  if (opts?.isTodayActive) {
+    return upcomingFirst ?? pastFirst ?? pool[0]!;
+  }
   if (!isFuture) {
     return pastFirst ?? upcomingFirst ?? pool[0]!;
   }
   return upcomingFirst ?? pastFirst ?? pool[0]!;
+}
+
+/** Canonical scope for each built-in template (hardened: never flipped). */
+export const BUILTIN_APPLIES_TO: Record<string, 'upcoming' | 'past'> = {
+  builtin_confirmation: 'upcoming',
+  builtin_no_show: 'past',
+};
+
+/**
+ * Filter templates for the AttendSheet picker.
+ *
+ * - Terminal `no_show`/`cancelled` → `past` + `any` only.
+ * - Active turn on the same clinic day (`isTodayActive`) → `upcoming` +
+ *   `past` + `any` (Option A: a turn earlier today is still confirmable,
+ *   so both builtins stay visible; auto-pick still prefers `upcoming`).
+ * - Other active turns → strict split on `isFuture`.
+ * - Never empty: falls back to all enabled, then to `BUILTIN_TEMPLATES`,
+ *   so the sheet always offers at least one button.
+ */
+export function filterTemplatesForSheet(
+  templates: WhatsappTemplate[],
+  status: string,
+  isFuture: boolean,
+  opts?: { isTodayActive?: boolean },
+): WhatsappTemplate[] {
+  const enabled = templates.filter((t) => Number(t.enabled) === 1);
+  const pool = enabled.length > 0 ? enabled : [...BUILTIN_TEMPLATES];
+  const pastOnly = status === 'no_show' || status === 'cancelled';
+  if (pastOnly) {
+    const out = pool.filter((t) => t.applies_to === 'any' || t.applies_to === 'past');
+    if (out.length > 0) return out;
+    return pool.length > 0 ? pool : [...BUILTIN_TEMPLATES];
+  }
+  if (opts?.isTodayActive) return [...pool];
+  const past = isFuture === false;
+  const out = pool.filter((t) => {
+    if (t.applies_to === 'any') return true;
+    return past ? t.applies_to === 'past' : t.applies_to === 'upcoming';
+  });
+  if (out.length > 0) return out;
+  return pool.length > 0 ? pool : [...BUILTIN_TEMPLATES];
 }
 
 /** Generate a stable id for new custom templates. */
