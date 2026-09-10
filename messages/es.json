@@ -213,6 +213,7 @@
       "pending": "Pendiente"
     },
     "conflict": "Ese horario está fuera del horario laboral del odontólogo",
+    "saveOutsideHours": "Guardar igual fuera del horario laboral",
     "patientNotFound": "Ese paciente no existe. Selecciona uno de la lista o crea uno nuevo.",
     "viewPatient": "Ver paciente",
     "invalid": "Datos inválidos. Revisá los campos.",
