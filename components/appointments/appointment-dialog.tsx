@@ -113,6 +113,11 @@ export function AppointmentDialog({
   );
   const [reopenArmed, setReopenArmed] = useState(false);
   const pendingFd = useRef<FormData | null>(null);
+  // Timestamp of the last "cancel delete" tap. Cancelling swaps the footer
+  // back in, rendering SAVE where the tap just landed — the same tap can
+  // ghost-click through onto SAVE (touch) or a hasty second tap can hit it
+  // before the user realizes the row changed. onSubmit ignores those.
+  const deleteCancelAt = useRef(0);
   const [dateVal, setDateVal] = useState('');
   const [timeVal, setTimeVal] = useState('');
   const [durVal, setDurVal] = useState('30');
@@ -209,12 +214,46 @@ export function AppointmentDialog({
     else router.refresh();
   }
 
+  function handleCancelDelete() {
+    deleteCancelAt.current = Date.now();
+    setConfirmDelete(false);
+  }
+
+  /** True when the form differs from the stored row in any persisted field. */
+  function isDirty(fd: FormData): boolean {
+    const str = (v: FormDataEntryValue | null) =>
+      typeof v === 'string' ? v : '';
+    if (str(fd.get('patient_id')) !== editing.patient_id) return true;
+    if (str(fd.get('dentist_id')) !== editing.dentist_id) return true;
+    if (str(fd.get('status')) !== editing.status) return true;
+    const newReason =
+      str(fd.get('status')) === 'cancelled' ? str(fd.get('cancel_reason')) : '';
+    const origReason =
+      editing.status === 'cancelled' ? (editing.cancel_reason ?? '') : '';
+    if (newReason !== origReason) return true;
+    if (str(fd.get('reason')) !== (editing.reason ?? '')) return true;
+    if (str(fd.get('notes')) !== (editing.notes ?? '')) return true;
+    if (Date.parse(str(fd.get('starts_at'))) !== Date.parse(editing.starts_at))
+      return true;
+    if (Date.parse(str(fd.get('ends_at'))) !== Date.parse(editing.ends_at))
+      return true;
+    return false;
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (Date.now() - deleteCancelAt.current < 500) return;
+    const fd = buildFd(e.currentTarget);
+    // No-op save: nothing changed, so skip the server roundtrip entirely.
+    // (Explicit force/reopen confirmations always go through.)
+    if (!forceMode && !reopenArmed && !isDirty(fd)) {
+      onOpenChange(false);
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
-      await submitFd(buildFd(e.currentTarget), forceMode);
+      await submitFd(fd, forceMode);
     } catch {
       setError(tErr('generic'));
     } finally {
@@ -517,7 +556,7 @@ export function AppointmentDialog({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setConfirmDelete(false)}
+                  onClick={handleCancelDelete}
                   data-testid="appt-delete-cancel"
                 >
                   {tCommon('cancel')}
