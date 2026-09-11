@@ -147,6 +147,14 @@ export function WeekCalendar({
     () => withClinicClock(filteredRaw, tz),
     [filteredRaw, tz],
   );
+  // Reconcile the open AttendSheet with fresh store rows (after a delta
+  // sync) so its phone/basic fields never go stale while it's open.
+  useEffect(() => {
+    setAttendAppt((prev) => {
+      if (!prev) return prev;
+      return filtered.find((r) => r.id === prev.id) ?? prev;
+    });
+  }, [filtered]);
   // AttendSheet context: clinic-local fields + same-day flag for the
   // WhatsApp template filter (today-active shows both confirmation + no-show).
   const attendClinicDate = attendAppt

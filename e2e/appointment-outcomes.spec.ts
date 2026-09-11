@@ -16,10 +16,10 @@ function at(day: Date, h: number, m: number) {
   return d;
 }
 
-/** A past weekday at h:m (yesterday, skipping back over weekends). */
-function pastWeekday(h: number, m: number) {
+/** A past weekday at h:m (daysBack ago, skipping back over weekends). */
+function pastWeekday(h: number, m: number, daysBack = 1) {
   const d = new Date();
-  d.setDate(d.getDate() - 1);
+  d.setDate(d.getDate() - daysBack);
   while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
   d.setHours(h, m, 0, 0);
   return d;
@@ -71,10 +71,14 @@ async function latestAt(page: Page, when: Date) {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
 }
 
-async function createAppt(page: Page, start: Date, durationMin = 30) {
-  await openManualCreate(page);
+async function createAppt(
+  page: Page,
+  start: Date,
+  durationMin = 30,
+  patientName = 'García',
+) {
+  await openManualCreate(page, patientName);
   const dialog = page.getByRole('dialog');
-  await pickPatient(dialog);
   await fillWhen(dialog, page, start, durationMin);
   await dialog
     .getByRole('button', { name: /^guardar$|^save$/i })
@@ -86,10 +90,11 @@ async function createAppt(page: Page, start: Date, durationMin = 30) {
 async function openBadge(page: Page, when: Date) {
   // Jump straight to the right week via the page's `start` query param —
   // clicking week-next repeatedly is stateful and breaks on second calls.
-  // Pass the target DAY (server applies startOfWeek); do not pre-round to
-  // Monday — new Date('yyyy-MM-dd') parses as UTC midnight and slips a day.
+  // Pass the target DAY with an explicit local-noon time: a bare
+  // 'yyyy-MM-dd' parses as UTC midnight, which on a negative-offset server
+  // TZ slips a day and startOfWeek lands on the PREVIOUS week for Mondays.
   await page.goto(
-    `/appointments?start=${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`,
+    `/appointments?start=${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T12:00:00`,
   );
   // Scope to the day column: same-time badges can exist on other weeks/days.
   const colIndex = (when.getDay() + 6) % 7;
@@ -109,7 +114,10 @@ test('overdue scheduled appointment becomes no_show via the cron sweep', async (
   await login(page);
   await page.goto('/appointments');
 
-  const past = pastWeekday(10, 0);
+  // 40 days back: the sweep auto-completes appointments with attendance
+  // evidence (treatments/invoices) in the visit window, and shared fixture
+  // patients keep accumulating those — a distant-past visit has none.
+  const past = pastWeekday(10, 0, 40);
   await createAppt(page, past, 15);
   const mine = await latestAt(page, past);
   expect(mine).toBeTruthy();
@@ -255,4 +263,77 @@ test('terminal status cannot silently reopen — needs explicit confirmation', a
   );
   expect(hit).toBeTruthy();
   expect(hit.status).toBe('scheduled');
+});
+
+test.describe('mobile attend stepper', () => {
+  // The mobile list renders the compact cards / AttendSheet only at phone
+  // width, and the week view defaults to "list" via matchMedia at mount.
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('tapping through the statuses keeps the turn detail open (incl. completed, for billing)', async ({
+    page,
+  }) => {
+    await login(page);
+
+    const when = await pickFreeSlot(page, nextWeekday(2), [
+      [13, 30],
+      [13, 15],
+      [12, 45],
+    ]);
+    await page.goto('/appointments');
+    await createAppt(page, when, 30);
+
+    const created = await latestAt(page, when);
+    expect(created).toBeTruthy();
+
+    // Reload on the right week (list view is the mobile default); local-noon
+    // time avoids the UTC-midnight day slip (see openBadge).
+    await page.goto(
+      `/appointments?start=${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T12:00:00`,
+    );
+    const hm = `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+    const row = page
+      .getByTestId('appt-list-row')
+      .filter({ hasText: hm })
+      .filter({ hasText: /García/ })
+      .first();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.click();
+
+    const sheet = page.getByRole('dialog');
+    await expect(sheet.getByTestId('attend-status-badge')).toHaveText(
+      /programado|scheduled/i,
+    );
+
+    const steps: { badge: RegExp; nextTab: RegExp }[] = [
+      { badge: /llegó|arrived/i, nextTab: /consultorio|chair/i },
+      { badge: /consultorio|in chair/i, nextTab: /completado|completed/i },
+      { badge: /completado|completed/i, nextTab: /unreachable/ },
+    ];
+    for (const step of steps) {
+      await sheet.getByTestId('attend-advance').click();
+      // The sheet must stay open AND update in place after every tap.
+      await expect(sheet.getByTestId('attend-status-badge')).toHaveText(
+        step.badge,
+        { timeout: 15_000 },
+      );
+      if (step.nextTab.source !== 'unreachable') {
+        await expect(
+          sheet.getByTestId('attend-advance'),
+          `advance button should offer ${step.nextTab} without closing`,
+        ).toContainText(step.nextTab);
+      } else {
+        // Completed: stepper is gone, sheet stays open, billing is available.
+        await expect(sheet.getByTestId('attend-advance')).toHaveCount(0);
+        await expect(sheet.getByTestId('visit-billing')).toBeVisible();
+        await expect(sheet).toBeVisible();
+      }
+    }
+
+    const hit = (await fetchWeek(page, when)).find(
+      (a: any) => a.id === created.id,
+    );
+    expect(hit).toBeTruthy();
+    expect(hit.status).toBe('completed');
+  });
 });

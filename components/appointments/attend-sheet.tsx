@@ -65,6 +65,16 @@ export function AttendSheet({
   const { countryCode, templates } = useWhatsapp();
   const [saving, setSaving] = useState(false);
   const [waOpen, setWaOpen] = useState(false);
+  // Self-updating status: the stepper advances instantly on a successful
+  // write instead of waiting for the parent's sync reconcile to swap the
+  // `appointment` prop (week-calendar never did, panels lag a round-trip).
+  // Reconciles back from the prop when the parent delivers a fresh row.
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (appointment) setLocalStatus(appointment.status);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointment?.id, appointment?.status]);
 
   const effectiveClinicDate = useMemo(() => {
     if (clinicDate) return clinicDate;
@@ -86,7 +96,8 @@ export function AttendSheet({
   if (!appointment) return null;
   const start = new Date(appointment.starts_at);
   const end = new Date(appointment.ends_at);
-  const idx = FLOW.indexOf(appointment.status as (typeof FLOW)[number]);
+  const effectiveStatus = localStatus ?? appointment.status;
+  const idx = FLOW.indexOf(effectiveStatus as (typeof FLOW)[number]);
   const next = idx >= 0 && idx < FLOW.length - 1 ? FLOW[idx + 1] : null;
 
   async function advance() {
@@ -98,11 +109,13 @@ export function AttendSheet({
         push({ title: tErr('generic'), variant: 'destructive' });
         return;
       }
+      // Update locally right away so the stepper keeps moving without
+      // waiting for the parent's sync to deliver the fresh row.
+      setLocalStatus(next);
       push({ title: t(`status.${next}`), variant: 'success' });
       if (onAdvanced) onAdvanced();
-      // Keep the sheet open with fresh state after parent refreshes; close
-      // when the visit is completed.
-      if (next === 'completed') onOpenChange(false);
+      // The sheet stays open the whole way — at `completed` the stepper
+      // disappears and Facturar visita is available in the same session.
     } catch {
       push({ title: tErr('generic'), variant: 'destructive' });
     } finally {
@@ -153,7 +166,7 @@ export function AttendSheet({
                 <div className="truncate text-sm">{appointment.reason}</div>
               ) : null}
             </div>
-            <Badge variant="default">{t(`status.${appointment.status}`)}</Badge>
+            <Badge variant="default" data-testid="attend-status-badge">{t(`status.${effectiveStatus}`)}</Badge>
           </div>
 
           {onEdit ? (
@@ -227,9 +240,10 @@ export function AttendSheet({
             </Link>
           </div>
 
-          {appointment.status !== 'cancelled' && appointment.status !== 'no_show' ? (
+          {effectiveStatus !== 'cancelled' && effectiveStatus !== 'no_show' ? (
             <VisitBilling
               appointment={appointment}
+              status={effectiveStatus}
               open={open}
               onBilled={onAdvanced}
             />
@@ -248,7 +262,7 @@ export function AttendSheet({
           dentistName: appointment.dentist_name,
           reason: appointment.reason,
         }}
-        status={appointment.status}
+        status={effectiveStatus}
         isFuture={isFuture}
         isTodayActive={isTodayActive}
         templates={templates}
@@ -271,10 +285,13 @@ type CatalogOption = {
 
 function VisitBilling({
   appointment,
+  status,
   open,
   onBilled,
 }: {
   appointment: ApptRow;
+  /** Effective status from the stepper (may be ahead of the prop). */
+  status: string;
   open: boolean;
   onBilled?: () => void;
 }) {
@@ -312,7 +329,7 @@ function VisitBilling({
       refresh();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, appointment.id, appointment.status]);
+  }, [open, appointment.id, status]);
 
   async function bill() {
     setBilling(true);
