@@ -27,6 +27,7 @@ import type { PatientRow } from '@/server/actions/patients';
 import { PatientForm } from '@/components/patients/patient-form';
 import type { Role } from '@/lib/schemas/common';
 import { WhatsappButton } from '@/components/ui/whatsapp-button';
+import { PendingReprogramChip } from './pending-reprogram-chip';
 import { usePatientOptions } from '@/lib/store/options';
 import { useWhatsapp } from '@/components/whatsapp-provider';
 
@@ -347,6 +348,8 @@ export function AppointmentDialog({
                   dentistId={editing.dentist_id}
                   dentistName={editing.dentist_name}
                   reason={editing.reason}
+                  appointmentId={editing.id}
+                  onReprogrammed={onCreated}
                 />
               ) : null}
             </div>
@@ -389,6 +392,7 @@ export function AppointmentDialog({
                       : editing.created_via)
                   : '—'}
               </div>
+              <PendingReprogramChip value={editing} />
               {(editing.reprogram_count ?? 0) > 0 ? (
                 <div data-testid="appt-reprogram">
                   <span className="font-medium">
@@ -626,6 +630,8 @@ export function PatientContact({
   dentistId,
   dentistName,
   reason,
+  appointmentId,
+  onReprogrammed,
 }: {
   patients: { id: string; name: string; phone: string | null; email: string | null }[];
   patientId: string;
@@ -636,6 +642,9 @@ export function PatientContact({
   dentistId?: string | null;
   dentistName?: string | null;
   reason?: string | null;
+  /** When set (edit dialog), the WhatsApp button offers Notify / Reprogram. */
+  appointmentId?: string | null;
+  onReprogrammed?: () => void;
 }) {
   const { countryCode, templates } = useWhatsapp();
   const p = patients.find((x) => x.id === patientId);
@@ -685,6 +694,8 @@ export function PatientContact({
             variant="icon"
             className="min-h-[32px] min-w-[32px] border-0"
             testId={`patient-contact-whatsapp-${p.id}`}
+            appointmentId={appointmentId}
+            onReprogrammed={onReprogrammed}
           />
         ) : null}
       </div>

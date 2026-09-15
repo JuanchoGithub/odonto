@@ -17,19 +17,30 @@ type Props = {
   locale: 'es' | 'en';
   /** Clinic IANA timezone — slot times render in clinic wall-clock. */
   clinicTz?: string;
+  /** 'reprogram' moves the existing turn (dentist + duration locked). */
+  purpose?: 'create' | 'reprogram';
+  oldStartsAt?: string;
+  oldEndsAt?: string;
 };
 
 const T = {
   es: {
     title: 'Reservá tu turno',
+    reprogramTitle: 'Reprogramá tu turno',
     subtitle: (p: string, d: string, m: number) =>
       `${p} — turno de ${m} minutos con ${d}`,
+    reprogramSubtitle: (p: string, d: string, m: number) =>
+      `${p} — mové tu turno de ${m} minutos con ${d} a un nuevo horario`,
+    oldTurn: (when: string) => `Tu turno actual: ${when}`,
     pickDay: 'Elegí un día',
     pickTime: 'Elegí un horario',
     noSlots: 'No hay horarios disponibles en los próximos días',
     confirm: 'Confirmar turno',
+    reprogramConfirm: 'Mover turno',
     confirming: 'Reservando…',
+    reprogramConfirming: 'Moviendo…',
     booked: (when: string) => `¡Listo! Tu turno quedó reservado para ${when}`,
+    reprogramBooked: (when: string) => `¡Listo! Tu turno se movió para ${when}`,
     conflict:
       'Ese horario ya no está disponible. Elegí otro.',
     expired: 'Este enlace expiró',
@@ -47,14 +58,21 @@ const T = {
   },
   en: {
     title: 'Book your appointment',
+    reprogramTitle: 'Reschedule your appointment',
     subtitle: (p: string, d: string, m: number) =>
       `${p} — ${m}-minute appointment with ${d}`,
+    reprogramSubtitle: (p: string, d: string, m: number) =>
+      `${p} — move your ${m}-minute appointment with ${d} to a new time`,
+    oldTurn: (when: string) => `Your current appointment: ${when}`,
     pickDay: 'Pick a day',
     pickTime: 'Pick a time',
     noSlots: 'No available slots in the next days',
     confirm: 'Confirm appointment',
+    reprogramConfirm: 'Move appointment',
     confirming: 'Booking…',
+    reprogramConfirming: 'Moving…',
     booked: (when: string) => `Done! Your appointment is booked for ${when}`,
+    reprogramBooked: (when: string) => `Done! Your appointment was moved to ${when}`,
     conflict: 'That slot is no longer available. Pick another.',
     expired: 'This link expired',
     consumed: 'This link has already been used',
@@ -103,8 +121,11 @@ export function TurnPickerClient({
   expiresAt,
   locale,
   clinicTz,
+  purpose,
+  oldStartsAt,
 }: Props) {
   const t = T[locale];
+  const isReprogram = purpose === 'reprogram';
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -201,7 +222,7 @@ export function TurnPickerClient({
       <Card>
         <CardContent className="p-6 text-center space-y-3">
           <CalendarCheck className="h-12 w-12 mx-auto text-primary" />
-          <p className="text-lg font-semibold">{t.booked(bookedLabel)}</p>
+          <p className="text-lg font-semibold">{isReprogram ? t.reprogramBooked(bookedLabel) : t.booked(bookedLabel)}</p>
         </CardContent>
       </Card>
     );
@@ -210,10 +231,21 @@ export function TurnPickerClient({
   return (
     <div className="space-y-4 pb-28 sm:pb-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{isReprogram ? t.reprogramTitle : t.title}</h1>
         <p className="text-muted-foreground mt-1">
-          {t.subtitle(patientName, dentistName, slotMinutes)}
+          {isReprogram
+            ? t.reprogramSubtitle(patientName, dentistName, slotMinutes)
+            : t.subtitle(patientName, dentistName, slotMinutes)}
         </p>
+        {isReprogram && oldStartsAt ? (
+          <p className="mt-1">
+            <Badge variant="secondary">
+              {t.oldTurn(
+                `${dayLabel(clinicDay(oldStartsAt, clinicTz), locale)} · ${timeLabel(oldStartsAt, clinicTz)}`,
+              )}
+            </Badge>
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground mt-1">
           {t.expires(dayLabel(clinicDay(expiresAt, clinicTz), locale))}
         </p>
@@ -326,7 +358,13 @@ export function TurnPickerClient({
               onClick={confirm}
               className="min-h-[52px] flex-1 text-base"
             >
-              {state === 'booking' ? t.confirming : t.confirm}
+              {state === 'booking'
+                ? isReprogram
+                  ? t.reprogramConfirming
+                  : t.confirming
+                : isReprogram
+                  ? t.reprogramConfirm
+                  : t.confirm}
             </Button>
           </div>
         </div>

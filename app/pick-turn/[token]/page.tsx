@@ -40,7 +40,10 @@ export default async function PickTurnPage({
             slotMinutes={info.slotMinutes}
             expiresAt={info.expiresAt}
             locale={locale}
-            clinicTz={clinicTz}
+            clinicTz={info.timezone}
+            purpose={info.purpose}
+            oldStartsAt={info.oldStartsAt}
+            oldEndsAt={info.oldEndsAt}
           />
         ) : (
           <InvalidLink reason={info.reason} locale={locale} />

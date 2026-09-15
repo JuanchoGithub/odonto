@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { WhatsappButton } from '@/components/ui/whatsapp-button';
+import { PendingReprogramChip } from './pending-reprogram-chip';
 import { useWhatsapp } from '@/components/whatsapp-provider';
 import { dentistColor } from '@/lib/colors';
 import { wallClock, clinicDateAtNoon } from '@/lib/store/time';
@@ -319,6 +320,7 @@ export function AppointmentList({
                           {a.reason ? ` · ${a.reason}` : null}
                         </span>
                         <ReprogramBadge count={a.reprogram_count} />
+                        <PendingReprogramChip value={a} />
                         {a.clinic_date && a.start_hhmm ? (
                           <WhatsappButton
                             patientId={a.patient_id}
@@ -337,8 +339,10 @@ export function AppointmentList({
                             variant="icon"
                             stopPropagation
                             onPhoneSaved={onChanged}
+                            onReprogrammed={onChanged}
                             className="border-0"
                             testId={`list-whatsapp-${a.id}`}
+                            appointmentId={a.id}
                           />
                         ) : null}
                       </span>
@@ -393,6 +397,7 @@ export function AppointmentList({
                           {statusLabel(a.status)}
                         </Badge>
                         <ReprogramBadge count={a.reprogram_count} />
+                        <PendingReprogramChip value={a} />
                       </span>
                     </TableCell>
                   </TableRow>

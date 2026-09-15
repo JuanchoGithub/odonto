@@ -38,6 +38,13 @@ function withClinicClock(rows: ApptRow[], tz: string): PanelAppt[] {
   });
 }
 
+/** Exact pending-reprogram flag from live link status (see appointments.ts). */
+async function withPending(items: PanelAppt[]): Promise<PanelAppt[]> {
+  const { pendingReprogramMap } = await import('./turn-picker');
+  const pending = await pendingReprogramMap(items.map((r) => r.id));
+  return items.map((r) => ({ ...r, reprogram_pending: pending.has(r.id) }));
+}
+
 function forbidden() {
   return { error: 'forbidden' as const };
 }
@@ -61,7 +68,7 @@ export async function listDoctorQueue(dentistId?: string) {
      ORDER BY a.starts_at`,
     [id, now.toISOString(), inOneHour.toISOString()],
   );
-  return { ok: true as const, items: withClinicClock(rows, tz) };
+  return { ok: true as const, items: await withPending(withClinicClock(rows, tz)) };
 }
 
 /**
@@ -90,7 +97,7 @@ export async function listDoctorToday(dentistId?: string) {
   const items = withClinicClock(rows, tz).filter(
     (r) => r.clinic_date === todayDate,
   );
-  return { ok: true as const, items, now_hhmm: wallClockInTz(nowIso, tz).hhmm };
+  return { ok: true as const, items: await withPending(items), now_hhmm: wallClockInTz(nowIso, tz).hhmm };
 }
 
 /** Monday-start key for a clinic-local date, used to bucket weeks. */
@@ -138,7 +145,8 @@ export async function listDoctorNextUpcoming(dentistId?: string, limit = 3) {
   if (rows.length === 0) return { ok: true as const, next: null };
   const nowWall = wallClockInTz(nowIso, tz);
   const nowWeek = mondayOf(nowWall.date);
-  const next: NextUpcoming[] = withClinicClock(rows, tz).map((appt) => {
+  const clocked = await withPending(withClinicClock(rows, tz));
+  const next: NextUpcoming[] = clocked.map((appt) => {
     const startWall = wallClockInTz(appt.starts_at, tz);
     const daysUntil = Math.round(
       (Date.parse(startWall.date) - Date.parse(nowWall.date)) / 86400_000,
@@ -185,7 +193,7 @@ export async function listSecretarySchedule(): Promise<
      ORDER BY a.starts_at`,
     [nowIso, horizon],
   );
-  const items = withClinicClock(rows, tz);
+  const items = await withPending(withClinicClock(rows, tz));
   const today = items.filter((r) => r.clinic_date === todayDate);
   const restMap = new Map<string, PanelAppt[]>();
   for (const r of items) {
@@ -227,7 +235,7 @@ export async function listFollowUps(): Promise<
      ORDER BY a.starts_at`,
     [nowIso, nowIso],
   );
-  const items = withClinicClock(rows, tz);
+  const items = await withPending(withClinicClock(rows, tz));
   const late = items.filter(
     (r) => r.status === 'scheduled' && r.starts_at <= nowIso && r.ends_at > nowIso,
   );

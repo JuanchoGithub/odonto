@@ -234,6 +234,17 @@ export async function updateAppointment(
       data.id,
     ],
   );
+  if (cancelled || noShow || completed) {
+    // A terminal flip kills any pending reprogram link (patient must get a fresh one).
+    await query(
+      `UPDATE appointments SET reprogram_link_id=NULL, reprogram_pending_at=NULL, updated_at=? WHERE id=?`,
+      [now, data.id],
+    );
+    await query(
+      `UPDATE turn_picker_links SET revoked_at=? WHERE appointment_id=? AND purpose='reprogram' AND used_at IS NULL AND revoked_at IS NULL`,
+      [now, data.id],
+    );
+  }
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, ?, 'appointment', ?, ?)`,
     [
@@ -320,6 +331,17 @@ export async function updateAppointmentStatus(
       id,
     ],
   );
+  if (isTerminal(next)) {
+    // A terminal flip kills any pending reprogram link (patient must get a fresh one).
+    await query(
+      `UPDATE appointments SET reprogram_link_id=NULL, reprogram_pending_at=NULL, updated_at=? WHERE id=?`,
+      [now, id],
+    );
+    await query(
+      `UPDATE turn_picker_links SET revoked_at=? WHERE appointment_id=? AND purpose='reprogram' AND used_at IS NULL AND revoked_at IS NULL`,
+      [now, id],
+    );
+  }
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,
     [
@@ -363,8 +385,13 @@ export async function deleteAppointment(id: string, cancelReason?: string) {
     [id],
   );
   await query(
-    `UPDATE appointments SET status='cancelled', cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=? WHERE id=?`,
+    `UPDATE appointments SET status='cancelled', cancelled_at=?, cancelled_by=?, cancel_reason=?, updated_at=?,
+       reprogram_link_id=NULL, reprogram_pending_at=NULL WHERE id=?`,
     [now, user.id, reason, now, id],
+  );
+  await query(
+    `UPDATE turn_picker_links SET revoked_at=? WHERE appointment_id=? AND purpose='reprogram' AND used_at IS NULL AND revoked_at IS NULL`,
+    [now, id],
   );
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'cancel', 'appointment', ?, ?)`,
@@ -392,6 +419,15 @@ export type ApptRow = {
   no_show_at: string | null;
   no_show_by: string | null;
   completed_at: string | null;
+  /** Pending-reprogram link id (absent on synthetic/optimistic rows). */
+  reprogram_link_id?: string | null;
+  reprogram_pending_at?: string | null;
+  /**
+   * Display flag: an ACTIVE reprogram link exists for this turn. Set by
+   * list decorators (exact, via live link status). Store-driven views fall
+   * back to `!!reprogram_link_id` when this is absent.
+   */
+  reprogram_pending?: boolean;
   patient_name: string;
   dentist_name: string;
   dentist_color: string | null;
@@ -464,8 +500,14 @@ export async function sweepOverdueNoShows(
     const now = nowIso();
     if (evidence) {
       await query(
-        `UPDATE appointments SET status='completed', completed_at=?, updated_at=? WHERE id=? AND status='scheduled'`,
+        `UPDATE appointments SET status='completed', completed_at=?, updated_at=?,
+           reprogram_link_id=NULL, reprogram_pending_at=NULL WHERE id=? AND status='scheduled'`,
         [now, now, c.id],
+      );
+      // A terminal flip kills any pending reprogram link (patient must get a fresh one).
+      await query(
+        `UPDATE turn_picker_links SET revoked_at=? WHERE appointment_id=? AND purpose='reprogram' AND used_at IS NULL AND revoked_at IS NULL`,
+        [now, c.id],
       );
       await query(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,
@@ -480,8 +522,14 @@ export async function sweepOverdueNoShows(
       attended++;
     } else {
       await query(
-        `UPDATE appointments SET status='no_show', no_show_at=?, no_show_by=?, updated_at=? WHERE id=? AND status='scheduled'`,
+        `UPDATE appointments SET status='no_show', no_show_at=?, no_show_by=?, updated_at=?,
+           reprogram_link_id=NULL, reprogram_pending_at=NULL WHERE id=? AND status='scheduled'`,
         [now, markedBy, now, c.id],
+      );
+      // A terminal flip kills any pending reprogram link (patient must get a fresh one).
+      await query(
+        `UPDATE turn_picker_links SET revoked_at=? WHERE appointment_id=? AND purpose='reprogram' AND used_at IS NULL AND revoked_at IS NULL`,
+        [now, c.id],
       );
       await query(
         `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta) VALUES (?, ?, 'update', 'appointment', ?, ?)`,
@@ -492,8 +540,38 @@ export async function sweepOverdueNoShows(
     ids.push(c.id);
     touchedDentists.add(c.dentist_id);
   }
+  // Reprogram links expire with no DB write of their own — revoke the stale
+  // ones here (daily cron) so the pending flag never lingers >24h past
+  // absolute expiry or the idle window (mirrors lib/turn-picker.ts).
+  try {
+    const { TURN_PICKER_IDLE_MS } = await import('@/lib/config');
+    const idleDays = Math.max(1, Math.round(TURN_PICKER_IDLE_MS / 86400_000));
+    const nowStr = nowIso();
+    const stale = await query<{ id: string }>(
+      `SELECT id FROM turn_picker_links
+        WHERE purpose = 'reprogram' AND used_at IS NULL AND revoked_at IS NULL
+          AND (datetime(expires_at) <= datetime(?)
+               OR datetime(created_at, ?) <= datetime(?))`,
+      [nowStr, `+${idleDays} days`, nowStr],
+    );
+    for (const s of stale) {
+      await query(`UPDATE turn_picker_links SET revoked_at = ? WHERE id = ?`, [nowStr, s.id]);
+      await clearReprogramPending(s.id);
+    }
+  } catch {
+    // Best-effort; the no-show flips above already succeeded.
+  }
   await refreshCalendars([...touchedDentists]);
   return { checked: candidates.length, noShows, attended, ids };
+}
+
+/** Clear the pending-reprogram flag if it still points at this link. */
+async function clearReprogramPending(linkId: string): Promise<void> {
+  await query(
+    `UPDATE appointments SET reprogram_link_id = NULL, reprogram_pending_at = NULL,
+       updated_at = ? WHERE reprogram_link_id = ?`,
+    [nowIso(), linkId],
+  );
 }
 
 async function findAttendanceEvidence(
@@ -565,17 +643,18 @@ export async function listAppointmentsForWeek(startIso: string) {
   // the time and use it for the WhatsApp template without trusting the
   // browser timezone (per AGENTS §12.9).
   const tz = await getClinicTimezone();
-  return rows.map((r) => {
+  const withClock = rows.map((r) => {
     const s = wallClockInTz(r.starts_at, tz);
     const e = wallClockInTz(r.ends_at, tz);
     return { ...r, clinic_date: s.date, start_hhmm: s.hhmm, end_hhmm: e.hhmm };
   });
+  return decorateWithReprogramPending(withClock);
 }
 
 /** Full appointment history for a single patient (all statuses, most recent first). */
 export async function listAppointmentsForPatient(patientId: string) {
   await requireUser();
-  return query<ApptRow>(
+  const rows = await query<ApptRow>(
     `SELECT a.*, p.first_name || ' ' || p.last_name as patient_name,
             p.phone as patient_phone, p.email as patient_email,
             u.name as dentist_name, u.color as dentist_color,
@@ -588,6 +667,20 @@ export async function listAppointmentsForPatient(patientId: string) {
      ORDER BY a.starts_at DESC`,
     [patientId],
   );
+  return decorateWithReprogramPending(rows);
+}
+
+/**
+ * Set `reprogram_pending` from LIVE link status (the `reprogram_link_id`
+ * flag alone can outlive an idle-expired link, which performs no DB write).
+ */
+export async function decorateWithReprogramPending<T extends ApptRow>(
+  rows: T[],
+): Promise<T[]> {
+  const { pendingReprogramMap } = await import('./turn-picker');
+  const ids = rows.map((r) => r.id);
+  const pending = await pendingReprogramMap(ids);
+  return rows.map((r) => ({ ...r, reprogram_pending: pending.has(r.id) }));
 }
 
 /** Working windows per day for calendar shading (null dentistId = clinic-wide "all" view). */

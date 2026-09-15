@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { dentistColor } from '@/lib/colors';
 import { AppointmentDialog } from './appointment-dialog';
+import { PendingReprogramChip } from './pending-reprogram-chip';
 import {
   updateAppointmentStatus,
   type ApptRow,
@@ -191,6 +192,7 @@ export function PatientAppointments({
                               {t('reprogrammed', { count: a.reprogram_count })}
                             </Badge>
                           ) : null}
+                          <PendingReprogramChip value={a} />
                           {a.creator_name ? (
                             <span className="text-xs text-muted-foreground">
                               {t('addedBy')} {a.creator_name}
@@ -261,6 +263,7 @@ export function PatientAppointments({
                                 {t('reprogrammed', { count: a.reprogram_count })}
                               </Badge>
                             ) : null}
+                            <PendingReprogramChip value={a} />
                           </span>
                         </TableCell>
                         <TableCell>

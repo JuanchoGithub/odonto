@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Phone, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WhatsappButton } from '@/components/ui/whatsapp-button';
+import { PendingReprogramChip } from '@/components/appointments/pending-reprogram-chip';
 import { useWhatsapp } from '@/components/whatsapp-provider';
 import { dentistColor } from '@/lib/colors';
 import type { PanelAppt } from '@/server/actions/dashboard';
@@ -119,6 +120,7 @@ export function PanelApptCard({
             {appt.reason ? ` · ${appt.reason}` : null}
           </span>
         </div>
+        <PendingReprogramChip value={appt} />
         {extra}
       </div>
       <div className="flex shrink-0 items-center gap-1">
@@ -151,7 +153,9 @@ export function PanelApptCard({
           variant="icon"
           stopPropagation
           onPhoneSaved={onPhoneUpdated}
+          onReprogrammed={onPhoneUpdated}
           testId={`panel-whatsapp-${appt.id}`}
+          appointmentId={appt.id}
         />
         {active && !coarse ? (
           <Button

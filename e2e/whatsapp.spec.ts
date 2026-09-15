@@ -88,7 +88,7 @@ test.describe('WhatsApp messaging', () => {
     );
   });
 
-  test('doctor panel WhatsApp icon opens wa.me with the right URL', async ({
+  test('doctor panel WhatsApp menu offers Notify (wa.me) + Reprogram', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -109,10 +109,15 @@ test.describe('WhatsApp messaging', () => {
     if (!(await waBtn.count())) {
       test.skip(true, 'No phone on the first panel row');
     }
-    const href = await waBtn.getAttribute('href');
+    await waBtn.first().click();
+    await expect(page.getByTestId('whatsapp-menu')).toBeVisible();
+    const notify = page.getByTestId(/-notify$/).first();
+    const href = await notify.getAttribute('href');
     expect(href).not.toBeNull();
     expect(href!).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
     const decoded = decodeURIComponent(href!.split('text=')[1] ?? '');
     expect(decoded).toMatch(/(turno|appointment)/i);
+    // Active turns also offer the reprogram entry.
+    await expect(page.getByTestId(/-reprogram$/).first()).toBeVisible();
   });
 });

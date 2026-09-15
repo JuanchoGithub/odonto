@@ -37,7 +37,56 @@ export type TurnPickerLinkRow = {
   revoked_at: string | null;
   created_by: string | null;
   created_at: string;
+  purpose: 'create' | 'reprogram';
+  appointment_id: string | null;
 };
+
+const ALLOWED_SLOT_MINUTES = [15, 30, 45, 60, 90, 120] as const;
+
+const TERMINAL_APPT = ['completed', 'cancelled', 'no_show'] as const;
+
+/** Clear the pending-reprogram flag if it still points at this link. */
+async function clearPendingForLink(linkId: string): Promise<void> {
+  await query(
+    `UPDATE appointments SET reprogram_link_id = NULL, reprogram_pending_at = NULL,
+       updated_at = ? WHERE reprogram_link_id = ?`,
+    [nowIso(), linkId],
+  );
+}
+
+/** Active reprogram link for an appointment, if any (used_at/revoked/expiry checked). */
+async function activeReprogramLinkFor(
+  appointmentId: string,
+): Promise<TurnPickerLinkRow | null> {
+  const rows = await query<TurnPickerLinkRow>(
+    `SELECT * FROM turn_picker_links WHERE appointment_id = ? AND purpose = 'reprogram'`,
+    [appointmentId],
+  );
+  return rows.find((r) => linkStatus(r) === 'active') ?? null;
+}
+
+/**
+ * Batch version for list decoration: returns the subset of appointment ids
+ * that have an ACTIVE reprogram link. The `reprogram_link_id` flag alone is
+ * not enough (links can idle-expire with no DB write), so the chip must be
+ * derived from live link status.
+ */
+export async function pendingReprogramMap(
+  appointmentIds: string[],
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  const ids = [...new Set(appointmentIds.filter(Boolean))];
+  if (ids.length === 0) return out;
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await query<TurnPickerLinkRow>(
+    `SELECT * FROM turn_picker_links WHERE purpose = 'reprogram' AND appointment_id IN (${placeholders})`,
+    ids,
+  );
+  for (const r of rows) {
+    if (r.appointment_id && linkStatus(r) === 'active') out.add(r.appointment_id);
+  }
+  return out;
+}
 
 function newToken(): string {
   return randomBytes(24).toString('base64url'); // 32 chars, 192 bits
@@ -77,8 +126,8 @@ export async function createTurnPickerLink(
   ).toISOString();
   await query(
     `INSERT INTO turn_picker_links
-       (id, token, patient_id, dentist_id, slot_minutes, expires_at, used_at, created_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       (id, token, patient_id, dentist_id, slot_minutes, expires_at, used_at, created_by, created_at, purpose, appointment_id)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 'create', NULL)`,
     [uid(), token, d.patient_id, d.dentist_id, d.slot_minutes, expiresAt, user.id, nowIso()],
   );
   await query(
@@ -90,6 +139,74 @@ export async function createTurnPickerLink(
   return { ok: true, url: `/pick-turn/${token}` };
 }
 
+/**
+ * Create a single-use reprogram link that MOVES an existing appointment.
+ * Dentist + exact duration are locked from the appointment — the patient
+ * only picks a new date/time. The appointment keeps its status and gains
+ * a visible pending flag (`reprogram_link_id`) until the link is
+ * consumed / revoked / expired or the turn reaches a terminal state.
+ */
+export async function createReprogramLink(
+  appointmentId: string,
+): Promise<
+  | { ok: true; url: string }
+  | { ok: false; error: 'invalid' | 'forbidden' | 'not_found' | 'terminal' | 'already_pending' }
+> {
+  const user = await requireUser();
+  if (!can(user.role, 'appointments:share')) return { ok: false, error: 'forbidden' };
+  if (!appointmentId) return { ok: false, error: 'invalid' };
+
+  const appt = await queryOne<{
+    id: string;
+    patient_id: string;
+    dentist_id: string;
+    starts_at: string;
+    ends_at: string;
+    status: string;
+  }>(
+    'SELECT id, patient_id, dentist_id, starts_at, ends_at, status FROM appointments WHERE id = ?',
+    [appointmentId],
+  );
+  if (!appt) return { ok: false, error: 'not_found' };
+  if ((TERMINAL_APPT as readonly string[]).includes(appt.status)) {
+    return { ok: false, error: 'terminal' };
+  }
+  const existing = await activeReprogramLinkFor(appt.id);
+  if (existing) {
+    return { ok: true, url: `/pick-turn/${existing.token}` };
+  }
+
+  // Exact duration is preserved at book time; the link's slot_minutes only
+  // drives the availability search granularity (DB CHECK allows 15/30/45/60/90/120).
+  const durationMs = new Date(appt.ends_at).getTime() - new Date(appt.starts_at).getTime();
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return { ok: false, error: 'invalid' };
+  const exactMin = Math.round(durationMs / 60000);
+  const searchMin = (ALLOWED_SLOT_MINUTES as readonly number[]).includes(exactMin) ? exactMin : 15;
+
+  const token = newToken();
+  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+  const now = nowIso();
+  const linkId = uid();
+  await query(
+    `INSERT INTO turn_picker_links
+       (id, token, patient_id, dentist_id, slot_minutes, expires_at, used_at, created_by, created_at, purpose, appointment_id)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 'reprogram', ?)`,
+    [linkId, token, appt.patient_id, appt.dentist_id, searchMin, expiresAt, user.id, now, appt.id],
+  );
+  await query(
+    `UPDATE appointments SET reprogram_link_id = ?, reprogram_pending_at = ?, updated_at = ? WHERE id = ?`,
+    [linkId, now, now, appt.id],
+  );
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+     VALUES (?, ?, 'create', 'turn_picker_link', ?, ?)`,
+    [uid(), user.id, token.slice(0, 8), JSON.stringify({ purpose: 'reprogram', appointment_id: appt.id, patient_id: appt.patient_id })],
+  );
+  revalidatePath('/appointments');
+  revalidatePath(`/patients/${appt.patient_id}`);
+  return { ok: true, url: `/pick-turn/${token}` };
+}
+
 export type PublicLinkInfo = {
   ok: true;
   patientName: string;
@@ -97,6 +214,10 @@ export type PublicLinkInfo = {
   slotMinutes: number;
   expiresAt: string; // effective expiry ISO
   timezone: string;
+  purpose: 'create' | 'reprogram';
+  /** Original turn (reprogram links only): clinic wall-clock is resolved client-side. */
+  oldStartsAt?: string;
+  oldEndsAt?: string;
 } | {
   ok: false;
   reason: 'invalid' | 'consumed' | 'expired' | 'revoked';
@@ -122,6 +243,26 @@ export async function getPublicLinkInfo(token: string): Promise<PublicLinkInfo> 
     ]),
     getClinicTimezone(),
   ]);
+  if (link.purpose === 'reprogram' && link.appointment_id) {
+    const appt = await queryOne<{ starts_at: string; ends_at: string }>(
+      'SELECT starts_at, ends_at FROM appointments WHERE id = ?',
+      [link.appointment_id],
+    );
+    if (!appt) return { ok: false, reason: 'revoked' };
+    const durationMs = new Date(appt.ends_at).getTime() - new Date(appt.starts_at).getTime();
+    const exactMin = Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs / 60000) : link.slot_minutes;
+    return {
+      ok: true,
+      patientName: p ? `${p.first_name} ${p.last_name}` : '',
+      dentistName: d?.name ?? '',
+      slotMinutes: exactMin,
+      expiresAt: new Date(effectiveExpiryMs(link)).toISOString(),
+      timezone: tz,
+      purpose: 'reprogram',
+      oldStartsAt: appt.starts_at,
+      oldEndsAt: appt.ends_at,
+    };
+  }
   return {
     ok: true,
     patientName: p ? `${p.first_name} ${p.last_name}` : '',
@@ -129,6 +270,7 @@ export async function getPublicLinkInfo(token: string): Promise<PublicLinkInfo> 
     slotMinutes: link.slot_minutes,
     expiresAt: new Date(effectiveExpiryMs(link)).toISOString(),
     timezone: tz,
+    purpose: link.purpose ?? 'create',
   };
 }
 
@@ -172,8 +314,47 @@ export async function bookViaPicker(
     return { ok: false, reason: status === 'consumed' ? 'consumed' : status === 'revoked' ? 'revoked' : 'expired' };
   }
 
+  // Reprogram links move the existing appointment, preserving its exact
+  // duration (dentist + duration locked). Create links insert a new turn.
+  const isReprogram = link.purpose === 'reprogram';
+  let appointmentToMove: {
+    id: string;
+    patient_id: string;
+    dentist_id: string;
+    starts_at: string;
+    ends_at: string;
+    status: string;
+    reprogram_count: number | null;
+    original_starts_at: string | null;
+  } | null = null;
+  let durationMs = link.slot_minutes * 60_000;
+  if (isReprogram) {
+    if (!link.appointment_id) return { ok: false, reason: 'revoked' as const };
+    appointmentToMove = await queryOne<{
+      id: string;
+      patient_id: string;
+      dentist_id: string;
+      starts_at: string;
+      ends_at: string;
+      status: string;
+      reprogram_count: number | null;
+      original_starts_at: string | null;
+    }>(
+      `SELECT id, patient_id, dentist_id, starts_at, ends_at, status,
+              reprogram_count, original_starts_at FROM appointments WHERE id = ?`,
+      [link.appointment_id],
+    );
+    if (!appointmentToMove) return { ok: false, reason: 'revoked' as const };
+    if ((TERMINAL_APPT as readonly string[]).includes(appointmentToMove.status)) {
+      return { ok: false, reason: 'revoked' as const };
+    }
+    const exact = new Date(appointmentToMove.ends_at).getTime() - new Date(appointmentToMove.starts_at).getTime();
+    if (!Number.isFinite(exact) || exact <= 0) return { ok: false, reason: 'invalid' as const };
+    durationMs = exact;
+  }
+
   const start = new Date(slotStartIso);
-  const end = new Date(start.getTime() + link.slot_minutes * 60_000);
+  const end = new Date(start.getTime() + durationMs);
   if (!Number.isFinite(start.getTime())) return { ok: false, reason: 'invalid' as const };
 
   // Defensive: re-check the slot is still available (handles stale pages & races).
@@ -205,11 +386,16 @@ export async function bookViaPicker(
     : null;
   const attributedTo = creator?.id ?? SYSTEM_USER_ID;
 
-  // Atomic consume + insert inside one transaction. rowsAffected tells us
-  // whether we won the race — no SELECT re-check (which both racers pass).
-  const apptId = uid();
+  // Atomic consume + insert/move inside one transaction. rowsAffected tells
+  // us whether we won the race — no SELECT re-check (which both racers pass).
+  const apptId = isReprogram ? appointmentToMove!.id : uid();
   const now = nowIso();
   let wonRace = false;
+  // Captured for the reschedule audit + reprogram_count bump on reprogram.
+  const prevStarts = isReprogram ? appointmentToMove!.starts_at : null;
+  const prevEnds = isReprogram ? appointmentToMove!.ends_at : null;
+  const prevCount = isReprogram ? (appointmentToMove!.reprogram_count ?? 0) : 0;
+  const prevOriginal = isReprogram ? appointmentToMove!.original_starts_at : null;
   await transaction(async (tx) => {
     const res = await tx.execute(
       `UPDATE turn_picker_links SET used_at = datetime('now')
@@ -218,35 +404,77 @@ export async function bookViaPicker(
     );
     if (res.rowsAffected !== 1) return; // lost the race
     wonRace = true;
-    await tx.execute(
-      `INSERT INTO appointments
-         (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        apptId,
-        link.patient_id,
-        link.dentist_id,
-        start.toISOString(),
-        end.toISOString(),
-        'scheduled',
-        null,
-        null,
-        attributedTo,
-        'shared',
-        now,
-        now,
-      ],
-    );
-    await tx.execute(
-      `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
-       VALUES (?, ?, 'book_via_picker', 'appointment', ?, ?)`,
-      [
-        uid(),
-        attributedTo,
-        apptId,
-        JSON.stringify({ token_prefix: link.token.slice(0, 8), patient_id: link.patient_id }),
-      ],
-    );
+    if (isReprogram) {
+      // No-op guard: picking the very same slot just consumes the link and
+      // clears the pending flag (no reprogram_count bump — nothing moved).
+      const sameSlot =
+        prevStarts === start.toISOString() && prevEnds === end.toISOString();
+      await tx.execute(
+        `UPDATE appointments
+            SET starts_at = ?, ends_at = ?,
+                reprogram_count = ?,
+                original_starts_at = ?,
+                reprogram_link_id = NULL, reprogram_pending_at = NULL,
+                updated_at = ?
+          WHERE id = ?`,
+        [
+          start.toISOString(),
+          end.toISOString(),
+          sameSlot ? prevCount : prevCount + 1,
+          sameSlot ? prevOriginal : (prevOriginal ?? prevStarts),
+          now,
+          apptId,
+        ],
+      );
+      await tx.execute(
+        `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+         VALUES (?, ?, ?, 'appointment', ?, ?)`,
+        [
+          uid(),
+          attributedTo,
+          sameSlot ? 'update' : 'reschedule',
+          apptId,
+          JSON.stringify({
+            token_prefix: link.token.slice(0, 8),
+            patient_id: link.patient_id,
+            via: 'reprogram_link',
+            from: { starts_at: prevStarts, ends_at: prevEnds, dentist_id: link.dentist_id },
+            to: { starts_at: start.toISOString(), ends_at: end.toISOString(), dentist_id: link.dentist_id },
+            reprogram_count: sameSlot ? prevCount : prevCount + 1,
+          }),
+        ],
+      );
+    } else {
+      await tx.execute(
+        `INSERT INTO appointments
+           (id, patient_id, dentist_id, starts_at, ends_at, status, reason, notes, created_by, created_via, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          apptId,
+          link.patient_id,
+          link.dentist_id,
+          start.toISOString(),
+          end.toISOString(),
+          'scheduled',
+          null,
+          null,
+          attributedTo,
+          'shared',
+          now,
+          now,
+        ],
+      );
+      await tx.execute(
+        `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+         VALUES (?, ?, 'book_via_picker', 'appointment', ?, ?)`,
+        [
+          uid(),
+          attributedTo,
+          apptId,
+          JSON.stringify({ token_prefix: link.token.slice(0, 8), patient_id: link.patient_id }),
+        ],
+      );
+    }
   });
   if (!wonRace) return { ok: false, reason: 'consumed' };
   revalidatePath(`/patients/${link.patient_id}`);
@@ -294,13 +522,17 @@ export async function revokeTurnPickerLink(
     [linkId],
   );
   if (!link) return { ok: false, error: 'not_found' };
-  // Already consumed/revoked — nothing to do.
-  if (link.used_at || link.revoked_at) return { ok: true };
+  // Already consumed/revoked — make sure no stale pending flag lingers.
+  if (link.used_at || link.revoked_at) {
+    await clearPendingForLink(linkId);
+    return { ok: true };
+  }
   const at = nowIso();
   await query(
     `UPDATE turn_picker_links SET revoked_at = ? WHERE id = ? AND used_at IS NULL AND revoked_at IS NULL`,
     [at, linkId],
   );
+  await clearPendingForLink(linkId);
   await query(
     `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
      VALUES (?, ?, 'revoke', 'turn_picker_link', ?, ?)`,
