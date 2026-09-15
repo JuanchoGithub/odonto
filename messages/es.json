@@ -281,6 +281,8 @@
     "whatsappNotifyDesc": "Enviar recordatorio como siempre",
     "whatsappReprogram": "Reprogramar",
     "whatsappReprogramDesc": "Enviar enlace para mover este turno",
+    "whatsappReprogramReady": "¡Enlace listo!",
+    "whatsappReprogramOpen": "Tocar para abrir WhatsApp",
     "whatsappReprogramError": "No se pudo generar el enlace de reprogramación.",
     "whatsappPendingReprogram": "Reprogramación pendiente",
     "subscribeTitle": "Suscribirse en iPhone",

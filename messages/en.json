@@ -281,6 +281,8 @@
     "whatsappNotifyDesc": "Send a reminder as usual",
     "whatsappReprogram": "Reschedule",
     "whatsappReprogramDesc": "Send a link to move this appointment",
+    "whatsappReprogramReady": "Link ready!",
+    "whatsappReprogramOpen": "Tap to open WhatsApp",
     "whatsappReprogramError": "Could not generate the reschedule link.",
     "whatsappPendingReprogram": "Reschedule pending",
     "subscribeTitle": "Subscribe on iPhone",

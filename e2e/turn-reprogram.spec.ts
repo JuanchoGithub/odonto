@@ -87,6 +87,13 @@ test('WhatsApp reprogram link moves the turn and tags it reprogrammed', async ({
   await editDialog.getByTestId(/^patient-contact-whatsapp-/).click();
   await expect(page.getByTestId('whatsapp-menu')).toBeVisible();
   await page.getByTestId(/-reprogram$/).first().click();
+  // The menu presents the ready link as a real anchor (tap = real gesture,
+  // never blocked like a scripted popup).
+  const openLink = page.getByTestId(/-reprogram-open$/).first();
+  await expect(openLink).toBeVisible({ timeout: 15_000 });
+  expect(await openLink.getAttribute('href')).toMatch(
+    /^https:\/\/wa\.me\//,
+  );
 
   // 3. The staff wa.me URL carries a /pick-turn/ reprogram link. Note the
   //    link rides inside the urlencoded `text=` body, so match the decoded

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition, useMemo, useRef } from 'react';
+import { useState, useTransition, useMemo } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations, useLocale } from 'next-intl';
 import { MessageCircle, X, Bell, CalendarClock, Loader2 } from 'lucide-react';
@@ -111,29 +111,14 @@ export function WhatsappButton({
   /** Reprogram requested while the phone was missing — resume after save. */
   const [resumeReprogram, setResumeReprogram] = useState(false);
   /**
-   * Tab opened synchronously inside the tap gesture, navigated to the wa.me
-   * URL once the link exists. Async `window.open` after the server
-   * round-trip falls outside the user activation and gets silently blocked
-   * (notably iOS Safari), so the popup must be claimed up-front.
+   * The wa.me URL for the freshly-issued reprogram link. Rendered as a REAL
+   * anchor (never a scripted window.open): async popups after the server
+   * round-trip fall outside the tap's user activation and get silently
+   * blocked — notably iOS Safari, which also backgrounds our tab the
+   * instant a blank popup opens, starving the fetch that would navigate
+   * it. A tap on a real href works everywhere, like Notify does.
    */
-  const pendingPopup = useRef<Window | null>(null);
-
-  function openPopupSync(): Window | null {
-    try {
-      return window.open('', '_blank', 'noopener,noreferrer');
-    } catch {
-      return null;
-    }
-  }
-
-  function closePendingPopup() {
-    try {
-      pendingPopup.current?.close();
-    } catch {
-      /* already gone */
-    }
-    pendingPopup.current = null;
-  }
+  const [reprogramUrl, setReprogramUrl] = useState<string | null>(null);
 
   const canReprogram =
     !!appointmentId && ACTIVE_FOR_REPROGRAM.includes(status);
@@ -178,11 +163,6 @@ export function WhatsappButton({
 
   function handleSave() {
     if (!typed.trim()) return;
-    // Direct tap gesture: claim the popup now when a reprogram resume is
-    // pending, so the later navigation isn't blocked (see pendingPopup).
-    if (resumeReprogram && !pendingPopup.current) {
-      pendingPopup.current = openPopupSync();
-    }
     startTransition(async () => {
       const res = await updatePatientPhoneInline(patientId, typed.trim());
       if ('error' in res) {
@@ -194,6 +174,8 @@ export function WhatsappButton({
       setMissingOpen(false);
       if (resumeReprogram) {
         setResumeReprogram(false);
+        // Back to the menu so the ready-to-tap link is visible.
+        setMenuOpen(true);
         void runReprogram(res.phone);
         return;
       }
@@ -203,7 +185,11 @@ export function WhatsappButton({
     });
   }
 
-  /** Issue (or reuse) the reprogram link and open it via WhatsApp. */
+  /**
+   * Issue (or reuse) the reprogram link and present it as a real anchor.
+   * The anchor tap is a genuine user gesture, so it opens WhatsApp
+   * everywhere a scripted window.open gets blocked.
+   */
   async function runReprogram(phoneOverride?: string) {
     if (!appointmentId || reprogramming) return;
     const phone = phoneOverride ?? patientPhone;
@@ -214,31 +200,11 @@ export function WhatsappButton({
       setMissingOpen(true);
       return;
     }
-    // Claim the navigation target now if the caller didn't (menu tap and
-    // phone-save tap both pre-open it; this is only a best-effort fallback).
-    let win = pendingPopup.current;
-    pendingPopup.current = null;
-    if (!win) win = openPopupSync();
-    const gotoUrl = (waUrl: string) => {
-      try {
-        if (win && !win.closed) {
-          win.location.href = waUrl;
-          return;
-        }
-      } catch {
-        /* cross-origin touch — fall through to window.open */
-      }
-      window.open(waUrl, '_blank', 'noopener,noreferrer');
-    };
     setReprogramming(true);
+    setReprogramUrl(null);
     try {
       const res = await createReprogramLink(appointmentId);
       if (!res.ok) {
-        try {
-          win?.close();
-        } catch {
-          /* already gone */
-        }
         push({ title: t('whatsappReprogramError'), variant: 'destructive' });
         return;
       }
@@ -250,18 +216,19 @@ export function WhatsappButton({
         link: abs,
       });
       // Same direct-chat / share-picker fallback as openTurnPickerWhatsapp.
-      gotoUrl(
+      const waUrl =
         waMeUrl(phone, msg, effective.countryCode) ??
-          `https://wa.me/?text=${encodeURIComponent(msg)}`,
-      );
-      setMenuOpen(false);
+        `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      setReprogramUrl(waUrl);
+      // Best-effort auto-open: saves a tap on desktop Chrome, silently
+      // ignored where popups are blocked — the anchor below always works.
+      try {
+        window.open(waUrl, '_blank', 'noopener,noreferrer');
+      } catch {
+        /* blocked — the user taps the link instead */
+      }
       onReprogrammed?.();
     } catch {
-      try {
-        win?.close();
-      } catch {
-        /* already gone */
-      }
       push({ title: t('whatsappReprogramError'), variant: 'destructive' });
     } finally {
       setReprogramming(false);
@@ -360,7 +327,13 @@ export function WhatsappButton({
         <MessageCircle className="h-5 w-5" />
         {variant === 'block' ? label : null}
       </button>
-      <Dialog.Root open={menuOpen} onOpenChange={setMenuOpen}>
+      <Dialog.Root
+        open={menuOpen}
+        onOpenChange={(b) => {
+          setMenuOpen(b);
+          if (!b) setReprogramUrl(null);
+        }}
+      >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/50" />
           <Dialog.Content
@@ -408,32 +381,47 @@ export function WhatsappButton({
                   </span>
                 </span>
               </a>
-              <button
-                type="button"
-                onClick={() => {
-                  // Synchronous with the tap — async window.open after the
-                  // server round-trip would be blocked as a popup.
-                  pendingPopup.current = openPopupSync();
-                  void runReprogram();
-                }}
-                disabled={reprogramming}
-                data-testid={`${testId}-reprogram`}
-                className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border px-3 text-left active:bg-accent disabled:opacity-60"
-              >
-                {reprogramming ? (
-                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-emerald-600" />
-                ) : (
+              {reprogramUrl ? (
+                <a
+                  href={reprogramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid={`${testId}-reprogram-open`}
+                  className="flex min-h-[52px] items-center gap-3 rounded-xl border border-emerald-600/40 bg-emerald-600/10 px-3 active:bg-accent"
+                >
                   <CalendarClock className="h-5 w-5 shrink-0 text-emerald-600" />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block text-base font-medium">
-                    {t('whatsappReprogram')}
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block text-base font-medium">
+                      {t('whatsappReprogramReady')}
+                    </span>
+                    <span className="block truncate text-sm text-muted-foreground">
+                      {t('whatsappReprogramOpen')}
+                    </span>
                   </span>
-                  <span className="block truncate text-sm text-muted-foreground">
-                    {t('whatsappReprogramDesc')}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => runReprogram()}
+                  disabled={reprogramming}
+                  data-testid={`${testId}-reprogram`}
+                  className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border px-3 text-left active:bg-accent disabled:opacity-60"
+                >
+                  {reprogramming ? (
+                    <Loader2 className="h-5 w-5 shrink-0 animate-spin text-emerald-600" />
+                  ) : (
+                    <CalendarClock className="h-5 w-5 shrink-0 text-emerald-600" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-medium">
+                      {t('whatsappReprogram')}
+                    </span>
+                    <span className="block truncate text-sm text-muted-foreground">
+                      {t('whatsappReprogramDesc')}
+                    </span>
                   </span>
-                </span>
-              </button>
+                </button>
+              )}
             </div>
           </Dialog.Content>
         </Dialog.Portal>
@@ -442,11 +430,7 @@ export function WhatsappButton({
         open={missingOpen}
         onOpenChange={(b) => {
           setMissingOpen(b);
-          if (!b) {
-            setResumeReprogram(false);
-            // Dismissed without saving — don't leave a blank tab behind.
-            closePendingPopup();
-          }
+          if (!b) setResumeReprogram(false);
         }}
         patientName={context.patientName}
         value={typed}
