@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CalendarCheck, Clock, Loader2 } from 'lucide-react';
+import { wallClock } from '@/lib/store/time';
 
 type Slot = { start: string; end: string; date: string };
 
@@ -14,6 +15,8 @@ type Props = {
   slotMinutes: number;
   expiresAt: string;
   locale: 'es' | 'en';
+  /** Clinic IANA timezone — slot times render in clinic wall-clock. */
+  clinicTz?: string;
 };
 
 const T = {
@@ -74,9 +77,22 @@ function dayLabel(date: string, locale: 'es' | 'en'): string {
   return `${t.weekdays[d.getDay()]} ${d.getDate()} ${t.months[d.getMonth()]}`;
 }
 
-function timeLabel(iso: string): string {
+function timeLabel(iso: string, tz?: string): string {
+  if (tz) {
+    const w = wallClock(iso, tz);
+    if (w.hhmm) return w.hhmm;
+  }
   const d = new Date(iso);
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Clinic-local YYYY-MM-DD for an instant (slice(0,10) is the UTC date). */
+function clinicDay(iso: string, tz?: string): string {
+  if (tz) {
+    const w = wallClock(iso, tz);
+    if (w.date) return w.date;
+  }
+  return iso.slice(0, 10);
 }
 
 export function TurnPickerClient({
@@ -86,6 +102,7 @@ export function TurnPickerClient({
   slotMinutes,
   expiresAt,
   locale,
+  clinicTz,
 }: Props) {
   const t = T[locale];
   const [slots, setSlots] = useState<Slot[] | null>(null);
@@ -143,9 +160,9 @@ export function TurnPickerClient({
       }
       if (r.ok && data.startsAt) {
         const label = `${dayLabel(
-          data.startsAt.slice(0, 10),
+          clinicDay(data.startsAt, clinicTz),
           locale,
-        )} · ${timeLabel(data.startsAt)}`;
+        )} · ${timeLabel(data.startsAt, clinicTz)}`;
         setBookedLabel(label);
         setState('booked');
       } else if (data.error === 'slot_unavailable' || data.error === 'conflict') {
@@ -198,7 +215,7 @@ export function TurnPickerClient({
           {t.subtitle(patientName, dentistName, slotMinutes)}
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          {t.expires(dayLabel(expiresAt.slice(0, 10), locale))}
+          {t.expires(dayLabel(clinicDay(expiresAt, clinicTz), locale))}
         </p>
       </div>
 
@@ -255,7 +272,7 @@ export function TurnPickerClient({
                       onClick={() => setSelectedSlot(s.start)}
                     >
                       <Clock className="h-4 w-4" />
-                      {timeLabel(s.start)}
+                      {timeLabel(s.start, clinicTz)}
                     </Button>
                   ))}
                 </div>
@@ -300,7 +317,7 @@ export function TurnPickerClient({
                 {dayLabel(selectedDate, locale)}
               </div>
               <div className="text-muted-foreground">
-                {timeLabel(selectedSlot)} · {slotMinutes} min
+                {timeLabel(selectedSlot, clinicTz)} · {slotMinutes} min
               </div>
             </div>
             <Button

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/rbac';
 import { getInvoice, recordPayment } from '@/server/actions/billing';
 import { queryOne } from '@/lib/db';
+import { getClinicTimezone } from '@/lib/availability';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from '@/lib/navigation';
@@ -35,6 +36,7 @@ export default async function InvoiceDetailPage({
   const clinic = await queryOne<Clinic>(
     'SELECT id, name, address, tax_id, currency, locale FROM clinics LIMIT 1',
   );
+  const clinicTz = await getClinicTimezone();
   const c = (clinic?.currency ?? 'USD') as Currency;
   const l = (clinic?.locale ?? locale) as AppLocale;
   const { invoice, lines, payments } = data;
@@ -51,7 +53,7 @@ export default async function InvoiceDetailPage({
             {invoice.number}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {formatDate(invoice.issued_at, l)} · {invoice.patient_name} ·{' '}
+            {formatDate(invoice.issued_at, l, undefined, clinicTz)} · {invoice.patient_name} ·{' '}
             <Badge
               variant={
                 invoice.status === 'paid'
@@ -70,6 +72,7 @@ export default async function InvoiceDetailPage({
         <ExportInvoiceButton
           invoice={{ ...invoice, lines, payments }}
           clinic={clinic ?? null}
+          timeZone={clinicTz}
         />
       </div>
 
@@ -151,7 +154,7 @@ export default async function InvoiceDetailPage({
               <tbody>
                 {payments.map((p) => (
                   <tr key={p.id} className="border-b">
-                    <td className="py-2">{formatDateTime(p.paid_at, l)}</td>
+                    <td className="py-2">{formatDateTime(p.paid_at, l, clinicTz)}</td>
                     <td className="py-2">{t(`methods.${p.method}` as any)}</td>
                     <td className="py-2 text-right">{formatMoney(p.amount_cents, c, l)}</td>
                     <td className="py-2">{p.reference ?? '—'}</td>

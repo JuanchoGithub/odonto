@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from '@/lib/navigation';
 import { can } from '@/lib/rbac';
-import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
+import { formatDate, formatDateTime, formatMoney, formatTime } from '@/lib/format';
 import type { PatientRow } from '@/server/actions/patients';
 import type { AppLocale, Currency, Role } from '@/lib/schemas/common';
 import { getPatientOverview, type OverviewTurn } from '@/server/actions/overview';
@@ -39,11 +39,14 @@ function TurnRow({
   kind,
   locale,
   statusLabel,
+  tz,
 }: {
   turn: NonNullable<OverviewTurn>;
   kind: 'last' | 'next';
   locale: AppLocale;
   statusLabel: (s: string) => string;
+  /** Clinic IANA timezone — instants render in clinic wall-clock, never UTC. */
+  tz: string;
 }) {
   const start = new Date(turn.starts_at);
   const end = new Date(turn.ends_at);
@@ -53,7 +56,7 @@ function TurnRow({
       className="flex min-h-[64px] flex-col gap-1 rounded-xl border p-3"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-base font-semibold">{formatDateTime(start, locale)}</span>
+        <span className="text-base font-semibold">{formatDateTime(start, locale, tz)}</span>
         <Badge variant={apptVariant(turn.status)} className="shrink-0">
           {statusLabel(turn.status)}
         </Badge>
@@ -62,8 +65,8 @@ function TurnRow({
         {relative(start, locale)} · {turn.dentist_name}
       </span>
       <span className="text-sm text-muted-foreground">
-        {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–
-        {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {formatTime(start, locale, tz)}–
+        {formatTime(end, locale, tz)}
         {turn.reason ? ` · ${turn.reason}` : ''}
       </span>
     </div>
@@ -247,7 +250,7 @@ export async function PatientOverview({
               {t('overview.lastTurn')}
             </p>
             {data.lastPast ? (
-              <TurnRow turn={data.lastPast} kind="last" locale={locale} statusLabel={statusLabel} />
+              <TurnRow turn={data.lastPast} kind="last" locale={locale} statusLabel={statusLabel} tz={tz} />
             ) : (
               <p data-testid="overview-last-turn" className="text-sm text-muted-foreground">
                 {t('overview.noTurns')}
@@ -257,7 +260,7 @@ export async function PatientOverview({
               {t('overview.nextTurn')}
             </p>
             {data.nextUpcoming ? (
-              <TurnRow turn={data.nextUpcoming} kind="next" locale={locale} statusLabel={statusLabel} />
+              <TurnRow turn={data.nextUpcoming} kind="next" locale={locale} statusLabel={statusLabel} tz={tz} />
             ) : (
               <p data-testid="overview-next-turn" className="text-sm text-muted-foreground">
                 {t('overview.noTurns')}

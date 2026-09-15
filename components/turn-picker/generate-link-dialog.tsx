@@ -24,6 +24,7 @@ import type { PatientRow } from '@/server/actions/patients';
 import type { PatientOption } from '@/lib/patient-options';
 import { PatientCombobox } from '@/components/patients/patient-combobox';
 import type { Role } from '@/lib/schemas/common';
+import { wallClock, clinicDateAtNoon } from '@/lib/store/time';
 import { useToast } from '@/components/ui/toaster';
 import { useWhatsapp } from '@/components/whatsapp-provider';
 import { openTurnPickerWhatsapp } from '@/lib/turn-picker-whatsapp';
@@ -41,6 +42,15 @@ function defaultSlotFor(
   return ALLOWED_LINK_DURATIONS.includes(clinicDefault) ? clinicDefault : 15;
 }
 
+/** Clinic-local link creation date; browser-local when no tz (legacy). */
+function linkCreatedLabel(iso: string, tz?: string): string {
+  if (tz) {
+    const d = wallClock(iso, tz).date;
+    if (d) return clinicDateAtNoon(d).toLocaleDateString();
+  }
+  return new Date(iso).toLocaleDateString();
+}
+
 export function GenerateTurnLinkDialog({
   open,
   onOpenChange,
@@ -52,6 +62,7 @@ export function GenerateTurnLinkDialog({
   currentUserId,
   viewerRole,
   clinicDefaultDuration,
+  clinicTz,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
@@ -69,6 +80,8 @@ export function GenerateTurnLinkDialog({
   viewerRole?: Role;
   /** Clinic fallback when the selected dentist has no per-dentist value. */
   clinicDefaultDuration?: number;
+  /** Clinic IANA timezone for link `created_at` display (else browser-local). */
+  clinicTz?: string;
 }) {
   const t = useTranslations('turnPicker');
   const tAppt = useTranslations('appointments');
@@ -356,7 +369,7 @@ export function GenerateTurnLinkDialog({
                     <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
                     <span className="truncate text-muted-foreground">
                       {l.dentist_name} · {l.slot_minutes} min ·{' '}
-                      {new Date(l.created_at).toLocaleDateString()}
+                      {linkCreatedLabel(l.created_at, clinicTz)}
                     </span>
                     <div className="ml-auto flex shrink-0 items-center gap-1">
                       <Button

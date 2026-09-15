@@ -34,10 +34,13 @@ export function PatientInvoices({
   patientId,
   currency,
   locale,
+  timeZone,
 }: {
   patientId: string;
   currency: Currency;
   locale: AppLocale;
+  /** Clinic IANA timezone for `issued_at` display. */
+  timeZone?: string;
 }) {
   const t = useTranslations('billing');
   const [open, setOpen] = useState(false);
@@ -57,7 +60,7 @@ export function PatientInvoices({
         </Button>
       </CardHeader>
       <CardContent>
-        <InvoicesList patientId={patientId} currency={currency} locale={locale} />
+        <InvoicesList patientId={patientId} currency={currency} locale={locale} timeZone={timeZone} />
         <NewInvoiceDialog
           open={open}
           onOpenChange={(o) => {
@@ -79,10 +82,12 @@ function InvoicesList({
   patientId,
   currency,
   locale,
+  timeZone,
 }: {
   patientId: string;
   currency: Currency;
   locale: AppLocale;
+  timeZone?: string;
 }) {
   const t = useTranslations('billing');
   const tCommon = useTranslations('common');
@@ -127,7 +132,7 @@ function InvoicesList({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-base font-semibold">{r.number}</span>
                 <span className="block text-sm text-muted-foreground">
-                  {formatDate(r.issued_at, locale)}
+                  {formatDate(r.issued_at, locale, undefined, timeZone)}
                 </span>
                 <span className="mt-1 text-sm font-medium">
                   {formatMoney(r.total_cents, currency, locale)}
@@ -169,7 +174,7 @@ function InvoicesList({
                     {r.number}
                   </Link>
                 </td>
-                <td className="py-2 pr-4">{formatDate(r.issued_at, locale)}</td>
+                <td className="py-2 pr-4">{formatDate(r.issued_at, locale, undefined, timeZone)}</td>
                 <td className="py-2 pr-4">{formatMoney(r.total_cents, currency, locale)}</td>
                 <td className="py-2 pr-4">
                   <Badge

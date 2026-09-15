@@ -17,6 +17,7 @@ import { query, queryOne } from '@/lib/db';
 import type { AppLocale, Currency } from '@/lib/schemas/common';
 import { ShareTurnButton } from '@/components/turn-picker/share-turn-button';
 import { getClinicDefaultDuration } from '@/server/actions/dentist-schedules';
+import { getClinicTimezone } from '@/lib/availability';
 import { DeletePatientButton } from '@/components/patients/delete-patient-button';
 import { RestorePatientButton } from '@/components/patients/restore-patient-button';
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
@@ -41,13 +42,14 @@ export default async function PatientDetailPage({
   const initialTab = (TABS as readonly string[]).includes(sp?.tab ?? '')
     ? (sp!.tab as (typeof TABS)[number])
     : 'overview';
-  const [patient, clinic, dentists, clinicDefault] = await Promise.all([
+  const [patient, clinic, dentists, clinicDefault, clinicTz] = await Promise.all([
     getPatient(id),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
     query<{ id: string; name: string; slot_minutes: number | null }>(
       "SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
     ),
     getClinicDefaultDuration(),
+    getClinicTimezone(),
   ]);
   if (!patient) notFound();
 
@@ -98,6 +100,7 @@ export default async function PatientDetailPage({
               currentUserId={user.id}
               role={user.role}
               clinicDefaultDuration={clinicDefault}
+              clinicTz={clinicTz}
             />
             <DeletePatientButton
               patientId={id}
@@ -155,13 +158,14 @@ export default async function PatientDetailPage({
           </Card>
         </TabsContent>
         <TabsContent value="odontogram">
-          <PatientOdontogram patientId={id} locale={(clinic?.locale ?? locale) as AppLocale} />
+          <PatientOdontogram patientId={id} locale={(clinic?.locale ?? locale) as AppLocale} timeZone={clinicTz} />
         </TabsContent>
         <TabsContent value="treatments">
           <PatientTreatments
             patientId={id}
             currency={(clinic?.currency ?? 'USD') as Currency}
             locale={(clinic?.locale ?? locale) as AppLocale}
+            timeZone={clinicTz}
           />
         </TabsContent>
         <TabsContent value="invoices">
@@ -169,12 +173,14 @@ export default async function PatientDetailPage({
             patientId={id}
             currency={(clinic?.currency ?? 'USD') as Currency}
             locale={(clinic?.locale ?? locale) as AppLocale}
+            timeZone={clinicTz}
           />
         </TabsContent>
         <TabsContent value="attachments">
           <PatientAttachments
             patientId={id}
             locale={(clinic?.locale ?? locale) as AppLocale}
+            timeZone={clinicTz}
           />
         </TabsContent>
         <TabsContent value="appointments">
@@ -183,6 +189,7 @@ export default async function PatientDetailPage({
             dentists={dentists}
             currentUserId={user.id}
             viewerRole={user.role}
+            clinicTz={clinicTz}
           />
         </TabsContent>
       </Tabs>

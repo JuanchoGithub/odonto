@@ -163,6 +163,9 @@ export function WeekCalendar({
   const attendStartHhmm = attendAppt
     ? (attendAppt.start_hhmm ?? wallClock(attendAppt.starts_at, tz).hhmm)
     : undefined;
+  const attendEndHhmm = attendAppt
+    ? (attendAppt.end_hhmm ?? wallClock(attendAppt.ends_at, tz).hhmm)
+    : undefined;
   const attendIsTodayActive = !!attendAppt
     && (attendAppt.status === 'scheduled'
       || attendAppt.status === 'arrived'
@@ -308,6 +311,7 @@ export function WeekCalendar({
             days={days}
             appts={filtered}
             locale={dateFnsLocale}
+            tz={tz}
             windowsByDate={windowsByDate}
             onSlotClick={(d) => openCreate(d, null, 'click')}
             onRangeSelect={(day, fromMin, toMin) => {
@@ -326,6 +330,7 @@ export function WeekCalendar({
             appts={filtered}
             pending={filteredPending}
             locale={dateFnsLocale}
+            tz={tz}
             labels={{
               date: tCommon('date'),
               time: t('time'),
@@ -361,6 +366,7 @@ export function WeekCalendar({
           currentUserId={viewer?.id}
           viewerRole={viewer?.role as any}
           clinicDefaultDuration={clinicDefaultDuration}
+          clinicTz={tz}
         />
         {editingAppt ? (
           <AppointmentDialog
@@ -377,6 +383,7 @@ export function WeekCalendar({
             prefillStart={prefill?.start}
             prefillEnd={prefill?.end}
             prefillNonce={prefillNonce}
+            clinicTz={tz}
           />
         ) : null}
         <AttendSheet
@@ -388,6 +395,8 @@ export function WeekCalendar({
           onAdvanced={refresh}
           clinicDate={attendClinicDate}
           startHhmm={attendStartHhmm}
+          endHhmm={attendEndHhmm}
+          tz={tz}
           isTodayActive={attendIsTodayActive}
           onRefresh={refresh}
           onEdit={openEdit}

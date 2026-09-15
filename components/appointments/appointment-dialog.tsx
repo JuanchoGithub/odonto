@@ -78,6 +78,7 @@ export function AppointmentDialog({
   prefillStart,
   prefillEnd,
   prefillNonce,
+  clinicTz,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
@@ -93,6 +94,13 @@ export function AppointmentDialog({
   prefillEnd?: string | null;
   /** Bump to re-seed the form from prefill even for the same appointment id. */
   prefillNonce?: number;
+  /**
+   * Clinic IANA timezone, used ONLY for the read-only "original date" notice.
+   * The date/time form fields stay browser-local on purpose: the submit path
+   * interprets them with `new Date()` in the same TZ, so display and submit
+   * must remain paired (see buildFd below).
+   */
+  clinicTz?: string;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -390,7 +398,13 @@ export function AppointmentDialog({
                     <span className="text-muted-foreground">
                       {' '}
                       · {t('originalDate', {
-                        date: format(new Date(editing.original_starts_at), 'Pp'),
+                        date: clinicTz
+                          ? new Intl.DateTimeFormat(undefined, {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                              timeZone: clinicTz,
+                            }).format(new Date(editing.original_starts_at))
+                          : format(new Date(editing.original_starts_at), 'Pp'),
                       })}
                     </span>
                   ) : null}

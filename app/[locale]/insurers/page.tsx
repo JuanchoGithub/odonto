@@ -9,6 +9,7 @@ import { InsurerSearch } from '@/components/insurers/insurer-search';
 import { Shield } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { queryOne } from '@/lib/db';
+import { getClinicTimezone } from '@/lib/availability';
 import type { AppLocale } from '@/lib/schemas/common';
 
 type Clinic = { currency: string; locale: AppLocale };
@@ -27,9 +28,10 @@ export default async function InsurersPage({
   const tCommon = await getTranslations('common');
   const sp = await searchParams;
   const q = sp.q ?? '';
-  const [insurers, clinic] = await Promise.all([
+  const [insurers, clinic, clinicTz] = await Promise.all([
     listInsurers(q),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
+    getClinicTimezone(),
   ]);
 
   return (
@@ -113,7 +115,7 @@ export default async function InsurersPage({
                         <td className="py-2 pr-4">{i.email ?? '—'}</td>
                         <td className="py-2 pr-4 text-right">{i.patient_count ?? 0}</td>
                         <td className="py-2 pr-4">
-                          {formatDate(i.created_at, (clinic?.locale ?? locale) as AppLocale)}
+                          {formatDate(i.created_at, (clinic?.locale ?? locale) as AppLocale, undefined, clinicTz)}
                         </td>
                       </tr>
                     ))}

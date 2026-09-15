@@ -28,10 +28,13 @@ export function PatientTreatments({
   patientId,
   currency,
   locale,
+  timeZone,
 }: {
   patientId: string;
   currency: Currency;
   locale: AppLocale;
+  /** Clinic IANA timezone for `performed_at` display. */
+  timeZone?: string;
 }) {
   const t = useTranslations('treatments');
   const [open, setOpen] = useState(false);
@@ -73,6 +76,7 @@ export function PatientTreatments({
           locale={locale}
           list={list}
           onRefresh={refresh}
+          timeZone={timeZone}
         />
         <TreatmentDialog
           open={open}
@@ -93,12 +97,14 @@ function TreatmentsTable({
   locale,
   list,
   onRefresh,
+  timeZone,
 }: {
   patientId: string;
   currency: Currency;
   locale: AppLocale;
   list: TreatmentRow[] | null;
   onRefresh: () => void;
+  timeZone?: string;
 }) {
   const t = useTranslations('treatments');
   const tCommon = useTranslations('common');
@@ -145,7 +151,7 @@ function TreatmentsTable({
                   {t(`status.${r.status}` as any)}
                 </Badge>
                 <span className="text-muted-foreground">
-                  {r.performed_at ? formatDateTime(r.performed_at, locale) : '—'}
+                  {r.performed_at ? formatDateTime(r.performed_at, locale, timeZone) : '—'}
                 </span>
               </span>
             </span>
@@ -187,7 +193,7 @@ function TreatmentsTable({
                   </Badge>
                 </td>
                 <td className="py-2 pr-4">
-                  {r.performed_at ? formatDateTime(r.performed_at, locale) : '—'}
+                  {r.performed_at ? formatDateTime(r.performed_at, locale, timeZone) : '—'}
                 </td>
               </tr>
             ))}

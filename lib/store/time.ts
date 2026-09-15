@@ -9,6 +9,7 @@
 export type WallClock = {
   date: string; // YYYY-MM-DD clinic-local
   hhmm: string; // HH:MM clinic-local (24h)
+  minutes: number; // minutes since clinic-local midnight
   dayOfWeek: number; // 0-6, Sun=0
 };
 
@@ -44,22 +45,44 @@ const DOW: Record<string, number> = {
 
 export function wallClock(iso: string, tz: string): WallClock {
   const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return { date: '', hhmm: '', dayOfWeek: 0 };
+  if (!Number.isFinite(d.getTime()))
+    return { date: '', hhmm: '', minutes: 0, dayOfWeek: 0 };
   try {
     const parts = formatter(tz).formatToParts(d);
     const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
     // en-CA yields YYYY-MM-DD order; read parts explicitly to be safe.
     const date = `${get('year')}-${get('month')}-${get('day')}`;
-    const hhmm = `${get('hour') === '24' ? '00' : get('hour')}:${get('minute')}`;
-    return { date, hhmm, dayOfWeek: DOW[get('weekday')] ?? 0 };
+    const hh = get('hour') === '24' ? '00' : get('hour');
+    const hhmm = `${hh}:${get('minute')}`;
+    const minutes = Number(hh) * 60 + Number(get('minute'));
+    return { date, hhmm, minutes, dayOfWeek: DOW[get('weekday')] ?? 0 };
   } catch {
     const p = (n: number) => String(n).padStart(2, '0');
     return {
       date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
       hhmm: `${p(d.getHours())}:${p(d.getMinutes())}`,
+      minutes: d.getHours() * 60 + d.getMinutes(),
       dayOfWeek: d.getDay(),
     };
   }
+}
+
+/**
+ * Build a Date from a clinic-local `YYYY-MM-DD` that `date-fns format()` can
+ * render without a day shift in any browser TZ (local noon never crosses
+ * midnight). Use for day labels derived from `clinic_date` strings.
+ */
+export function clinicDateAtNoon(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return new Date(dateStr);
+  return new Date(y, m - 1, d, 12);
+}
+
+/** `HH:MM` → minutes since midnight (for grid positioning from `*_hhmm`). */
+export function hhmmToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return 0;
+  return h * 60 + m;
 }
 
 /** Monday-start key for a clinic-local YYYY-MM-DD date. */

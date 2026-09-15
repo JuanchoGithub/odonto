@@ -118,6 +118,7 @@ export function Odontogram({
   locale,
   readOnly = false,
   history = [],
+  timeZone,
 }: {
   initial: ToothRow[];
   patientId: string;
@@ -125,6 +126,8 @@ export function Odontogram({
   mode: OdontogramMode;
   readOnly?: boolean;
   history?: OdontogramHistoryRow[];
+  /** Clinic IANA timezone for history `created_at` display. */
+  timeZone?: string;
 }) {
   const t = useTranslations('odontogram');
   const tCommon = useTranslations('common');
@@ -607,6 +610,7 @@ export function Odontogram({
           patientId={patientId}
           mode={mode}
           locale={locale}
+          timeZone={timeZone}
         />
       ) : (
         <>

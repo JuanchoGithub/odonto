@@ -2,6 +2,7 @@ import { setRequestLocale, getTranslations } from 'next-intl/server';
 import { requireUser } from '@/lib/rbac';
 import { listInvoices } from '@/server/actions/billing';
 import { queryOne } from '@/lib/db';
+import { getClinicTimezone } from '@/lib/availability';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from '@/lib/navigation';
 import { formatMoney, formatDate } from '@/lib/format';
@@ -19,9 +20,10 @@ export default async function BillingPage({
   setRequestLocale(locale);
   await requireUser();
   const t = await getTranslations('billing');
-  const [rows, clinic] = await Promise.all([
+  const [rows, clinic, clinicTz] = await Promise.all([
     listInvoices(),
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
+    getClinicTimezone(),
   ]);
   const c = (clinic?.currency ?? 'USD') as Currency;
   const l = (clinic?.locale ?? locale) as AppLocale;
@@ -51,7 +53,7 @@ export default async function BillingPage({
                           {r.number}
                         </span>
                         <span className="block truncate text-sm text-muted-foreground">
-                          {r.patient_name} · {formatDate(r.issued_at, l)}
+                          {r.patient_name} · {formatDate(r.issued_at, l, undefined, clinicTz)}
                         </span>
                         <span className="mt-1 flex flex-wrap items-center gap-2 text-sm">
                           <span className="font-medium">
@@ -105,7 +107,7 @@ export default async function BillingPage({
                             {r.patient_name}
                           </Link>
                         </td>
-                        <td className="py-2 pr-4">{formatDate(r.issued_at, l)}</td>
+                        <td className="py-2 pr-4">{formatDate(r.issued_at, l, undefined, clinicTz)}</td>
                         <td className="py-2 pr-4">{formatMoney(r.total_cents, c, l)}</td>
                         <td className="py-2 pr-4">{formatMoney(r.paid_cents, c, l)}</td>
                         <td className="py-2 pr-4">

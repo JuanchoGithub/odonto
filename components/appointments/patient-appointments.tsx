@@ -24,6 +24,7 @@ import { useToast } from '@/components/ui/toaster';
 import type { Role } from '@/lib/schemas/common';
 import { useDeltaRows } from '@/lib/store/snapshots';
 import { runSync, useEnsureSeeded } from '@/lib/store/sync';
+import { wallClock, clinicDateAtNoon } from '@/lib/store/time';
 
 function statusVariant(s: string) {
   return s === 'completed'
@@ -40,11 +41,14 @@ export function PatientAppointments({
   dentists,
   currentUserId,
   viewerRole,
+  clinicTz,
 }: {
   patientId: string;
   dentists: { id: string; name: string; color?: string | null }[];
   currentUserId?: string;
   viewerRole?: Role;
+  /** Clinic IANA timezone — rows render in clinic wall-clock, not browser TZ. */
+  clinicTz?: string;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -77,6 +81,26 @@ export function PatientAppointments({
   function refresh() {
     // Authoritative reconcile after a write (one delta sync, not a refetch).
     void runSync();
+  }
+
+  // Clinic wall-clock per row. Without `clinicTz` this falls back to the
+  // previous browser-local rendering (kept for back-compat only).
+  function clock(a: ApptRow): { date: string; startHhmm: string; endHhmm: string } | null {
+    if (!clinicTz) return null;
+    const s = wallClock(a.starts_at, clinicTz);
+    const e = wallClock(a.ends_at, clinicTz);
+    if (!s.date) return null;
+    return { date: s.date, startHhmm: s.hhmm, endHhmm: e.hhmm };
+  }
+  function dateLabel(a: ApptRow, start: Date): string {
+    const c = clock(a);
+    return c
+      ? format(clinicDateAtNoon(c.date), 'PPP', { locale: dateFnsLocale })
+      : format(start, 'PPP', { locale: dateFnsLocale });
+  }
+  function timeLabel(a: ApptRow, start: Date, end: Date): string {
+    const c = clock(a);
+    return c ? `${c.startHhmm}–${c.endHhmm}` : `${format(start, 'HH:mm')}–${format(end, 'HH:mm')}`;
   }
 
   function openEdit(a: ApptRow) {
@@ -148,10 +172,10 @@ export function PatientAppointments({
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-base font-semibold">
-                          {format(start, 'PPP', { locale: dateFnsLocale })}
+                          {dateLabel(a, start)}
                         </span>
                         <span className="block text-sm text-muted-foreground">
-                          {format(start, 'HH:mm')}–{format(end, 'HH:mm')} · {a.dentist_name}
+                          {timeLabel(a, start, end)} · {a.dentist_name}
                         </span>
                         {a.reason ? (
                           <span className="mt-1 block truncate text-sm text-muted-foreground">
@@ -207,10 +231,10 @@ export function PatientAppointments({
                         onClick={() => openEdit(a)}
                       >
                         <TableCell className="whitespace-nowrap">
-                          {format(start, 'PPP', { locale: dateFnsLocale })}
+                          {dateLabel(a, start)}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {format(start, 'HH:mm')}–{format(end, 'HH:mm')}
+                          {timeLabel(a, start, end)}
                         </TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-2 whitespace-nowrap">
@@ -266,6 +290,7 @@ export function PatientAppointments({
             onCreated={refresh}
             currentUserId={currentUserId}
             viewerRole={viewerRole}
+            clinicTz={clinicTz}
           />
         ) : null}
       </CardContent>

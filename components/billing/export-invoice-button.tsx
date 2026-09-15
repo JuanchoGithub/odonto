@@ -24,6 +24,7 @@ type Payment = {
 export function ExportInvoiceButton({
   invoice,
   clinic,
+  timeZone,
 }: {
   invoice: {
     number: string;
@@ -45,6 +46,8 @@ export function ExportInvoiceButton({
     currency: Currency;
     locale: AppLocale;
   } | null;
+  /** Clinic IANA timezone for the `Issued:` line. */
+  timeZone?: string;
 }) {
   function exportPdf() {
     const doc = new jsPDF();
@@ -67,7 +70,7 @@ export function ExportInvoiceButton({
     doc.setFontSize(18).setFont('helvetica', 'bold');
     doc.text(`Invoice ${invoice.number}`, w - 14, 14, { align: 'right' });
     doc.setFontSize(9).setFont('helvetica', 'normal');
-    doc.text(`Issued: ${formatDate(invoice.issued_at, loc)}`, w - 14, 20, {
+    doc.text(`Issued: ${formatDate(invoice.issued_at, loc, undefined, timeZone)}`, w - 14, 20, {
       align: 'right',
     });
     doc.text(`Status: ${invoice.status.toUpperCase()}`, w - 14, 25, { align: 'right' });

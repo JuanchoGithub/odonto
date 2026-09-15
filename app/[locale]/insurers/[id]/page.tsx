@@ -9,6 +9,7 @@ import { query } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { formatDate } from '@/lib/format';
 import { queryOne } from '@/lib/db';
+import { getClinicTimezone } from '@/lib/availability';
 import type { AppLocale, Role } from '@/lib/schemas/common';
 
 type Clinic = { currency: string; locale: AppLocale };
@@ -27,12 +28,13 @@ export default async function InsurerDetailPage({
   const tPatients = await getTranslations('patients');
   const insurer = await getInsurer(id);
   if (!insurer) notFound();
-  const [clinic, patients] = await Promise.all([
+  const [clinic, patients, clinicTz] = await Promise.all([
     queryOne<Clinic>('SELECT currency, locale FROM clinics LIMIT 1'),
     query<{ id: string; first_name: string; last_name: string; created_at: string }>(
       `SELECT id, first_name, last_name, created_at FROM patients WHERE insurer_id = ? ORDER BY last_name, first_name LIMIT 100`,
       [id],
     ),
+    getClinicTimezone(),
   ]);
 
   return (
@@ -51,7 +53,7 @@ export default async function InsurerDetailPage({
           </h1>
           <p className="text-sm text-muted-foreground">
             {insurer.phone ?? '—'} · {insurer.email ?? '—'} ·{' '}
-            {formatDate(insurer.created_at, (clinic?.locale ?? locale) as AppLocale)}
+            {formatDate(insurer.created_at, (clinic?.locale ?? locale) as AppLocale, undefined, clinicTz)}
           </p>
         </div>
         {session.user.role === ('admin' as Role) ? (
@@ -104,7 +106,7 @@ export default async function InsurerDetailPage({
                         </Link>
                       </td>
                       <td className="py-2 pr-4">
-                        {formatDate(p.created_at, (clinic?.locale ?? locale) as AppLocale)}
+                        {formatDate(p.created_at, (clinic?.locale ?? locale) as AppLocale, undefined, clinicTz)}
                       </td>
                     </tr>
                   ))}

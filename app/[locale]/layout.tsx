@@ -5,6 +5,7 @@ import { routing } from '@/lib/i18n';
 import { auth } from '@/lib/auth';
 import { query, queryOne } from '@/lib/db';
 import { getClinicDefaultDuration } from '@/server/actions/dentist-schedules';
+import { getClinicTimezone } from '@/lib/availability';
 import { TopNav } from '@/components/nav/top-nav';
 import { BottomNav } from '@/components/nav/bottom-nav';
 import { AuthProvider } from '@/components/auth/session-provider';
@@ -41,9 +42,10 @@ export default async function LocaleLayout({
   const session = await auth();
   // Parallelize the independent data loads (clinic + whatsapp) so the
   // layout shell isn't a sequential waterfall of Turso round-trips.
-  const [clinic, whatsapp] = await Promise.all([
+  const [clinic, whatsapp, clinicTz] = await Promise.all([
     queryOne<Clinic>('SELECT id, name, currency, locale FROM clinics LIMIT 1'),
     getWhatsappContextData(),
+    getClinicTimezone(),
   ]);
 
   // Block app until clinic is configured
@@ -117,6 +119,7 @@ export default async function LocaleLayout({
                   currentUserId={session.user.id}
                   dentists={addTurnDentists}
                   clinicDefaultDuration={clinicDefaultDuration}
+                  clinicTz={clinicTz}
                 />
               ) : null}
             </div>

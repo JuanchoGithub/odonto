@@ -371,6 +371,8 @@ export function SecretaryPanel({
         onAdvanced={load}
         clinicDate={attendAppt?.clinic_date}
         startHhmm={attendAppt?.start_hhmm}
+        endHhmm={attendAppt?.end_hhmm}
+        tz={clinicTz}
         isTodayActive={
           !!attendAppt
           && (attendAppt.status === 'scheduled'
@@ -392,6 +394,7 @@ export function SecretaryPanel({
           dentists={dentists}
           appointment={editingAppt}
           onCreated={load}
+          clinicTz={clinicTz}
         />
       ) : null}
       <AddAppointmentDialog
@@ -401,6 +404,7 @@ export function SecretaryPanel({
         dentists={dentists}
         onCreated={load}
         clinicDefaultDuration={clinicDefaultDuration}
+        clinicTz={clinicTz}
       />
     </div>
   );

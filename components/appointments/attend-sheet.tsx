@@ -21,6 +21,7 @@ import {
 } from '@/server/actions/billing';
 import { createTreatment } from '@/server/actions/treatments';
 import { useCatalogRows } from '@/lib/store/options';
+import { wallClock, clinicDateAtNoon } from '@/lib/store/time';
 import { useToast } from '@/components/ui/toaster';
 import { AttendTemplateSheet } from './attend-template-sheet';
 import { useWhatsapp } from '@/components/whatsapp-provider';
@@ -38,6 +39,8 @@ export function AttendSheet({
   onAdvanced,
   clinicDate,
   startHhmm,
+  endHhmm,
+  tz,
   isTodayActive,
   onRefresh,
   onEdit,
@@ -50,6 +53,13 @@ export function AttendSheet({
   clinicDate?: string;
   /** Clinic-local HH:MM. Required for WhatsApp template rendering. */
   startHhmm?: string;
+  /** Clinic-local HH:MM (end). Used for the header display. */
+  endHhmm?: string;
+  /**
+   * Clinic IANA timezone. Used to derive clinic wall-clock when the
+   * `clinicDate/*Hhmm` props are absent (raw store rows).
+   */
+  tz?: string;
   /** Active turn on the same clinic day → WhatsApp shows both templates. */
   isTodayActive?: boolean;
   /** Optional callback when WhatsApp updated the patient phone so the parent can refresh. */
@@ -79,23 +89,35 @@ export function AttendSheet({
   const effectiveClinicDate = useMemo(() => {
     if (clinicDate) return clinicDate;
     if (!appointment) return '';
-    // Fallback: derive from ISO date portion (UTC slice — only used when
-    // the caller didn't supply clinic-local fields).
-    return appointment.starts_at.slice(0, 10);
-  }, [clinicDate, appointment]);
+    // Prefer clinic wall-clock over the old UTC slice (slice(0,10) shifts the
+    // day for negative-offset clinics); browser-local is the last resort.
+    if (tz) return wallClock(appointment.starts_at, tz).date || '';
+    const d = new Date(appointment.starts_at);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }, [clinicDate, appointment, tz]);
   const effectiveStartHhmm = useMemo(() => {
     if (startHhmm) return startHhmm;
     if (!appointment) return '';
-    return appointment.starts_at.slice(11, 16);
-  }, [startHhmm, appointment]);
+    if (tz) return wallClock(appointment.starts_at, tz).hhmm || '';
+    const d = new Date(appointment.starts_at);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}`;
+  }, [startHhmm, appointment, tz]);
+  const effectiveEndHhmm = useMemo(() => {
+    if (endHhmm) return endHhmm;
+    if (!appointment) return '';
+    if (tz) return wallClock(appointment.ends_at, tz).hhmm || '';
+    const d = new Date(appointment.ends_at);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}`;
+  }, [endHhmm, appointment, tz]);
   const isFuture = useMemo(
     () => (appointment ? Date.parse(appointment.starts_at) > Date.now() : false),
     [appointment],
   );
 
   if (!appointment) return null;
-  const start = new Date(appointment.starts_at);
-  const end = new Date(appointment.ends_at);
   const effectiveStatus = localStatus ?? appointment.status;
   const idx = FLOW.indexOf(effectiveStatus as (typeof FLOW)[number]);
   const next = idx >= 0 && idx < FLOW.length - 1 ? FLOW[idx + 1] : null;
@@ -159,8 +181,8 @@ export function AttendSheet({
                 {appointment.patient_name}
               </div>
               <div className="text-sm text-muted-foreground">
-                {format(start, 'EEE d MMM · HH:mm')}–{format(end, 'HH:mm')} ·{' '}
-                {appointment.dentist_name}
+                {format(clinicDateAtNoon(effectiveClinicDate), 'EEE d MMM')} · {effectiveStartHhmm}–
+                {effectiveEndHhmm} · {appointment.dentist_name}
               </div>
               {appointment.reason ? (
                 <div className="truncate text-sm">{appointment.reason}</div>

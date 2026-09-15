@@ -39,11 +39,14 @@ export function OdontogramHistory({
   patientId,
   mode,
   locale,
+  timeZone,
 }: {
   history: OdontogramHistoryRow[];
   patientId: string;
   mode: OdontogramMode;
   locale: string;
+  /** Clinic IANA timezone for `created_at` display. */
+  timeZone?: string;
 }) {
   const t = useTranslations('odontogram');
   const [asOfId, setAsOfId] = useState<string>('');
@@ -85,7 +88,7 @@ export function OdontogramHistory({
                 <SelectItem value="">{t('current')}</SelectItem>
                 {history.map((h) => (
                   <SelectItem key={h.id} value={h.id}>
-                    {formatDateTime(h.created_at, locale as AppLocale)}
+                    {formatDateTime(h.created_at, locale as AppLocale, timeZone)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -99,7 +102,7 @@ export function OdontogramHistory({
                   data-testid="history-snapshot-banner"
                 >
                   {t('readOnlyNotice')} —{' '}
-                  {formatDateTime(asOf.created_at, locale as AppLocale)}
+                  {formatDateTime(asOf.created_at, locale as AppLocale, timeZone)}
                 </span>
                 <Button
                   variant="ghost"
@@ -127,7 +130,7 @@ export function OdontogramHistory({
         <CardContent className="pt-6 space-y-1">
           <div className="text-sm font-medium mb-2">{t('historyTimeline')}</div>
           {history.map((h) => (
-            <TimelineRow key={h.id} h={h} locale={locale as AppLocale} />
+            <TimelineRow key={h.id} h={h} locale={locale as AppLocale} timeZone={timeZone} />
           ))}
         </CardContent>
       </Card>
@@ -138,9 +141,11 @@ export function OdontogramHistory({
 function TimelineRow({
   h,
   locale,
+  timeZone,
 }: {
   h: OdontogramHistoryRow;
   locale: AppLocale;
+  timeZone?: string;
 }) {
   const t = useTranslations('odontogram');
   const cond = h.condition;
@@ -185,7 +190,7 @@ function TimelineRow({
           <div className="text-xs text-muted-foreground">{h.note}</div>
         ) : null}
         <div className="text-xs text-muted-foreground">
-          {formatDateTime(h.created_at, locale)}
+          {formatDateTime(h.created_at, locale, timeZone)}
         </div>
       </div>
     </div>

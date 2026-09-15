@@ -1,5 +1,6 @@
 import { getPublicLinkInfo } from '@/server/actions/turn-picker';
 import { queryOne } from '@/lib/db';
+import { getClinicTimezone } from '@/lib/availability';
 import { TurnPickerClient } from '@/components/turn-picker/turn-picker-client';
 import { Activity } from 'lucide-react';
 
@@ -12,9 +13,10 @@ export default async function PickTurnPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const [info, clinic] = await Promise.all([
+  const [info, clinic, clinicTz] = await Promise.all([
     getPublicLinkInfo(token),
     queryOne<Clinic>('SELECT name, locale FROM clinics LIMIT 1'),
+    getClinicTimezone(),
   ]);
   const locale = (clinic?.locale === 'en' ? 'en' : 'es') as 'es' | 'en';
 
@@ -38,6 +40,7 @@ export default async function PickTurnPage({
             slotMinutes={info.slotMinutes}
             expiresAt={info.expiresAt}
             locale={locale}
+            clinicTz={clinicTz}
           />
         ) : (
           <InvalidLink reason={info.reason} locale={locale} />

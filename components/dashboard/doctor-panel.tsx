@@ -351,6 +351,8 @@ export function DoctorPanel({
         onAdvanced={load}
         clinicDate={attendAppt?.clinic_date}
         startHhmm={attendAppt?.start_hhmm}
+        endHhmm={attendAppt?.end_hhmm}
+        tz={clinicTz}
         isTodayActive={
           !!attendAppt
           && (attendAppt.status === 'scheduled'
@@ -374,6 +376,7 @@ export function DoctorPanel({
           onCreated={load}
           currentUserId={dentist.id}
           viewerRole="dentist"
+          clinicTz={clinicTz}
         />
       ) : null}
       <AddAppointmentDialog
@@ -385,6 +388,7 @@ export function DoctorPanel({
         currentUserId={dentist.id}
         viewerRole="dentist"
         clinicDefaultDuration={dentist.slot_minutes ?? undefined}
+        clinicTz={clinicTz}
       />
     </div>
   );

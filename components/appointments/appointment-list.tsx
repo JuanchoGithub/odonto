@@ -18,7 +18,19 @@ import {
 import { WhatsappButton } from '@/components/ui/whatsapp-button';
 import { useWhatsapp } from '@/components/whatsapp-provider';
 import { dentistColor } from '@/lib/colors';
+import { wallClock, clinicDateAtNoon } from '@/lib/store/time';
 import type { ApptRow, PendingLinkRow } from '@/server/actions/appointments';
+
+/**
+ * Rows decorated with clinic wall-clock (`withClinicClock`) carry
+ * `clinic_date/start_hhmm/end_hhmm` — display MUST prefer those over the raw
+ * ISO instants so the list matches the overview (AGENTS.md §12.9).
+ */
+export type ListAppt = ApptRow & {
+  clinic_date?: string;
+  start_hhmm?: string;
+  end_hhmm?: string;
+};
 
 type Labels = {
   date: string;
@@ -194,22 +206,65 @@ export function AppointmentList({
   statusLabel,
   onAttend,
   onChanged,
+  tz,
 }: {
-  appts: ApptRow[];
+  appts: ListAppt[];
   pending: PendingLinkRow[];
   locale: Locale;
   labels: Labels;
-  onOpenAppt: (a: ApptRow) => void;
+  onOpenAppt: (a: ListAppt) => void;
   onCopyLink: (token: string) => void;
   statusLabel: (s: string) => string;
-  onAttend?: (a: ApptRow) => void;
+  onAttend?: (a: ListAppt) => void;
   /** Called after an inline WhatsApp phone capture so the parent can refresh. */
   onChanged?: () => void;
+  /**
+   * Clinic IANA timezone. Used when a row lacks decorated `*_hhmm` fields;
+   * rows from `withClinicClock` already carry them and ignore this.
+   */
+  tz?: string;
 }) {
   const { countryCode, templates } = useWhatsapp();
   const sorted = [...appts].sort(
     (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
   );
+
+  // Clinic wall-clock display with graceful fallbacks:
+  // decorated fields → tz-derived → browser-local (legacy).
+  function clinicDate(a: ListAppt): string | null {
+    if (a.clinic_date) return a.clinic_date;
+    if (tz) return wallClock(a.starts_at, tz).date || null;
+    return null;
+  }
+  function datePPP(a: ListAppt, start: Date): string {
+    const d = clinicDate(a);
+    return d
+      ? format(clinicDateAtNoon(d), 'PPP', { locale })
+      : format(start, 'PPP', { locale });
+  }
+  function dayShort(a: ListAppt, start: Date): string {
+    const d = clinicDate(a);
+    return d
+      ? format(clinicDateAtNoon(d), 'EEE d MMM', { locale })
+      : format(start, 'EEE d MMM', { locale });
+  }
+  function hhmm(a: ListAppt, start: Date): string {
+    if (a.start_hhmm) return a.start_hhmm;
+    if (tz) return wallClock(a.starts_at, tz).hhmm || format(start, 'HH:mm');
+    return format(start, 'HH:mm');
+  }
+  function timeRange(a: ListAppt, start: Date, end: Date): string {
+    const s = a.start_hhmm ?? (tz ? wallClock(a.starts_at, tz).hhmm : null) ?? format(start, 'HH:mm');
+    const e = a.end_hhmm ?? (tz ? wallClock(a.ends_at, tz).hhmm : null) ?? format(end, 'HH:mm');
+    return `${s}–${e}`;
+  }
+  function pendingDate(iso: string): string {
+    if (tz) {
+      const d = wallClock(iso, tz).date;
+      if (d) return format(clinicDateAtNoon(d), 'PPP', { locale });
+    }
+    return format(new Date(iso), 'PPP', { locale });
+  }
 
   return (
     <div className="space-y-6" data-testid="day-agenda">
@@ -234,7 +289,7 @@ export function AppointmentList({
                     role={tapAttend ? 'button' : undefined}
                     tabIndex={tapAttend ? 0 : undefined}
                     data-testid="appt-list-row"
-                    aria-label={`${a.patient_name}, ${format(start, 'HH:mm')}, ${statusLabel(a.status)}`}
+                    aria-label={`${a.patient_name}, ${hhmm(a, start)}, ${statusLabel(a.status)}`}
                     onClick={
                       tapAttend ? () => onAttend!(a) : () => onOpenAppt(a)
                     }
@@ -255,12 +310,12 @@ export function AppointmentList({
                           {a.patient_name}
                         </span>
                         <span className="shrink-0 text-base font-semibold tabular-nums">
-                          {format(start, 'HH:mm')}
+                          {hhmm(a, start)}
                         </span>
                       </span>
                       <span className="mt-0.5 flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-                          {format(start, 'EEE d MMM', { locale })}
+                          {dayShort(a, start)}
                           {a.reason ? ` · ${a.reason}` : null}
                         </span>
                         <ReprogramBadge count={a.reprogram_count} />
@@ -317,10 +372,10 @@ export function AppointmentList({
                     onClick={() => onOpenAppt(a)}
                   >
                     <TableCell className="whitespace-nowrap">
-                      {format(start, 'PPP', { locale })}
+                      {datePPP(a, start)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {format(start, 'HH:mm')}–{format(end, 'HH:mm')}
+                      {timeRange(a, start, end)}
                     </TableCell>
                     <TableCell>{a.patient_name}</TableCell>
                     <ContactCell
@@ -404,7 +459,7 @@ export function AppointmentList({
                     onClick={() => onCopyLink(l.token)}
                   >
                     <TableCell className="whitespace-nowrap">
-                      {format(new Date(l.created_at), 'PPP', { locale })}
+                      {pendingDate(l.created_at)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {l.slot_minutes} min

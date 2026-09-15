@@ -52,11 +52,14 @@ export function BottomNav({
   currentUserId,
   dentists,
   clinicDefaultDuration,
+  clinicTz,
 }: {
   role: Role;
   currentUserId?: string;
   dentists?: { id: string; name: string; slot_minutes?: number | null }[] | null;
   clinicDefaultDuration?: number;
+  /** Clinic IANA timezone for dialog date displays. */
+  clinicTz?: string;
 }) {
   const t = useTranslations('nav');
   const tc = useTranslations('common');
@@ -196,6 +199,7 @@ export function BottomNav({
           currentUserId={currentUserId}
           viewerRole={role}
           clinicDefaultDuration={clinicDefaultDuration}
+          clinicTz={clinicTz}
         />
       ) : null}
     </>

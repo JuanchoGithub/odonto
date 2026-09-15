@@ -5,9 +5,12 @@ import type { AppLocale } from '@/lib/schemas/common';
 export async function PatientOdontogram({
   patientId,
   locale,
+  timeZone,
 }: {
   patientId: string;
   locale: AppLocale;
+  /** Clinic IANA timezone for history `created_at` display. */
+  timeZone?: string;
 }) {
   const [teeth, mode, history] = await Promise.all([
     getOdontogram(patientId),
@@ -21,6 +24,7 @@ export async function PatientOdontogram({
       locale={locale}
       mode={mode}
       history={history}
+      timeZone={timeZone}
     />
   );
 }

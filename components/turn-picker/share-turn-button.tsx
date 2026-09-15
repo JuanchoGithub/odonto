@@ -14,6 +14,7 @@ export function ShareTurnButton({
   currentUserId,
   role,
   clinicDefaultDuration,
+  clinicTz,
 }: {
   patientId: string;
   patientName?: string;
@@ -23,6 +24,8 @@ export function ShareTurnButton({
   role: Role;
   /** Clinic fallback for `slot_minutes` when the selected dentist has none. */
   clinicDefaultDuration?: number;
+  /** Clinic IANA timezone for link `created_at` display. */
+  clinicTz?: string;
 }) {
   const t = useTranslations('turnPicker');
   const [open, setOpen] = useState(false);
@@ -50,6 +53,7 @@ export function ShareTurnButton({
         currentUserId={currentUserId}
         viewerRole={role}
         clinicDefaultDuration={clinicDefaultDuration}
+        clinicTz={clinicTz}
       />
     </>
   );

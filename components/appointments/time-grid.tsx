@@ -3,7 +3,38 @@ import { useMemo, useRef, useState } from 'react';
 import { format, isToday, type Locale } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { dentistColor } from '@/lib/colors';
+import { wallClock, hhmmToMinutes } from '@/lib/store/time';
 import type { ApptRow } from '@/server/actions/appointments';
+
+/**
+ * Rows decorated with clinic wall-clock (`withClinicClock`) carry
+ * `start_hhmm/end_hhmm`. The grid MUST position and label blocks from those
+ * (or the clinic TZ), never from browser-local `getHours()` — otherwise the
+ * same turn sits at 20:15 for a traveler and 17:15 at the clinic.
+ */
+export type ClockedAppt = ApptRow & {
+  start_hhmm?: string;
+  end_hhmm?: string;
+  clinic_date?: string;
+};
+
+/** Clinic-local minutes since midnight for grid positioning. */
+function startMinutes(a: ClockedAppt, isoMs: number, tz?: string): number {
+  if (a.start_hhmm) return hhmmToMinutes(a.start_hhmm);
+  if (tz) return wallClock(new Date(isoMs).toISOString(), tz).minutes;
+  return minutesOfDay(new Date(isoMs));
+}
+
+/** Clinic-local `HH:MM` label. */
+function hhmmLabel(a: ClockedAppt, isoMs: number, which: 'start' | 'end', tz?: string): string {
+  const v = which === 'start' ? a.start_hhmm : a.end_hhmm;
+  if (v) return v;
+  if (tz) {
+    const w = wallClock(new Date(isoMs).toISOString(), tz);
+    if (w.hhmm) return w.hhmm;
+  }
+  return format(new Date(isoMs), 'HH:mm');
+}
 
 export const SLOT_MINUTES = 15;
 export const SLOT_PX = 14;
@@ -18,10 +49,10 @@ function minutesOfDay(d: Date) {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-type LaidBlock = { appt: ApptRow; col: number; cols: number };
+type LaidBlock = { appt: ClockedAppt; col: number; cols: number };
 
 // Side-by-side columns for overlapping appointments within a day.
-function layoutDay(dayAppts: ApptRow[]): LaidBlock[] {
+function layoutDay(dayAppts: ClockedAppt[]): LaidBlock[] {
   const events = dayAppts
     .map((a) => ({
       a,
@@ -92,6 +123,7 @@ export function TimeGrid({
   days,
   appts,
   locale,
+  tz,
   windowsByDate,
   onSlotClick,
   onRangeSelect,
@@ -99,14 +131,16 @@ export function TimeGrid({
   onMoveAppt,
 }: {
   days: Date[];
-  appts: ApptRow[];
+  appts: ClockedAppt[];
   locale: Locale;
+  /** Clinic IANA timezone for block positioning/labels (falls back to browser). */
+  tz?: string;
   /** Working windows per date (yyyy-MM-dd). Missing/undefined = no shading info. */
   windowsByDate: Record<string, WorkingWindow[]> | null;
   onSlotClick: (d: Date) => void;
   onRangeSelect: (day: Date, startMin: number, endMin: number) => void;
-  onOpenAppt: (a: ApptRow) => void;
-  onMoveAppt: (a: ApptRow, start: Date, end: Date) => void;
+  onOpenAppt: (a: ClockedAppt) => void;
+  onMoveAppt: (a: ClockedAppt, start: Date, end: Date) => void;
 }) {
   const hourLines = Array.from(
     { length: TOTAL_MIN / SLOT_MINUTES },
@@ -158,6 +192,7 @@ export function TimeGrid({
             day={d}
             dayIndex={dayIndex}
             dayCount={days.length}
+            tz={tz}
             appts={appts.filter(
               (a) =>
                 new Date(a.starts_at).toDateString() === d.toDateString(),
@@ -179,6 +214,7 @@ function DayColumn({
   day,
   dayIndex,
   dayCount,
+  tz,
   appts,
   lines,
   windows,
@@ -190,14 +226,15 @@ function DayColumn({
   day: Date;
   dayIndex: number;
   dayCount: number;
-  appts: ApptRow[];
+  tz?: string;
+  appts: ClockedAppt[];
   lines: number[];
   /** Working windows for this date; null = no shading info. */
   windows: WorkingWindow[] | null;
   onSlotClick: (d: Date) => void;
   onRangeSelect: (day: Date, startMin: number, endMin: number) => void;
-  onOpenAppt: (a: ApptRow) => void;
-  onMoveAppt: (a: ApptRow, start: Date, end: Date) => void;
+  onOpenAppt: (a: ClockedAppt) => void;
+  onMoveAppt: (a: ClockedAppt, start: Date, end: Date) => void;
 }) {
   const laid = layoutDay(appts);
   const colRef = useRef<HTMLDivElement>(null);
@@ -342,6 +379,7 @@ function DayColumn({
           block={b}
           dayIndex={dayIndex}
           dayCount={dayCount}
+          tz={tz}
           onOpen={onOpenAppt}
           onCommit={onMoveAppt}
         />
@@ -358,14 +396,16 @@ function ApptBlock({
   block,
   dayIndex,
   dayCount,
+  tz,
   onOpen,
   onCommit,
 }: {
   block: LaidBlock;
   dayIndex: number;
   dayCount: number;
-  onOpen: (a: ApptRow) => void;
-  onCommit: (a: ApptRow, start: Date, end: Date) => void;
+  tz?: string;
+  onOpen: (a: ClockedAppt) => void;
+  onCommit: (a: ClockedAppt, start: Date, end: Date) => void;
 }) {
   const { appt, col, cols } = block;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -403,7 +443,12 @@ function ApptBlock({
     dispEnd = origStart + preview.durMin * 60000;
   }
 
-  const startMin = minutesOfDay(new Date(dispStart));
+  const startMin =
+    dispStart === origStart
+      ? startMinutes(appt, origStart, tz)
+      : tz
+        ? wallClock(new Date(dispStart).toISOString(), tz).minutes
+        : minutesOfDay(new Date(dispStart));
   const durMin = Math.max(
     SLOT_MINUTES,
     Math.round((dispEnd - dispStart) / 60000),
@@ -421,6 +466,18 @@ function ApptBlock({
   const inactive =
     appt.status === 'cancelled' || appt.status === 'no_show';
   const done = appt.status === 'completed';
+
+  // While dragging, labels track the preview position (instant math);
+  // at rest they show the clinic wall-clock fields.
+  function instantHhmm(ms: number): string {
+    if (tz) {
+      const w = wallClock(new Date(ms).toISOString(), tz);
+      if (w.hhmm) return w.hhmm;
+    }
+    return format(new Date(ms), 'HH:mm');
+  }
+  const startLabel = preview ? instantHhmm(dispStart) : hhmmLabel(appt, dispStart, 'start', tz);
+  const endLabel = preview ? instantHhmm(dispEnd) : hhmmLabel(appt, dispEnd, 'end', tz);
 
   function onPointerDown(e: React.PointerEvent, mode: 'move' | 'resize') {
     // Touch devices: tap opens the dialog; drag/resize need pixel precision
@@ -456,7 +513,7 @@ function ApptBlock({
         dayCount - 1 - dayIndex,
       );
       // Clamp the drop inside the visible time window.
-      const startMin0 = minutesOfDay(new Date(d.origStart));
+      const startMin0 = startMinutes(appt, d.origStart, tz);
       const durMin = Math.max(
         SLOT_MINUTES,
         Math.round((d.origEnd - d.origStart) / 60000),
@@ -476,7 +533,7 @@ function ApptBlock({
         SLOT_MINUTES,
         Math.round((d.origEnd - d.origStart) / 60000),
       );
-      const startMin0 = minutesOfDay(new Date(d.origStart));
+      const startMin0 = startMinutes(appt, d.origStart, tz);
       const maxDur = DAY_END_MIN - startMin0;
       d.lastResizeDurMin = Math.min(
         Math.max(origDurMin + deltaMin, SLOT_MINUTES),
@@ -526,7 +583,7 @@ function ApptBlock({
       data-testid="appt-badge"
       role="button"
       tabIndex={0}
-      aria-label={`${format(new Date(dispStart), 'HH:mm')} ${appt.patient_name}`}
+      aria-label={`${startLabel} ${appt.patient_name}`}
       className={cn(
         'absolute rounded-[4px] border text-white overflow-hidden select-none',
         coarse ? 'touch-pan-y cursor-pointer' : 'touch-none cursor-grab active:cursor-grabbing',
@@ -571,8 +628,7 @@ function ApptBlock({
     >
       <div className="px-1 py-0.5 leading-tight text-[11px]">
         <div className={cn('font-semibold', inactive && 'line-through')}>
-          {format(new Date(dispStart), 'HH:mm')}–
-          {format(new Date(dispEnd), 'HH:mm')}
+          {startLabel}–{endLabel}
           {(appt.reprogram_count ?? 0) > 0 ? (
             <span
               className="ml-1 font-normal opacity-80"

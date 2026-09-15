@@ -19,9 +19,12 @@ import type { AppLocale } from '@/lib/schemas/common';
 export function PatientAttachments({
   patientId,
   locale,
+  timeZone,
 }: {
   patientId: string;
   locale?: AppLocale;
+  /** Clinic IANA timezone for `uploaded_at` display. */
+  timeZone?: string;
 }) {
   const t = useTranslations('attachments');
   const tCommon = useTranslations('common');
@@ -128,7 +131,7 @@ export function PatientAttachments({
                     <span className="rounded bg-muted px-2 py-0.5 text-xs">
                       {t(`kinds.${a.kind}` as any)}
                     </span>
-                    <span>{formatDateTime(a.uploaded_at, (locale ?? 'es') as AppLocale)}</span>
+                    <span>{formatDateTime(a.uploaded_at, (locale ?? 'es') as AppLocale, timeZone)}</span>
                   </span>
                 </span>
                 <a

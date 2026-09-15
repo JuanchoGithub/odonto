@@ -46,10 +46,20 @@ import { useRouter } from '@/lib/navigation';
 import { useWhatsapp } from '@/components/whatsapp-provider';
 import { openTurnPickerWhatsapp } from '@/lib/turn-picker-whatsapp';
 import type { Role } from '@/lib/schemas/common';
+import { wallClock, clinicDateAtNoon } from '@/lib/store/time';
 
 export type CreatedVia = 'manual' | 'click' | 'drag';
 
 const DURATIONS = [15, 30, 45, 60, 90, 120];
+
+/** Clinic-local link creation date; browser-local when no tz (legacy). */
+function linkCreatedLabel(iso: string, tz?: string): string {
+  if (tz) {
+    const d = wallClock(iso, tz).date;
+    if (d) return clinicDateAtNoon(d).toLocaleDateString();
+  }
+  return new Date(iso).toLocaleDateString();
+}
 
 function defaultDurFor(
   dentists: { id: string; slot_minutes?: number | null }[],
@@ -97,6 +107,7 @@ export function AddAppointmentDialog({
   currentUserId,
   viewerRole,
   clinicDefaultDuration,
+  clinicTz,
 }: {
   open: boolean;
   onOpenChange: (b: boolean) => void;
@@ -114,6 +125,8 @@ export function AddAppointmentDialog({
   viewerRole?: Role;
   /** Clinic fallback default duration (used when no dentist is selected yet). */
   clinicDefaultDuration?: number;
+  /** Clinic IANA timezone for link `created_at` display (else browser-local). */
+  clinicTz?: string;
 }) {
   const t = useTranslations('appointments');
   const tCommon = useTranslations('common');
@@ -713,7 +726,7 @@ export function AddAppointmentDialog({
                       <Link2 className="h-3 w-3" />
                       <span className="truncate">
                         {l.dentist_name} · {l.slot_minutes} min ·{' '}
-                        {new Date(l.created_at).toLocaleDateString()}
+                        {linkCreatedLabel(l.created_at, clinicTz)}
                       </span>
                     </li>
                   ))}
