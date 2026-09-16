@@ -420,25 +420,29 @@ export function AppointmentList({
             {pending.map((l) => (
               <li
                 key={l.id}
-                className="flex min-h-[64px] w-full items-center gap-2 rounded-xl border border-dashed bg-card p-2.5 active:bg-accent"
+                data-testid="pending-link-row"
+                className="flex min-h-[64px] w-full flex-col gap-1 rounded-xl border border-dashed bg-card p-2.5 active:bg-accent"
               >
-                <button
-                  type="button"
-                  data-testid="pending-link-row"
-                  onClick={() => onCopyLink(l.token)}
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-0.5 text-left"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-semibold">
-                      {l.patient_name}
+                <div className="flex w-full items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onCopyLink(l.token)}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-0.5 text-left"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-base font-semibold">
+                        {l.patient_name}
+                      </span>
+                      <span className="block text-sm text-muted-foreground">
+                        {l.slot_minutes} min · {l.dentist_name}
+                      </span>
                     </span>
-                    <span className="block text-sm text-muted-foreground">
-                      {l.slot_minutes} min · {l.dentist_name}
-                    </span>
-                  </span>
-                </button>
-                <Badge variant="warning" className="shrink-0">{labels.pending}</Badge>
-                <PendingLinkActions l={l} onChanged={onChanged} />
+                  </button>
+                  <PendingLinkActions l={l} onChanged={onChanged} />
+                </div>
+                <div className="flex w-full justify-end">
+                  <Badge variant="warning" className="shrink-0">{labels.pending}</Badge>
+                </div>
               </li>
             ))}
           </ul>
