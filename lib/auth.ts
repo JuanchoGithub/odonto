@@ -37,8 +37,31 @@ type UserRow = {
 
 const VALID_ROLES: Role[] = ['admin', 'dentist', 'receptionist'];
 
+// Near-unlimited login: 1-year sliding JWT session. Active daily use re-issues
+// the token/cookie (see updateAge), so staff effectively stay logged in; only
+// a full year of idleness forces a re-login. Tunable without a code push via
+// SESSION_MAX_AGE_SEC / SESSION_UPDATE_AGE_SEC (seconds). Previously 12h/1h,
+// which forced a login almost every morning.
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const n = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+const SESSION_MAX_AGE_SEC = parsePositiveInt(
+  process.env.SESSION_MAX_AGE_SEC,
+  365 * 24 * 60 * 60,
+);
+const SESSION_UPDATE_AGE_SEC = parsePositiveInt(
+  process.env.SESSION_UPDATE_AGE_SEC,
+  24 * 60 * 60,
+);
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  session: { strategy: 'jwt', maxAge: 12 * 60 * 60, updateAge: 60 * 60 },
+  session: {
+    strategy: 'jwt',
+    maxAge: SESSION_MAX_AGE_SEC,
+    updateAge: SESSION_UPDATE_AGE_SEC,
+  },
   pages: { signIn: '/login' },
   trustHost: true,
   providers: [
