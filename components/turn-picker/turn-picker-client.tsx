@@ -275,7 +275,7 @@ export function TurnPickerClient({
               <CardHeader>
                 <CardTitle className="text-base">{t.pickDay}</CardTitle>
               </CardHeader>
-              <CardContent className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+              <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {days.map((d) => (
                   <Button
                     key={d}
@@ -284,7 +284,7 @@ export function TurnPickerClient({
                       setSelectedDate(d);
                       setSelectedSlot(null);
                     }}
-                    className="min-h-[52px] shrink-0 px-4 text-base"
+                    className="min-h-[52px] text-base"
                   >
                     {dayLabel(d, locale)}
                   </Button>
