@@ -41,6 +41,7 @@ export default async function PickTurnPage({
             expiresAt={info.expiresAt}
             locale={locale}
             clinicTz={info.timezone}
+            manualUntil={info.agendaOpenUntil}
             purpose={info.purpose}
             oldStartsAt={info.oldStartsAt}
             oldEndsAt={info.oldEndsAt}

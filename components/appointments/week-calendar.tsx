@@ -36,7 +36,7 @@ import { useWeekWindows, useSchedulesSnapshot } from '@/lib/store/schedules';
 import { weekSlice, withClinicClock } from '@/lib/store/projections';
 import { wallClock } from '@/lib/store/time';
 
-export type DentistRef = { id: string; name: string; color: string | null; slot_minutes?: number | null };
+export type DentistRef = { id: string; name: string; color: string | null; slot_minutes?: number | null; agenda_open_until?: string | null };
 
 export function WeekCalendar({
   initial,

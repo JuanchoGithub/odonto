@@ -65,23 +65,23 @@ export default async function LocaleLayout({
   // single-entry list (picker hidden in the dialog); receptionists get the
   // full dentist list. Admins keep the legacy /patients/new shortcut, so
   // no extra query for them.
-  type DentistOpt = { id: string; name: string; slot_minutes: number | null };
+  type DentistOpt = { id: string; name: string; slot_minutes: number | null; agenda_open_until?: string | null };
   let addTurnDentists: DentistOpt[] | null = null;
   let clinicDefaultDuration: number | undefined;
   if (session?.user && session.user.role !== 'admin') {
     if (session.user.role === 'dentist') {
-      const me = await queryOne<{ name: string; slot_minutes: number | null }>(
-        'SELECT name, slot_minutes FROM users WHERE id = ?',
+      const me = await queryOne<{ name: string; slot_minutes: number | null; agenda_open_until: string | null }>(
+        'SELECT name, slot_minutes, agenda_open_until FROM users WHERE id = ?',
         [session.user.id],
       );
       addTurnDentists = me
-        ? [{ id: session.user.id, name: me.name, slot_minutes: me.slot_minutes }]
+        ? [{ id: session.user.id, name: me.name, slot_minutes: me.slot_minutes, agenda_open_until: me.agenda_open_until }]
         : [];
       clinicDefaultDuration = me?.slot_minutes ?? undefined;
     } else {
       const [dentists, clinicDefault] = await Promise.all([
         query<DentistOpt>(
-          "SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
+          "SELECT id, name, slot_minutes, agenda_open_until FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
         ),
         getClinicDefaultDuration(),
       ]);

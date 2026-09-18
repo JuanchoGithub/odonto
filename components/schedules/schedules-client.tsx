@@ -32,11 +32,19 @@ import {
   deleteDentistException,
   saveDefaultDuration,
   saveClinicDefaultDuration,
+  saveAgendaOpenUntil,
   type DentistScheduleRow,
   type DentistExceptionRow,
   type ClinicBusinessHoursRow,
   type ClinicExceptionRow,
 } from '@/server/actions/dentist-schedules';
+import {
+  ABSOLUTE_MAX_WINDOW_DAYS,
+  BASE_WINDOW_DAYS,
+  FAR_WINDOW_DAYS,
+  addDays,
+  diffDays,
+} from '@/lib/agenda-horizon';
 
 const ALLOWED_DURATIONS = [15, 30, 45, 60, 90, 120] as const;
 
@@ -125,6 +133,7 @@ export function SchedulesClient({
   dentists,
   defaultDuration,
   clinicDefaultDuration,
+  agendaOpenUntil,
 }: {
   targetDentistId: string;
   isAdmin: boolean;
@@ -135,6 +144,7 @@ export function SchedulesClient({
   dentists: { id: string; name: string; slot_minutes?: number | null }[];
   defaultDuration: number;
   clinicDefaultDuration: number;
+  agendaOpenUntil?: string | null;
 }) {
   const t = useTranslations('schedules');
   const tCommon = useTranslations('common');
@@ -407,6 +417,13 @@ export function SchedulesClient({
           ) : null}
         </CardContent>
       </Card>
+
+      {/* Manual agenda opening — extends only, folds back to 14 days */}
+      <AgendaOpenCard
+        dentistId={targetDentistId}
+        dentistName={dentists.find((d) => d.id === targetDentistId)?.name}
+        initial={agendaOpenUntil ?? null}
+      />
 
       {/* Weekly schedule */}
       <Card data-testid="weekly-schedule">
@@ -760,6 +777,166 @@ export function SchedulesClient({
         </Dialog.Portal>
       </Dialog.Root>
     </div>
+  );
+}
+
+/**
+ * Manual agenda opening ("abrir agenda"). Extend-only: the date picker
+ * hides every date inside the base 14-day window (`min` = today + 15) and
+ * caps at today + 62, so a doctor can never reduce the window from here.
+ * Windows over 30 days require a triple `confirm()` before the write is
+ * sent with `confirmed: true` (the server re-checks all guardrails in
+ * clinic time). Clearing returns to the automatic rule immediately.
+ */
+function AgendaOpenCard({
+  dentistId,
+  dentistName,
+  initial,
+}: {
+  dentistId: string;
+  dentistName?: string;
+  initial: string | null;
+}) {
+  const t = useTranslations('schedules');
+  const tCommon = useTranslations('common');
+  const router = useRouter();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const browserToday = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
+  })();
+  const min = addDays(browserToday, BASE_WINDOW_DAYS + 1);
+  const max = addDays(browserToday, ABSOLUTE_MAX_WINDOW_DAYS);
+  const [value, setValue] = useState(initial ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setValue(initial ?? '');
+  }, [initial, dentistId]);
+
+  const days = value ? diffDays(browserToday, value) : 0;
+  const isFar = !!value && days > FAR_WINDOW_DAYS;
+  const tooEarly = !!value && value <= addDays(browserToday, BASE_WINDOW_DAYS);
+  const tooFar = !!value && value > max;
+
+  async function save() {
+    if (!value || saving) return;
+    setError(null);
+    if (tooEarly) {
+      setError(t('agendaTooEarly'));
+      return;
+    }
+    if (tooFar) {
+      setError(t('agendaTooFar'));
+      return;
+    }
+    // Triple confirmation for far windows (> 30 days of window).
+    if (isFar) {
+      if (!window.confirm(t('agendaOpenConfirm1', { date: value, days }))) return;
+      if (!window.confirm(t('agendaOpenConfirm2'))) return;
+      if (!window.confirm(t('agendaOpenConfirm3', { date: value }))) return;
+    }
+    setSaving(true);
+    try {
+      const res = await saveAgendaOpenUntil({
+        dentist_id: dentistId,
+        date: value,
+        confirmed: isFar,
+      });
+      if (!res.ok) {
+        setError(
+          res.error === 'too_early'
+            ? t('agendaTooEarly')
+            : res.error === 'too_far'
+              ? t('agendaTooFar')
+              : res.error === 'confirm_required'
+                ? t('agendaConfirmRequired')
+                : res.error,
+        );
+        return;
+      }
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clear() {
+    if (saving) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await saveAgendaOpenUntil({ dentist_id: dentistId, date: null });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setValue('');
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card data-testid="agenda-open">
+      <CardHeader>
+        <CardTitle className="text-base">{t('agendaOpen')}</CardTitle>
+        <CardDescription>
+          {t('agendaOpenDesc')}
+          {dentistName ? ` · ${dentistName}` : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {initial ? (
+          <p className="text-sm text-muted-foreground" data-testid="agenda-open-current">
+            {t('agendaOpenLabel')}: {initial}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('agendaOpenNone')}</p>
+        )}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="agenda-open-date">{t('agendaOpenLabel')}</Label>
+            <Input
+              id="agenda-open-date"
+              type="date"
+              className="w-44"
+              value={value}
+              min={min}
+              max={max}
+              onChange={(e) => setValue(e.target.value)}
+              data-testid="agenda-open-date"
+            />
+          </div>
+          <Button
+            onClick={save}
+            disabled={saving || !value || value === (initial ?? '')}
+            data-testid="agenda-open-save"
+          >
+            {saving ? tCommon('loading') : tCommon('save')}
+          </Button>
+          {initial ? (
+            <Button
+              variant="ghost"
+              onClick={clear}
+              disabled={saving}
+              data-testid="agenda-open-clear"
+            >
+              {t('agendaOpenClear')}
+            </Button>
+          ) : null}
+        </div>
+        <p className="text-xs text-muted-foreground">{t('agendaOpenHint')}</p>
+        {isFar ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="agenda-open-far-warning">
+            {t('agendaOpenFarWarning')}
+          </p>
+        ) : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      </CardContent>
+    </Card>
   );
 }
 

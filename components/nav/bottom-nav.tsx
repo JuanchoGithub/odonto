@@ -56,7 +56,7 @@ export function BottomNav({
 }: {
   role: Role;
   currentUserId?: string;
-  dentists?: { id: string; name: string; slot_minutes?: number | null }[] | null;
+  dentists?: { id: string; name: string; slot_minutes?: number | null; agenda_open_until?: string | null }[] | null;
   clinicDefaultDuration?: number;
   /** Clinic IANA timezone for dialog date displays. */
   clinicTz?: string;

@@ -214,6 +214,8 @@ export type PublicLinkInfo = {
   slotMinutes: number;
   expiresAt: string; // effective expiry ISO
   timezone: string;
+  /** Per-dentist manual agenda anchor (clinic-local YYYY-MM-DD, null = none). */
+  agendaOpenUntil: string | null;
   purpose: 'create' | 'reprogram';
   /** Original turn (reprogram links only): clinic wall-clock is resolved client-side. */
   oldStartsAt?: string;
@@ -238,9 +240,10 @@ export async function getPublicLinkInfo(token: string): Promise<PublicLinkInfo> 
       'SELECT first_name, last_name FROM patients WHERE id = ?',
       [link.patient_id],
     ),
-    queryOne<{ name: string }>('SELECT name FROM users WHERE id = ?', [
-      link.dentist_id,
-    ]),
+    queryOne<{ name: string; agenda_open_until: string | null }>(
+      'SELECT name, agenda_open_until FROM users WHERE id = ?',
+      [link.dentist_id],
+    ),
     getClinicTimezone(),
   ]);
   if (link.purpose === 'reprogram' && link.appointment_id) {
@@ -258,6 +261,7 @@ export async function getPublicLinkInfo(token: string): Promise<PublicLinkInfo> 
       slotMinutes: exactMin,
       expiresAt: new Date(effectiveExpiryMs(link)).toISOString(),
       timezone: tz,
+      agendaOpenUntil: d?.agenda_open_until ?? null,
       purpose: 'reprogram',
       oldStartsAt: appt.starts_at,
       oldEndsAt: appt.ends_at,
@@ -270,6 +274,7 @@ export async function getPublicLinkInfo(token: string): Promise<PublicLinkInfo> 
     slotMinutes: link.slot_minutes,
     expiresAt: new Date(effectiveExpiryMs(link)).toISOString(),
     timezone: tz,
+    agendaOpenUntil: d?.agenda_open_until ?? null,
     purpose: link.purpose ?? 'create',
   };
 }
@@ -285,9 +290,11 @@ export async function getAvailability(
   );
   if (!link) return { ok: false };
   if (linkStatus(link) !== 'active') return { ok: false };
-  // Bound the range: at most 31 days to avoid unbounded scans.
+  // Bound the range: at most 62 days to avoid unbounded scans. The client
+  // drives the agenda horizon (14-day base, automatic month-end anchor,
+  // manual per-dentist opening) — the server just caps the scan.
   const days = daysBetweenLen(fromDate, toDate);
-  if (days > 31) return { ok: false };
+  if (days > 62) return { ok: false };
   const slots = await getSlots(link.dentist_id, fromDate, toDate, link.slot_minutes);
   const nowIsoStr = new Date().toISOString();
   return {

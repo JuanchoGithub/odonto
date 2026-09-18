@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CalendarCheck, Clock, Loader2 } from 'lucide-react';
 import { wallClock } from '@/lib/store/time';
+import { agendaEndDate } from '@/lib/agenda-horizon';
 
 type Slot = { start: string; end: string; date: string };
 
@@ -17,6 +18,8 @@ type Props = {
   locale: 'es' | 'en';
   /** Clinic IANA timezone — slot times render in clinic wall-clock. */
   clinicTz?: string;
+  /** Per-dentist manual agenda anchor (clinic-local YYYY-MM-DD, null = none). */
+  manualUntil?: string | null;
   /** 'reprogram' moves the existing turn (dentist + duration locked). */
   purpose?: 'create' | 'reprogram';
   oldStartsAt?: string;
@@ -121,6 +124,7 @@ export function TurnPickerClient({
   expiresAt,
   locale,
   clinicTz,
+  manualUntil,
   purpose,
   oldStartsAt,
 }: Props) {
@@ -134,19 +138,25 @@ export function TurnPickerClient({
   >('idle');
   const [bookedLabel, setBookedLabel] = useState('');
 
+  // Agenda horizon: 14-day base, automatic month-end anchor once past
+  // the 15th, manual per-dentist opening — resolved on clinic-local today
+  // so the window matches the server's wall-clock (never browser TZ).
+  function range(): { from: string; to: string } {
+    const nowIso = new Date().toISOString();
+    const from = clinicTz ? wallClock(nowIso, clinicTz).date || nowIso.slice(0, 10) : nowIso.slice(0, 10);
+    return { from, to: agendaEndDate(from, manualUntil) };
+  }
+
   useEffect(() => {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const from = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    const endD = new Date(now.getTime() + 14 * 86400_000);
-    const to = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+    const { from, to } = range();
     fetch(
       `/api/turn-picker/${encodeURIComponent(token)}/availability?from=${from}&to=${to}`,
     )
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('fetch'))))
       .then((data) => setSlots(data.slots ?? []))
       .catch(() => setSlots([]));
-  }, [token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, clinicTz, manualUntil]);
 
   const days = useMemo(() => {
     if (!slots) return [];
@@ -191,11 +201,7 @@ export function TurnPickerClient({
         // Refresh availability to hide the taken slot.
         setSlots(null);
         setSelectedSlot(null);
-        const now = new Date();
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const from = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-        const endD = new Date(now.getTime() + 14 * 86400_000);
-        const to = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+        const { from, to } = range();
         const rr = await fetch(
           `/api/turn-picker/${encodeURIComponent(token)}/availability?from=${from}&to=${to}`,
         );

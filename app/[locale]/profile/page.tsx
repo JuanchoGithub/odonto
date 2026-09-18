@@ -80,6 +80,7 @@ export default async function ProfileRoute({
               dentists={schedule.dentists}
               defaultDuration={schedule.defaultDuration}
               clinicDefaultDuration={schedule.clinicDefaultDuration}
+              agendaOpenUntil={schedule.agendaOpenUntil}
             />
           ) : null
         }

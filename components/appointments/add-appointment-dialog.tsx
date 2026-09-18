@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { format } from 'date-fns';
+import { agendaEndDate } from '@/lib/agenda-horizon';
 import { createAppointment } from '@/server/actions/appointments';
 import {
   createTurnPickerLink,
@@ -118,7 +119,7 @@ export function AddAppointmentDialog({
   startExpanded?: boolean;
   /** How the user started this creation flow; recorded on the appointment. */
   createdVia?: CreatedVia;
-  dentists: { id: string; name: string; slot_minutes?: number | null }[];
+  dentists: { id: string; name: string; slot_minutes?: number | null; agenda_open_until?: string | null }[];
   onCreated?: () => void;
   /** When viewer is a dentist, dentist_id is locked to this (field hidden). */
   currentUserId?: string;
@@ -238,6 +239,20 @@ export function AddAppointmentDialog({
     if (touchedDur) return;
     setDurVal(String(defaultDurFor(dentists, dentistId, clinicDefault)));
   }, [dentistId, dentists, clinicDefault, touchedDur]);
+
+  // Advisory picker max for the selected dentist's agenda horizon (base
+  // 14-day + automatic month-end anchor + manual opening). Staff writes
+  // are NOT blocked — far-future recalls stay bookable; this only guides
+  // the date picker toward bookable days for turn links.
+  const agendaMax = useMemo(() => {
+    const nowIso = new Date().toISOString();
+    const today = clinicTz
+      ? wallClock(nowIso, clinicTz).date || nowIso.slice(0, 10)
+      : nowIso.slice(0, 10);
+    const manual =
+      dentists.find((d) => d.id === dentistId)?.agenda_open_until ?? null;
+    return agendaEndDate(today, manual);
+  }, [dentistId, dentists, clinicTz]);
 
   // Active links for the currently-selected patient.
   useEffect(() => {
@@ -594,6 +609,7 @@ export function AddAppointmentDialog({
                       name="appt_date"
                       type="date"
                       value={dateVal}
+                      max={agendaMax}
                       onChange={(e) => setDateVal(e.target.value)}
                       required
                     />

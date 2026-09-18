@@ -27,8 +27,8 @@ export default async function DashboardPage({
 
   const dentistRow =
     user.role === 'dentist'
-      ? await queryOne<{ slot_minutes: number | null }>(
-          'SELECT slot_minutes FROM users WHERE id = ?',
+      ? await queryOne<{ slot_minutes: number | null; agenda_open_until: string | null }>(
+          'SELECT slot_minutes, agenda_open_until FROM users WHERE id = ?',
           [user.id],
         )
       : null;
@@ -48,13 +48,14 @@ export default async function DashboardPage({
             id: user.id,
             name: user.name ?? '',
             slot_minutes: dentistRow?.slot_minutes ?? null,
+            agenda_open_until: dentistRow?.agenda_open_until ?? null,
           }}
           clinicTz={clinicTz}
         />
       ) : user.role === 'receptionist' ? (
         <SecretaryPanel
-          dentists={await query<{ id: string; name: string; slot_minutes: number | null }>(
-            "SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
+          dentists={await query<{ id: string; name: string; slot_minutes: number | null; agenda_open_until: string | null }>(
+            "SELECT id, name, slot_minutes, agenda_open_until FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
           )}
           currency={clinic.currency}
           locale={clinic.locale}

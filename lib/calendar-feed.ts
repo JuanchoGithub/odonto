@@ -20,11 +20,29 @@ export type FeedEvent = {
   dentist_name: string;
 };
 
-/** Rolling 6-week window bounds as ISO strings. */
-export function feedWindow(nowMs = Date.now()): { from: string; to: string } {
+/**
+ * Rolling window bounds as ISO strings. The back leg is fixed at 28 days;
+ * the forward leg is the agenda horizon (14-day base, automatic month-end
+ * anchor, manual per-dentist opening) — pass the inclusive clinic-local
+ * `YYYY-MM-DD` agenda end to extend it, or omit it for the legacy 14 days.
+ */
+export function feedWindow(
+  nowMs = Date.now(),
+  agendaEndDateStr?: string | null,
+): { from: string; to: string } {
+  const defaultTo = new Date(nowMs + 14 * 86400_000).toISOString();
+  let to = defaultTo;
+  if (agendaEndDateStr && /^\d{4}-\d{2}-\d{2}$/.test(agendaEndDateStr)) {
+    const [y, m, d] = agendaEndDateStr.split('-').map(Number);
+    if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) {
+      // End of the agenda-end day (UTC day boundary; day-granular window).
+      const endOfDay = new Date(Date.UTC(y, m - 1, d) + 86400_000).toISOString();
+      if (endOfDay > to) to = endOfDay;
+    }
+  }
   return {
     from: new Date(nowMs - 28 * 86400_000).toISOString(),
-    to: new Date(nowMs + 14 * 86400_000).toISOString(),
+    to,
   };
 }
 

@@ -6,6 +6,14 @@ import { query, queryOne } from '@/lib/db';
 import { requireUser, requireRole } from '@/lib/rbac';
 import { uid, nowIso } from '@/lib/utils';
 import { isWithinWorkingHours, getClinicTimezone, wallClockInTz } from '@/lib/availability';
+import {
+  ABSOLUTE_MAX_WINDOW_DAYS,
+  BASE_WINDOW_DAYS,
+  FAR_WINDOW_DAYS,
+  addDays,
+  diffDays,
+  isValidDateStr,
+} from '@/lib/agenda-horizon';
 
 const WindowSchema = z.object({
   start_time: z.string().regex(/^\d{2}:\d{2}$/),
@@ -77,8 +85,8 @@ export async function getSchedulePageData(dentistId?: string) {
             `SELECT id, name, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name`,
           )
         : Promise.resolve([] as { id: string; name: string; slot_minutes: number | null }[]),
-      queryOne<{ slot_minutes: number | null }>(
-        `SELECT slot_minutes FROM users WHERE id = ?`,
+      queryOne<{ slot_minutes: number | null; agenda_open_until: string | null }>(
+        `SELECT slot_minutes, agenda_open_until FROM users WHERE id = ?`,
         [targetId],
       ),
       user.role === 'admin'
@@ -98,6 +106,7 @@ export async function getSchedulePageData(dentistId?: string) {
     targetId,
     defaultDuration,
     clinicDefaultDuration,
+    agendaOpenUntil: targetUser?.agenda_open_until ?? null,
   };
 }
 
@@ -545,4 +554,99 @@ export async function deleteScheduleWindow(id: string) {
   }
   await query(`DELETE FROM dentist_schedules WHERE id = ?`, [id]);
   revalidatePath('/settings/schedules');
+}
+
+// ---------- Manual agenda opening ("abrir agenda") ----------
+
+const AgendaOpenSchema = z.object({
+  dentist_id: z.string().min(1),
+  /** Clinic-local YYYY-MM-DD, or null to clear back to the automatic rule. */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  /** Must be true when the resulting window exceeds FAR_WINDOW_DAYS. */
+  confirmed: z.boolean().optional().default(false),
+});
+
+export type SaveAgendaOpenResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error:
+        | 'invalid'
+        | 'forbidden'
+        | 'not_found'
+        | 'too_early'
+        | 'too_far'
+        | 'confirm_required';
+    };
+
+/**
+ * Per-dentist manual agenda extension. Same sticky semantics as the
+ * automatic month-end rule: the stored date is an anchor, and the
+ * effective horizon (`agendaEndDate`) folds back to the 14-day window
+ * once time catches up. Guardrails (also enforced client-side):
+ * - the date must extend beyond today + 14 (never a reduction / no-op);
+ * - capped at today + 62;
+ * - windows over 30 days require the explicit `confirmed` ack (the UI
+ *   triple-confirms before sending it).
+ */
+export async function saveAgendaOpenUntil(
+  payload: unknown,
+): Promise<SaveAgendaOpenResult> {
+  const user = await requireUser();
+  const parsed = AgendaOpenSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, error: 'invalid' };
+  const d = parsed.data;
+  if (user.role !== 'admin' && user.id !== d.dentist_id) {
+    return { ok: false, error: 'forbidden' };
+  }
+  const target = await queryOne<{ id: string; role: string }>(
+    'SELECT id, role FROM users WHERE id = ? AND deleted_at IS NULL AND id != \'system\'',
+    [d.dentist_id],
+  );
+  if (!target || target.role !== 'dentist') return { ok: false, error: 'not_found' };
+
+  // Clearing is always allowed.
+  if (d.date === null) {
+    await query('UPDATE users SET agenda_open_until = NULL WHERE id = ?', [
+      d.dentist_id,
+    ]);
+    await query(
+      `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+       VALUES (?, ?, 'update', 'user', ?, ?)`,
+      [uid(), user.id, d.dentist_id, JSON.stringify({ agenda_open_until: null })],
+    );
+    revalidatePath('/profile');
+    return { ok: true };
+  }
+
+  if (!isValidDateStr(d.date)) return { ok: false, error: 'invalid' };
+  const tz = await getClinicTimezone();
+  const today = wallClockInTz(nowIso(), tz).date;
+  if (d.date < today) return { ok: false, error: 'invalid' };
+  // Never a reduction: must open strictly beyond the base 14-day window.
+  if (d.date <= addDays(today, BASE_WINDOW_DAYS)) {
+    return { ok: false, error: 'too_early' };
+  }
+  if (d.date > addDays(today, ABSOLUTE_MAX_WINDOW_DAYS)) {
+    return { ok: false, error: 'too_far' };
+  }
+  if (diffDays(today, d.date) > FAR_WINDOW_DAYS && !d.confirmed) {
+    return { ok: false, error: 'confirm_required' };
+  }
+  await query('UPDATE users SET agenda_open_until = ? WHERE id = ?', [
+    d.date,
+    d.dentist_id,
+  ]);
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+     VALUES (?, ?, 'update', 'user', ?, ?)`,
+    [
+      uid(),
+      user.id,
+      d.dentist_id,
+      JSON.stringify({ agenda_open_until: d.date, confirmed_far: diffDays(today, d.date) > FAR_WINDOW_DAYS }),
+    ],
+  );
+  revalidatePath('/profile');
+  return { ok: true };
 }

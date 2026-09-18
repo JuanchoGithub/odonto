@@ -52,7 +52,7 @@ export function SecretaryPanel({
   clinicDefaultDuration,
   clinicTz,
 }: {
-  dentists: { id: string; name: string; slot_minutes?: number | null }[];
+  dentists: { id: string; name: string; slot_minutes?: number | null; agenda_open_until?: string | null }[];
   currency: string;
   locale: string;
   clinicDefaultDuration?: number;

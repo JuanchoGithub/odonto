@@ -24,8 +24,8 @@ export default async function AppointmentsPage({
     : startOfWeek(new Date(), { weekStartsOn: 1 });
   const [appts, dentists, pendingLinks, clinicDefault, clinicTz] = await Promise.all([
     listAppointmentsForWeek(start.toISOString()),
-    query<{ id: string; name: string; color: string | null; slot_minutes: number | null }>(
-      "SELECT id, name, color, slot_minutes FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
+    query<{ id: string; name: string; color: string | null; slot_minutes: number | null; agenda_open_until: string | null }>(
+      "SELECT id, name, color, slot_minutes, agenda_open_until FROM users WHERE role = 'dentist' AND deleted_at IS NULL AND id != 'system' ORDER BY name",
     ),
     listPendingTurnLinks(),
     getClinicDefaultDuration(),
@@ -37,7 +37,7 @@ export default async function AppointmentsPage({
       <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{t('title')}</h1>
       <WeekCalendar
         initial={appts}
-        dentists={dentists.map((d) => ({ id: d.id, name: d.name, color: d.color, slot_minutes: d.slot_minutes ?? null }))}
+        dentists={dentists.map((d) => ({ id: d.id, name: d.name, color: d.color, slot_minutes: d.slot_minutes ?? null, agenda_open_until: d.agenda_open_until ?? null }))}
         pendingLinks={pendingLinks}
         viewer={{ id: user.id, role: user.role }}
         // Date-only string: parsing a full ISO in the browser would shift

@@ -119,7 +119,7 @@ export function DoctorPanel({
   dentist,
   clinicTz,
 }: {
-  dentist: { id: string; name: string; slot_minutes?: number | null };
+  dentist: { id: string; name: string; slot_minutes?: number | null; agenda_open_until?: string | null };
   clinicTz: string;
 }) {
   const t = useTranslations('dashboard');

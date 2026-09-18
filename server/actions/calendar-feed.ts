@@ -10,6 +10,8 @@ import {
   toWebcalUrl,
   type FeedEvent,
 } from '@/lib/calendar-feed';
+import { agendaEndDate } from '@/lib/agenda-horizon';
+import { getClinicTimezone, wallClockInTz } from '@/lib/availability';
 
 /**
  * Per-dentist subscribable calendar feeds (iPhone calendar subscription).
@@ -70,7 +72,25 @@ export async function refreshDentistCalendar(dentistId: string): Promise<void> {
   try {
     const dent = await getOrCreateToken(dentistId);
     if (!dent) return;
-    const { from, to } = feedWindow();
+    // Forward leg follows the agenda horizon so manually/auto-opened turns
+    // ahead of the base 14 days still show up in the subscribed calendar.
+    let agendaEnd: string | null = null;
+    try {
+      const [tz, row] = await Promise.all([
+        getClinicTimezone(),
+        queryOne<{ agenda_open_until: string | null }>(
+          'SELECT agenda_open_until FROM users WHERE id = ?',
+          [dentistId],
+        ),
+      ]);
+      agendaEnd = agendaEndDate(
+        wallClockInTz(nowIso(), tz).date,
+        row?.agenda_open_until ?? null,
+      );
+    } catch {
+      agendaEnd = null;
+    }
+    const { from, to } = feedWindow(Date.now(), agendaEnd);
     const rows = await query<FeedEvent>(
       `SELECT a.id, a.starts_at, a.ends_at, a.status, a.reason, a.notes,
               a.reprogram_count,
