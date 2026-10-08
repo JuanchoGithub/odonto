@@ -51,6 +51,7 @@ export type SchedulesSnapshot = {
     kind: string;
     start_time: string | null;
     end_time: string | null;
+    mode?: string | null;
   }[];
   clinicExceptions: { date: string }[];
 };

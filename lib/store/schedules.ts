@@ -99,17 +99,33 @@ function resolveWindowsForDate(
   date: string,
   weekday: number,
   clinicExceptionDates: Set<string>,
-  dentistExceptions: Map<string, { kind: string; start_time: string | null; end_time: string | null }>,
+  dentistExceptions: Map<
+    string,
+    { kind: string; start_time: string | null; end_time: string | null; mode?: string | null }[]
+  >,
   schedules: Map<number, { start_time: string; end_time: string }[]> | null,
   businessHours: Map<number, { start_time: string; end_time: string }[]>,
 ): WorkingWindow[] {
   if (clinicExceptionDates.has(date)) return [];
-  const ex = dentistExceptions.get(date);
-  if (ex) {
-    if (ex.kind === 'time_off') return [];
-    if (ex.kind === 'custom_hours' && ex.start_time && ex.end_time) {
-      return [{ startMin: hhmmToMin(ex.start_time), endMin: hhmmToMin(ex.end_time) }];
-    }
+  const exs = dentistExceptions.get(date) ?? [];
+  // An absent day never silently becomes work (mirrors lib/availability.ts).
+  if (exs.some((e) => e.kind === 'time_off')) return [];
+  const customs = exs.filter((e) => e.kind === 'custom_hours' && e.start_time && e.end_time);
+  if (customs.length > 0) {
+    const customWindows = customs.map((e) => ({
+      startMin: hhmmToMin(e.start_time!),
+      endMin: hhmmToMin(e.end_time!),
+    }));
+    if (customs.some((e) => e.mode !== 'add')) return customWindows;
+    const source = schedules === null ? businessHours : schedules;
+    const rows = source.get(weekday) ?? [];
+    return [
+      ...rows.map((r) => ({
+        startMin: hhmmToMin(r.start_time),
+        endMin: hhmmToMin(r.end_time),
+      })),
+      ...customWindows,
+    ];
   }
   const source = schedules === null ? businessHours : schedules;
   const rows = source.get(weekday);
@@ -140,11 +156,15 @@ export function computeWeekWindows(
   const dates = datesBetween(startDate, endDate);
 
   const clinicExceptionDates = new Set(snap.clinicExceptions.map((r) => r.date));
-  const dentistExceptions = new Map(
-    snap.dentistExceptions
-      .filter((r) => !dentistId || r.dentist_id === dentistId)
-      .map((r) => [r.date, r] as const),
-  );
+  const dentistExceptions = new Map<
+    string,
+    { kind: string; start_time: string | null; end_time: string | null; mode?: string | null }[]
+  >();
+  for (const r of snap.dentistExceptions.filter((r) => !dentistId || r.dentist_id === dentistId)) {
+    const list = dentistExceptions.get(r.date) ?? [];
+    list.push(r);
+    dentistExceptions.set(r.date, list);
+  }
   const toDayMap = (rows: { day_of_week: number; start_time: string; end_time: string }[]) => {
     const m = new Map<number, { start_time: string; end_time: string }[]>();
     for (const r of rows) {

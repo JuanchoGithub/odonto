@@ -6,9 +6,17 @@ import { query, queryOne } from './db';
  *
  * A dentist's bookable window on a date is resolved in this order:
  *   1. clinic_exceptions row for that date            -> closed (no slots).
- *   2. dentist_exceptions row for (dentist, date):
- *        kind='time_off'     -> closed (no slots).
- *        kind='custom_hours' -> the exception's window replaces the schedule.
+ *   2. dentist_exceptions rows for (dentist, date):
+ *        any kind='time_off' -> closed (no slots). An absent day never
+ *        silently becomes work; replacing an absence happens explicitly
+ *        in addExtraDay (delete + insert + audit), never here.
+ *        kind='custom_hours' rows (one-off "días puntuales", possibly
+ *        several windows per date):
+ *          - if any row has mode != 'add' (i.e. 'replace', the default),
+ *            the weekly schedule is discarded and the windows are the
+ *            union of ALL custom rows for the date;
+ *          - if every row has mode = 'add', the custom windows are added
+ *            ON TOP OF the weekly/business windows for that weekday.
  *   3. dentist_schedules rows for the weekday (within effective range).
  *   4. Fallback: clinic_business_hours rows for the weekday.
  * If nothing matches, there are no slots that day.
@@ -107,29 +115,55 @@ function datesBetween(fromDate: string, toDate: string): string[] {
   return out;
 }
 
+/** One dentist_exceptions row. `mode` is 'replace' | 'add' (NULL = legacy 'replace'). */
+export type DentistException = {
+  kind: string;
+  start_time: string | null;
+  end_time: string | null;
+  mode: string | null;
+};
+
 /** Resolve the working windows (minutes since midnight) for one date. */
 function resolveWindowsForDate(
   date: string,
   weekday: number, // 0=Sun..6=Sat, clinic-local
   clinicExceptionDates: Set<string>,
-  dentistExceptions: Map<string, { kind: string; start_time: string | null; end_time: string | null }>,
+  dentistExceptions: Map<string, DentistException[]>,
   /** null = dentist has no schedule rows at all → fall back to business hours. */
   schedules: Map<number, { start_time: string; end_time: string }[]> | null,
   businessHours: Map<number, { start_time: string; end_time: string }[]>,
 ): { windows: WorkingWindow[]; source: 'custom_hours' | 'schedule' | 'business_hours' | null } {
   if (clinicExceptionDates.has(date)) return { windows: [], source: null };
 
-  const ex = dentistExceptions.get(date);
-  if (ex) {
-    if (ex.kind === 'time_off') return { windows: [], source: null };
-    if (ex.kind === 'custom_hours' && ex.start_time && ex.end_time) {
-      return {
-        windows: [
-          { startMin: hhmmToMin(ex.start_time), endMin: hhmmToMin(ex.end_time) },
-        ],
-        source: 'custom_hours',
-      };
+  const exs = dentistExceptions.get(date) ?? [];
+  // An absent day never silently becomes work.
+  if (exs.some((e) => e.kind === 'time_off')) return { windows: [], source: null };
+  const customs = exs.filter(
+    (e) => e.kind === 'custom_hours' && e.start_time && e.end_time,
+  );
+  if (customs.length > 0) {
+    const customWindows = customs.map((e) => ({
+      startMin: hhmmToMin(e.start_time!),
+      endMin: hhmmToMin(e.end_time!),
+    }));
+    // 'replace' discards the weekly schedule; 'add' keeps it underneath.
+    // Mixed replace+add on one date: weekly is discarded, all custom
+    // rows still contribute their explicit windows.
+    if (customs.some((e) => e.mode !== 'add')) {
+      return { windows: customWindows, source: 'custom_hours' };
     }
+    const source = schedules === null ? businessHours : schedules;
+    const rows = source.get(weekday) ?? [];
+    return {
+      windows: [
+        ...rows.map((r) => ({
+          startMin: hhmmToMin(r.start_time),
+          endMin: hhmmToMin(r.end_time),
+        })),
+        ...customWindows,
+      ],
+      source: 'custom_hours',
+    };
   }
 
   // Schedule-level fallback: only when the dentist has NO schedule rows at all.
@@ -178,12 +212,21 @@ export async function getSlots(
         kind: string;
         start_time: string | null;
         end_time: string | null;
+        mode: string | null;
       }>(
-        `SELECT date, kind, start_time, end_time FROM dentist_exceptions
+        `SELECT date, kind, start_time, end_time, mode FROM dentist_exceptions
          WHERE dentist_id = ? AND date BETWEEN ? AND ?`,
         [dentistId, fromDate, toDate],
       )
-        .then((rows) => new Map(rows.map((r) => [r.date, r]))),
+        .then((rows) => {
+          const m = new Map<string, DentistException[]>();
+          for (const r of rows) {
+            const list = m.get(r.date) ?? [];
+            list.push(r);
+            m.set(r.date, list);
+          }
+          return m;
+        }),
       query<{
         day_of_week: number;
         start_time: string;
@@ -285,17 +328,13 @@ export async function isWithinWorkingHours(
   const date = startWall.date;
   const weekday = startWall.dayOfWeek;
 
-  const [clinicEx, dentistEx, dentistHasSchedule, schedRows, bizRows] = await Promise.all([
+  const [clinicEx, dentistExs, dentistHasSchedule, schedRows, bizRows] = await Promise.all([
     queryOne<{ date: string }>(
       `SELECT date FROM clinic_exceptions WHERE date = ?`,
       [date],
     ),
-    queryOne<{
-      kind: string;
-      start_time: string | null;
-      end_time: string | null;
-    }>(
-      `SELECT kind, start_time, end_time FROM dentist_exceptions
+    query<DentistException>(
+      `SELECT kind, start_time, end_time, mode FROM dentist_exceptions
        WHERE dentist_id = ? AND date = ?`,
       [dentistId, date],
     ),
@@ -322,10 +361,23 @@ export async function isWithinWorkingHours(
   if (clinicEx) return false;
 
   let windows: { start_time: string; end_time: string }[] = [];
-  if (dentistEx) {
-    if (dentistEx.kind === 'time_off') return false;
-    if (dentistEx.kind === 'custom_hours' && dentistEx.start_time && dentistEx.end_time) {
-      windows = [{ start_time: dentistEx.start_time, end_time: dentistEx.end_time }];
+  // An absent day never silently becomes work.
+  if (dentistExs.some((e) => e.kind === 'time_off')) return false;
+  const customs = dentistExs.filter(
+    (e) => e.kind === 'custom_hours' && e.start_time && e.end_time,
+  );
+  if (customs.length > 0) {
+    windows = customs.map((e) => ({
+      start_time: e.start_time!,
+      end_time: e.end_time!,
+    }));
+    // mode='add' keeps the weekly/business windows underneath.
+    if (customs.every((e) => e.mode === 'add')) {
+      if (dentistHasSchedule && dentistHasSchedule.n > 0) {
+        windows = [...schedRows, ...windows];
+      } else {
+        windows = [...bizRows, ...windows];
+      }
     }
   } else if (dentistHasSchedule && dentistHasSchedule.n > 0) {
     // Dentist configured their own hours; no per-day fallback.
@@ -412,8 +464,9 @@ export async function getWeekWindows(
           kind: string;
           start_time: string | null;
           end_time: string | null;
+          mode: string | null;
         }>(
-          `SELECT date, kind, start_time, end_time FROM dentist_exceptions
+          `SELECT date, kind, start_time, end_time, mode FROM dentist_exceptions
            WHERE dentist_id = ? AND date BETWEEN ? AND ?`,
           [dentistId, startDate, endDate],
         )
@@ -435,11 +488,12 @@ export async function getWeekWindows(
   const clinicExceptionDates = new Set(
     (clinicExRows as { date: string }[]).map((r) => r.date),
   );
-  const dentistExceptions = new Map(
-    (exRows as { date: string; kind: string; start_time: string | null; end_time: string | null }[]).map(
-      (r) => [r.date, r],
-    ),
-  );
+  const dentistExceptions = new Map<string, DentistException[]>();
+  for (const r of exRows as ({ date: string } & DentistException)[]) {
+    const list = dentistExceptions.get(r.date) ?? [];
+    list.push(r);
+    dentistExceptions.set(r.date, list);
+  }
   const toDayMap = (
     rows: { day_of_week: number; start_time: string; end_time: string }[],
   ) => {

@@ -53,6 +53,7 @@ export type DentistExceptionRow = {
   start_time: string | null;
   end_time: string | null;
   reason: string | null;
+  mode: 'replace' | 'add' | null;
 };
 
 export async function getSchedulePageData(dentistId?: string) {
@@ -60,7 +61,7 @@ export async function getSchedulePageData(dentistId?: string) {
   // Admins see everyone; dentists see only themselves.
   const targetId =
     user.role === 'admin' && dentistId ? dentistId : user.id;
-  const [weekly, exceptions, businessHours, clinicExceptions, dentists, targetUser, clinicRow] =
+  const [weekly, exceptions, businessHours, clinicExceptions, dentists, targetUser, clinicRow, tzRow] =
     await Promise.all([
       query<DentistScheduleRow>(
         `SELECT * FROM dentist_schedules WHERE dentist_id = ? ORDER BY day_of_week, start_time`,
@@ -70,11 +71,12 @@ export async function getSchedulePageData(dentistId?: string) {
         `SELECT * FROM dentist_exceptions WHERE dentist_id = ? ORDER BY date DESC LIMIT 100`,
         [targetId],
       ),
-      user.role === 'admin'
-        ? query<ClinicBusinessHoursRow>(
-            `SELECT * FROM clinic_business_hours ORDER BY day_of_week`,
-          )
-        : Promise.resolve([] as ClinicBusinessHoursRow[]),
+      // Clinic hours are readable by dentists too: they need them to tell
+      // normally-open days (fallback) from normally-closed ones when
+      // opening a one-off day. Editing stays admin-only (save path).
+      query<ClinicBusinessHoursRow>(
+        `SELECT * FROM clinic_business_hours ORDER BY day_of_week`,
+      ),
       user.role === 'admin'
         ? query<ClinicExceptionRow>(
             `SELECT * FROM clinic_exceptions ORDER BY date DESC LIMIT 100`,
@@ -94,6 +96,9 @@ export async function getSchedulePageData(dentistId?: string) {
             `SELECT default_slot_minutes FROM clinics LIMIT 1`,
           )
         : Promise.resolve(null as { default_slot_minutes: number | null } | null),
+      queryOne<{ timezone: string | null }>(
+        `SELECT timezone FROM clinics LIMIT 1`,
+      ),
     ]);
   const clinicDefaultDuration = clinicRow?.default_slot_minutes ?? 15;
   const defaultDuration = targetUser?.slot_minutes ?? clinicDefaultDuration;
@@ -107,6 +112,7 @@ export async function getSchedulePageData(dentistId?: string) {
     defaultDuration,
     clinicDefaultDuration,
     agendaOpenUntil: targetUser?.agenda_open_until ?? null,
+    clinicTz: tzRow?.timezone ?? 'UTC',
   };
 }
 
@@ -176,22 +182,35 @@ export async function findOrphanedAppointments(
     const date = startWall.date;
 
     // Simulate: check exceptions first (unchanged), then the proposed windows.
-    const ex = await queryOne<{ kind: string; start_time: string | null; end_time: string | null }>(
-      `SELECT kind, start_time, end_time FROM dentist_exceptions
+    const exs = await query<{ kind: string; start_time: string | null; end_time: string | null; mode: string | null }>(
+      `SELECT kind, start_time, end_time, mode FROM dentist_exceptions
        WHERE dentist_id = ? AND date = ?`,
       [dentistId, date],
     );
+    const dayFallback = fallbackWindows.filter((w) => w.day_of_week === startWall.dayOfWeek);
     let windows: { start_min: number; end_min: number }[] = [];
-    if (ex) {
-      if (ex.kind === 'time_off') {
-        windows = [];
-      } else if (ex.kind === 'custom_hours' && ex.start_time && ex.end_time) {
-        const [sh, sm] = ex.start_time.split(':').map(Number);
-        const [eh, em] = ex.end_time.split(':').map(Number);
-        windows = [{ start_min: sh * 60 + sm, end_min: eh * 60 + em }];
+    // An absent day never silently becomes work.
+    if (!exs.some((e) => e.kind === 'time_off')) {
+      const customs = exs.filter(
+        (e) => e.kind === 'custom_hours' && e.start_time && e.end_time,
+      );
+      if (customs.length > 0) {
+        const toMinPair = (s: string) => {
+          const [h, m] = s.split(':').map(Number);
+          return h * 60 + (m || 0);
+        };
+        const customWindows = customs.map((e) => ({
+          start_min: toMinPair(e.start_time!),
+          end_min: toMinPair(e.end_time!),
+        }));
+        // mode='add' rows sit on top of the (proposed) weekly windows.
+        windows =
+          customs.every((e) => e.mode === 'add')
+            ? [...dayFallback, ...customWindows]
+            : customWindows;
+      } else {
+        windows = dayFallback;
       }
-    } else {
-      windows = fallbackWindows.filter((w) => w.day_of_week === startWall.dayOfWeek);
     }
 
     const sameDay = startWall.date === endWall.date;
@@ -554,6 +573,129 @@ export async function deleteScheduleWindow(id: string) {
   }
   await query(`DELETE FROM dentist_schedules WHERE id = ?`, [id]);
   revalidatePath('/settings/schedules');
+}
+
+// ---------- Extra open days ("días puntuales") ----------
+
+const ExtraDaySchema = z.object({
+  dentist_id: z.string().min(1),
+  /** Clinic-local YYYY-MM-DD. Never past, capped at today + 62 (agenda cap). */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/),
+  /** 'replace' = these rows ARE the day; 'add' = on top of weekly hours. */
+  mode: z.enum(['replace', 'add']).optional().default('replace'),
+  reason: z.string().optional().nullable(),
+  /**
+   * Explicit ack when the date already carries a time_off row. Without it
+   * the write is refused with `has_absence` so the UI can warn first —
+   * an absent day never silently becomes work.
+   */
+  replaceAbsence: z.boolean().optional().default(false),
+});
+
+export type SaveExtraDayResult =
+  | { ok: true; replacedAbsence: boolean }
+  | {
+      ok: false;
+      error:
+        | 'invalid'
+        | 'forbidden'
+        | 'not_found'
+        | 'past'
+        | 'too_far'
+        | 'has_absence'
+        | 'duplicate';
+    };
+
+/**
+ * One-off opening for a specific date + time window. Separate from the
+ * Ausencias (time_off) flow by design — this only ever writes
+ * kind='custom_hours'. Multiple windows per date are allowed (one row
+ * each); exact duplicates are rejected by the partial unique index.
+ */
+export async function addExtraDay(payload: unknown): Promise<SaveExtraDayResult> {
+  const user = await requireUser();
+  const parsed = ExtraDaySchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, error: 'invalid' };
+  const d = parsed.data;
+  if (user.role !== 'admin' && user.id !== d.dentist_id) {
+    return { ok: false, error: 'forbidden' };
+  }
+  const target = await queryOne<{ id: string; role: string }>(
+    'SELECT id, role FROM users WHERE id = ? AND deleted_at IS NULL AND id != \'system\'',
+    [d.dentist_id],
+  );
+  if (!target || target.role !== 'dentist') return { ok: false, error: 'not_found' };
+
+  if (!isValidDateStr(d.date)) return { ok: false, error: 'invalid' };
+  const toMin = (s: string) => {
+    const [h, m] = s.split(':').map(Number);
+    return h * 60 + (m || 0);
+  };
+  if (toMin(d.start_time) >= toMin(d.end_time)) return { ok: false, error: 'invalid' };
+  const tz = await getClinicTimezone();
+  const today = wallClockInTz(nowIso(), tz).date;
+  if (d.date < today) return { ok: false, error: 'past' };
+  if (d.date > addDays(today, ABSOLUTE_MAX_WINDOW_DAYS)) {
+    return { ok: false, error: 'too_far' };
+  }
+
+  const absence = await queryOne<{ id: string }>(
+    `SELECT id FROM dentist_exceptions
+      WHERE dentist_id = ? AND date = ? AND kind = 'time_off' LIMIT 1`,
+    [d.dentist_id, d.date],
+  );
+  if (absence && !d.replaceAbsence) return { ok: false, error: 'has_absence' };
+
+  try {
+    if (absence && d.replaceAbsence) {
+      await query(
+        `DELETE FROM dentist_exceptions
+          WHERE dentist_id = ? AND date = ? AND kind = 'time_off'`,
+        [d.dentist_id, d.date],
+      );
+    }
+    await query(
+      `INSERT INTO dentist_exceptions
+         (id, dentist_id, date, kind, start_time, end_time, reason, mode, created_at)
+       VALUES (?, ?, ?, 'custom_hours', ?, ?, ?, ?, ?)`,
+      [
+        uid(),
+        d.dentist_id,
+        d.date,
+        d.start_time,
+        d.end_time,
+        d.reason ?? null,
+        d.mode,
+        nowIso(),
+      ],
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('UNIQUE')) return { ok: false, error: 'duplicate' };
+    throw e;
+  }
+  await query(
+    `INSERT INTO audit_log (id, user_id, action, entity, entity_id, meta)
+     VALUES (?, ?, 'create', 'dentist_exceptions', ?, ?)`,
+    [
+      uid(),
+      user.id,
+      d.dentist_id,
+      JSON.stringify({
+        via: 'extra-day',
+        date: d.date,
+        start_time: d.start_time,
+        end_time: d.end_time,
+        mode: d.mode,
+        replaced_absence: Boolean(absence && d.replaceAbsence),
+      }),
+    ],
+  );
+  revalidatePath('/profile');
+  revalidatePath('/settings/schedules');
+  return { ok: true, replacedAbsence: Boolean(absence && d.replaceAbsence) };
 }
 
 // ---------- Manual agenda opening ("abrir agenda") ----------

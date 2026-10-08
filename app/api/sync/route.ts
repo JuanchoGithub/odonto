@@ -482,7 +482,7 @@ export async function POST(req: NextRequest) {
             `SELECT dentist_id, day_of_week, start_time, end_time, effective_from, effective_to FROM dentist_schedules LIMIT 2000`,
           ),
           query(
-            `SELECT dentist_id, date, kind, start_time, end_time FROM dentist_exceptions WHERE date >= ? LIMIT 2000`,
+            `SELECT dentist_id, date, kind, start_time, end_time, mode FROM dentist_exceptions WHERE date >= ? LIMIT 2000`,
             [cutoff],
           ),
           query(`SELECT date FROM clinic_exceptions WHERE date >= ? LIMIT 500`, [cutoff]),

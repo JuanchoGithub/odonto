@@ -30,6 +30,7 @@ import {
   deleteClinicException,
   addDentistException,
   deleteDentistException,
+  addExtraDay,
   saveDefaultDuration,
   saveClinicDefaultDuration,
   saveAgendaOpenUntil,
@@ -43,8 +44,10 @@ import {
   BASE_WINDOW_DAYS,
   FAR_WINDOW_DAYS,
   addDays,
+  agendaEndDate,
   diffDays,
 } from '@/lib/agenda-horizon';
+import { wallClock } from '@/lib/store/time';
 
 const ALLOWED_DURATIONS = [15, 30, 45, 60, 90, 120] as const;
 
@@ -134,6 +137,7 @@ export function SchedulesClient({
   defaultDuration,
   clinicDefaultDuration,
   agendaOpenUntil,
+  clinicTz,
 }: {
   targetDentistId: string;
   isAdmin: boolean;
@@ -145,6 +149,7 @@ export function SchedulesClient({
   defaultDuration: number;
   clinicDefaultDuration: number;
   agendaOpenUntil?: string | null;
+  clinicTz: string;
 }) {
   const t = useTranslations('schedules');
   const tCommon = useTranslations('common');
@@ -498,6 +503,26 @@ export function SchedulesClient({
         </CardContent>
       </Card>
 
+      {/* Extra open days ("días puntuales") — separate concept from Ausencias */}
+      <ExtraDaysCard
+        dentistId={targetDentistId}
+        dentistName={dentists.find((d) => d.id === targetDentistId)?.name}
+        weekly={weekly.map((w) => ({
+          day_of_week: w.day_of_week,
+          start_time: w.start_time,
+          end_time: w.end_time,
+        }))}
+        fallbackWeekly={businessHours.map((b) => ({
+          day_of_week: b.day_of_week,
+          start_time: b.start_time,
+          end_time: b.end_time,
+        }))}
+        exceptions={exceptions}
+        clinicExceptions={clinicExceptions}
+        agendaOpenUntil={agendaOpenUntil ?? null}
+        clinicTz={clinicTz}
+      />
+
       {/* Dentist exceptions */}
       <Card>
         <CardHeader>
@@ -512,6 +537,7 @@ export function SchedulesClient({
                 <li
                   key={e.id}
                   className="flex items-center justify-between border rounded-md px-3 py-2 text-sm"
+                  data-testid="absence-row"
                 >
                   <span>
                     <Badge
@@ -940,6 +966,418 @@ function AgendaOpenCard({
   );
 }
 
+/**
+ * Extra open days ("días puntuales"): open a specific date at a specific
+ * time, even a day with no weekly hours. Deliberately separate from the
+ * Ausencias (time_off) card below — different concept, different write
+ * path (`addExtraDay` only writes kind='custom_hours').
+ *
+ * Conflict rules surfaced here:
+ * - past dates are hard-blocked; dates beyond today+62 are rejected
+ *   (same cap as the agenda horizon);
+ * - a clinic holiday only warns (the row is saved and applies if the
+ *   holiday is lifted);
+ * - an existing absence blocks with an explicit replace confirm — an
+ *   absent day never silently becomes work;
+ * - a date beyond the effective agenda horizon offers a one-tap
+ *   extend-agenda opt-in (checked by default), so patients can see it.
+ */
+function ExtraDaysCard({
+  dentistId,
+  dentistName,
+  weekly,
+  fallbackWeekly,
+  exceptions,
+  clinicExceptions,
+  agendaOpenUntil,
+  clinicTz,
+}: {
+  dentistId: string;
+  dentistName?: string;
+  weekly: Window[];
+  /** Clinic business hours — the fallback when the dentist has no own rows. */
+  fallbackWeekly: Window[];
+  exceptions: DentistExceptionRow[];
+  clinicExceptions: ClinicExceptionRow[];
+  agendaOpenUntil: string | null;
+  clinicTz: string;
+}) {
+  const t = useTranslations('schedules');
+  const tCommon = useTranslations('common');
+  const router = useRouter();
+
+  const nowIso = new Date().toISOString();
+  const today =
+    wallClock(nowIso, clinicTz).date || nowIso.slice(0, 10);
+  const max = addDays(today, ABSOLUTE_MAX_WINDOW_DAYS);
+
+  const [anchor, setAnchor] = useState<string | null>(agendaOpenUntil);
+  const [date, setDate] = useState('');
+  const [start, setStart] = useState('09:00');
+  const [end, setEnd] = useState('13:00');
+  const [mode, setMode] = useState<'replace' | 'add'>('add');
+  const [extend, setExtend] = useState(true);
+  const [confirmingReplace, setConfirmingReplace] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [extError, setExtError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAnchor(agendaOpenUntil);
+  }, [agendaOpenUntil, dentistId]);
+  useEffect(() => {
+    setConfirmingReplace(false);
+  }, [date, dentistId]);
+
+  const horizon = agendaEndDate(today, anchor);
+  const weekday = date ? weekdayOfDateInTz(date, clinicTz) : null;
+  // Same fallback rule as the engine: with no personal rows at all the
+  // dentist works the clinic business hours that weekday.
+  const baseHours = weekly.length > 0 ? weekly : fallbackWeekly;
+  const normallyOpen =
+    weekday !== null && baseHours.some((w) => w.day_of_week === weekday);
+  const customsOnDate = exceptions.filter(
+    (e) => e.kind === 'custom_hours' && e.date === date,
+  );
+  const absenceOnDate = exceptions.find(
+    (e) => e.kind === 'time_off' && e.date === date,
+  );
+  const holidayOnDate = clinicExceptions.some((e) => e.date === date);
+  const beyondHorizon = !!date && date > horizon;
+  const past = !!date && date < today;
+  const tooFar = !!date && date > max;
+  const badRange = start >= end;
+  const showModeChoice = normallyOpen || customsOnDate.length > 0;
+  const effectiveMode = showModeChoice ? mode : 'replace';
+  const farWindow = !!date && diffDays(today, date) > FAR_WINDOW_DAYS;
+
+  const upcoming = exceptions
+    .filter((e) => e.kind === 'custom_hours' && e.date >= today)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const byDate = new Map<string, DentistExceptionRow[]>();
+  for (const r of upcoming) {
+    const list = byDate.get(r.date) ?? [];
+    list.push(r);
+    byDate.set(r.date, list);
+  }
+
+  async function submit() {
+    if (!date || saving) return;
+    setError(null);
+    setExtError(null);
+    if (past) {
+      setError(t('extraDayPast'));
+      return;
+    }
+    if (tooFar) {
+      setError(t('extraDayTooFar'));
+      return;
+    }
+    if (badRange) return;
+    // Absence on this date: first click arms the explicit replace
+    // confirm; only the second click writes.
+    if (absenceOnDate && !confirmingReplace) {
+      setConfirmingReplace(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      // Horizon opt-in (checked by default): extend the agenda anchor to
+      // the new date first. Beyond-horizon implies beyond today+14, so
+      // this strictly extends — it can never shorten the window.
+      if (beyondHorizon && extend) {
+        const days = diffDays(today, date);
+        if (farWindow) {
+          if (!window.confirm(t('agendaOpenConfirm1', { date, days }))) return;
+          if (!window.confirm(t('agendaOpenConfirm2'))) return;
+          if (!window.confirm(t('agendaOpenConfirm3', { date }))) return;
+        }
+        const res = await saveAgendaOpenUntil({
+          dentist_id: dentistId,
+          date,
+          confirmed: farWindow,
+        });
+        if (!res.ok) {
+          setExtError(res.error);
+        } else {
+          setAnchor(date);
+        }
+      }
+      const res = await addExtraDay({
+        dentist_id: dentistId,
+        date,
+        start_time: start,
+        end_time: end,
+        mode: effectiveMode,
+        replaceAbsence: confirmingReplace,
+      });
+      if (!res.ok) {
+        if (res.error === 'has_absence') {
+          setConfirmingReplace(true);
+          setError(t('extraDayAbsenceWarn'));
+        } else if (res.error === 'duplicate') {
+          setError(t('extraDayDuplicate'));
+        } else if (res.error === 'past') {
+          setError(t('extraDayPast'));
+        } else if (res.error === 'too_far') {
+          setError(t('extraDayTooFar'));
+        } else {
+          setError(res.error);
+        }
+        return;
+      }
+      setDate('');
+      setConfirmingReplace(false);
+      router.refresh();
+    } catch (e) {
+      // Server-action throws (network / 500) never surface as results —
+      // show them instead of dying silently on a dead click.
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function activateSuppressed(absenceId: string) {
+    if (busyId) return;
+    setBusyId(absenceId);
+    try {
+      await deleteDentistException(absenceId);
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Card data-testid="extra-days">
+      <CardHeader>
+        <CardTitle className="text-base">{t('extraDays')}</CardTitle>
+        <CardDescription>
+          {t('extraDaysDesc')}
+          {dentistName ? ` · ${dentistName}` : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {upcoming.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('extraDaysEmpty')}</p>
+        ) : (
+          <ul className="space-y-2">
+            {[...byDate.entries()].map(([d, rows]) => {
+              const suppressed = exceptions.some(
+                (e) => e.kind === 'time_off' && e.date === d,
+              );
+              const absenceId = exceptions.find(
+                (e) => e.kind === 'time_off' && e.date === d,
+              )?.id;
+              return (
+                <li
+                  key={d}
+                  className="border rounded-md px-3 py-2 text-sm space-y-1"
+                  data-testid="extra-day-row"
+                >
+                  <div className="font-medium">{d}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rows.map((r) => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs"
+                      >
+                        {r.start_time}–{r.end_time}
+                        {r.mode === 'add' ? ` · ${t('extraDayModeAdd')}` : ''}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          aria-label={tCommon('delete')}
+                          disabled={busyId !== null || saving}
+                          onClick={() => {
+                            setBusyId(r.id);
+                            void deleteDentistException(r.id)
+                              .then(() => router.refresh())
+                              .finally(() => setBusyId(null));
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </span>
+                    ))}
+                  </div>
+                  {suppressed && absenceId ? (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <Badge variant="secondary">
+                        {t('extraDaySuppressedByAbsence')}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busyId !== null}
+                        onClick={() => void activateSuppressed(absenceId)}
+                      >
+                        {busyId === absenceId
+                          ? tCommon('loading')
+                          : t('extraDayActivate')}
+                      </Button>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="extra-day-date">
+              {t('extraDayDate')}
+            </Label>
+            <Input
+              id="extra-day-date"
+              type="date"
+              value={date}
+              min={today}
+              max={max}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-40"
+              data-testid="extra-day-date"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="extra-day-start">
+              {t('extraDayStart')}
+            </Label>
+            <Input
+              id="extra-day-start"
+              type="time"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="w-28"
+              data-testid="extra-day-start"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs" htmlFor="extra-day-end">
+              {t('extraDayEnd')}
+            </Label>
+            <Input
+              id="extra-day-end"
+              type="time"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              className="w-28"
+              data-testid="extra-day-end"
+            />
+          </div>
+          {showModeChoice ? (
+            <div className="space-y-1">
+              <Label className="text-xs">—</Label>
+              <Select
+                value={effectiveMode}
+                onValueChange={(v) => setMode(v as 'replace' | 'add')}
+              >
+                <SelectTrigger className="w-52" data-testid="extra-day-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="add">{t('extraDayModeAdd')}</SelectItem>
+                  <SelectItem value="replace">
+                    {t('extraDayModeReplace')}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+          <Button
+            onClick={submit}
+            disabled={saving || !date || past || tooFar || badRange}
+            size="sm"
+            data-testid="extra-day-add"
+          >
+            {saving
+              ? tCommon('loading')
+              : confirmingReplace
+                ? t('extraDayAbsenceReplace')
+                : t('extraDayAdd')}
+          </Button>
+        </div>
+
+        {date && !past && !tooFar ? (
+          <p className="text-xs text-muted-foreground">
+            {normallyOpen ? t('extraDayNormallyOpen') : t('extraDayNormallyClosed', { start, end })}
+          </p>
+        ) : null}
+        {holidayOnDate ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            {t('extraDayHolidayWarn')}
+          </p>
+        ) : null}
+        {absenceOnDate ? (
+          <p
+            className="text-xs text-amber-600 dark:text-amber-400"
+            data-testid="extra-day-absence-warning"
+          >
+            {t('extraDayAbsenceWarn')}
+          </p>
+        ) : null}
+        {beyondHorizon ? (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">
+              {t('extraDayBeyondHorizon')}
+            </p>
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-primary"
+                checked={extend}
+                onChange={(e) => setExtend(e.target.checked)}
+                data-testid="extra-day-extend-agenda"
+              />
+              {t('extraDayExtendAgenda', { date })}
+            </label>
+            {farWindow && extend ? (
+              <p
+                className="text-xs text-amber-600 dark:text-amber-400"
+                data-testid="extra-day-far-warning"
+              >
+                {t('agendaOpenFarWarning')}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        {extError ? (
+          <p className="text-sm text-destructive">{extError}</p>
+        ) : null}
+        {error ? (
+          <p className="text-sm text-destructive" data-testid="extra-day-error">
+            {error}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Weekday index (0=Sun..6=Sat) for a clinic-local date in the clinic's TZ. */
+function weekdayOfDateInTz(date: string, tz: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, d, 12));
+  const wd = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    weekday: 'short',
+  }).format(utc);
+  const map: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  return map[wd] ?? 0;
+}
+
 function AddExceptionForm({
   dentistId,
   onAdded,
@@ -985,6 +1423,7 @@ function AddExceptionForm({
           value={date}
           onChange={(e) => setDate(e.target.value)}
           className="w-40"
+          data-testid="absence-date"
         />
       </div>
       <div className="space-y-1">
@@ -1026,7 +1465,12 @@ function AddExceptionForm({
           />
         </>
       ) : null}
-      <Button onClick={submit} disabled={saving || !date} size="sm">
+      <Button
+        onClick={submit}
+        disabled={saving || !date}
+        size="sm"
+        data-testid="absence-add"
+      >
         {saving ? tCommon('loading') : t('addException')}
       </Button>
     </div>
